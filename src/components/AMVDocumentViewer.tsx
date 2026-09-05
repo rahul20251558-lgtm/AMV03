@@ -1,0 +1,1456 @@
+import React, { useState } from 'react';
+import {
+  AMVDocumentData,
+  DocumentType,
+  ThemeFormat,
+  SystemSuitabilityRow,
+  AccuracyRecoveryRow,
+  FontFamilyType,
+  FontSizePt,
+} from '../types';
+import { formatNum, formatInt } from '../services/mathUtils';
+import { LinearityChart } from './LinearityChart';
+import { FontAndSizeControl } from './FontAndSizeControl';
+import {
+  Download,
+  Printer,
+  Edit3,
+  Layers,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
+
+interface AMVDocumentViewerProps {
+  data: AMVDocumentData;
+  docType: DocumentType;
+  theme: ThemeFormat;
+  fontFamily?: FontFamilyType;
+  fontSize?: FontSizePt;
+  onFontFamilyChange?: (font: FontFamilyType) => void;
+  onFontSizeChange?: (size: FontSizePt) => void;
+  onDocTypeChange: (type: DocumentType) => void;
+  onThemeChange: (theme: ThemeFormat) => void;
+  onDownloadProtocol: () => void;
+  onDownloadReport: () => void;
+  onDownloadBoth: () => void;
+  onUpdateData?: (updated: AMVDocumentData) => void;
+}
+
+export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
+  data,
+  docType,
+  theme,
+  fontFamily = 'Times New Roman',
+  fontSize = 12,
+  onFontFamilyChange,
+  onFontSizeChange,
+  onDocTypeChange,
+  onThemeChange,
+  onDownloadProtocol,
+  onDownloadReport,
+  onDownloadBoth,
+  onUpdateData,
+}) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [showChart, setShowChart] = useState(false);
+  const isProtocol = docType === 'protocol';
+  const isBlue = theme === 'blue';
+
+  const fontStyle: React.CSSProperties = {
+    fontFamily:
+      fontFamily === 'Times New Roman'
+        ? '"Times New Roman", Times, "Liberation Serif", Georgia, serif'
+        : fontFamily === 'Arial'
+        ? 'Arial, Helvetica, "Liberation Sans", sans-serif'
+        : fontFamily === 'Calibri'
+        ? 'Calibri, "Segoe UI", Candara, sans-serif'
+        : fontFamily,
+    fontSize: `${fontSize}pt`,
+    lineHeight: 1.5,
+  };
+
+  // CSS Styles based on theme (strict matching reference PDF)
+  const tableHeaderClass = isBlue
+    ? 'bg-[#1F4E79] text-white font-bold border-[#1F4E79]'
+    : 'bg-zinc-100 text-zinc-900 font-bold border-zinc-300';
+
+  const sectionHeadingClass = isBlue
+    ? 'text-[#1F4E79] border-[#1F4E79]'
+    : 'text-zinc-900 border-zinc-800';
+
+  // Handle cell edit for System Suitability
+  const handleSSChange = (index: number, field: keyof SystemSuitabilityRow, value: number) => {
+    if (!onUpdateData) return;
+    const updated = JSON.parse(JSON.stringify(data)) as AMVDocumentData;
+    updated.systemSuitability.injections[index][field] = value;
+    onUpdateData(updated);
+  };
+
+  // Handle cell edit for Accuracy
+  const handleAccuracyChange = (
+    index: number,
+    field: keyof AccuracyRecoveryRow,
+    value: number
+  ) => {
+    if (!onUpdateData) return;
+    const updated = JSON.parse(JSON.stringify(data)) as AMVDocumentData;
+    updated.accuracy.rows[index][field] = value;
+    if (field === 'amountRecovered' || field === 'amountAdded') {
+      const added = updated.accuracy.rows[index].amountAdded;
+      const rec = updated.accuracy.rows[index].amountRecovered;
+      if (added > 0) {
+        updated.accuracy.rows[index].percentRecovery = Number(((rec / added) * 100).toFixed(2));
+      }
+    }
+    onUpdateData(updated);
+  };
+
+  // Handle cell edit for Precision
+  const handlePrecisionChange = (index: number, field: 'analyst1Assay' | 'analyst2Assay', value: number) => {
+    if (!onUpdateData) return;
+    const updated = JSON.parse(JSON.stringify(data)) as AMVDocumentData;
+    updated.precision.rows[index][field] = value;
+    onUpdateData(updated);
+  };
+
+  // Running header component for pages 2 to 8
+  const RunningHeader = () => (
+    <div className="flex justify-between items-center pb-2 mb-4 border-b border-zinc-300 text-[11px] text-zinc-500 font-sans">
+      <span className="font-semibold text-zinc-700">{data.companyName}</span>
+      <span>
+        {isProtocol ? 'AMV Protocol' : 'AMV Report'} – {data.productName} | Doc No. {data.documentNo}
+      </span>
+    </div>
+  );
+
+  // Running footer component for each page (Page X of 8)
+  const RunningFooter = ({ pageNum }: { pageNum: number }) => (
+    <div className="text-center pt-3 mt-5 border-t border-zinc-200 text-[11px] text-zinc-400 font-sans">
+      Page {pageNum} of 8
+    </div>
+  );
+
+  const c = data.chromatographicConditions;
+  const ss = data.systemSuitability;
+  const spec = data.specificity;
+  const lin = data.linearity;
+  const acc = data.accuracy;
+  const prec = data.precision;
+  const rob = data.robustness;
+  const stab = data.solutionStability;
+
+  return (
+    <div style={fontStyle} className="space-y-6 text-zinc-900">
+      {/* Top Document Action Bar */}
+      <div className="bg-white border border-zinc-200 rounded-xl p-3 sm:p-4 shadow-xs flex flex-wrap items-center justify-between gap-3 print:hidden">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 bg-zinc-100 p-1 rounded-lg border border-zinc-200">
+            <button
+              type="button"
+              onClick={() => onDocTypeChange('protocol')}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                docType === 'protocol'
+                  ? 'bg-white text-zinc-900 shadow-xs'
+                  : 'text-zinc-600 hover:text-zinc-900'
+              }`}
+            >
+              AMV Protocol
+            </button>
+            <button
+              type="button"
+              onClick={() => onDocTypeChange('report')}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                docType === 'report'
+                  ? 'bg-white text-zinc-900 shadow-xs'
+                  : 'text-zinc-600 hover:text-zinc-900'
+              }`}
+            >
+              AMV Report
+            </button>
+          </div>
+
+          {/* Format Switcher (Executive Blue vs Simple Format) */}
+          <div className="flex items-center gap-1.5 bg-zinc-100 p-1 rounded-lg border border-zinc-200">
+            <button
+              type="button"
+              onClick={() => onThemeChange('blue')}
+              className={`px-2.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                theme === 'blue'
+                  ? 'bg-[#1F4E79] text-white shadow-xs'
+                  : 'text-zinc-600 hover:text-zinc-900'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-blue-300"></span>
+              Executive Blue
+            </button>
+            <button
+              type="button"
+              onClick={() => onThemeChange('simple')}
+              className={`px-2.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                theme === 'simple'
+                  ? 'bg-zinc-800 text-white shadow-xs'
+                  : 'text-zinc-600 hover:text-zinc-900'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-zinc-400"></span>
+              Simple Format (No Color)
+            </button>
+          </div>
+
+          {/* Typography Controls: Font Family & Font Size (matching uploaded image: Times New Roman 12) */}
+          <FontAndSizeControl
+            fontFamily={fontFamily}
+            fontSize={fontSize}
+            onFontFamilyChange={onFontFamilyChange || (() => {})}
+            onFontSizeChange={onFontSizeChange || (() => {})}
+          />
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex flex-wrap items-center gap-2">
+          {!isProtocol && (
+            <button
+              type="button"
+              onClick={() => setIsEditing(!isEditing)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors flex items-center gap-1.5 ${
+                isEditing
+                  ? 'bg-amber-50 text-amber-800 border-amber-300'
+                  : 'bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-50'
+              }`}
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>{isEditing ? 'Done Editing' : 'Edit Numerical Values'}</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={onDownloadProtocol}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg text-zinc-700 bg-white border border-zinc-300 hover:bg-zinc-50 transition-colors flex items-center gap-1.5"
+            title="Download Word .docx for Protocol"
+          >
+            <Download className="w-3.5 h-3.5 text-zinc-600" />
+            <span>Protocol (.docx)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onDownloadReport}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg text-white bg-blue-700 hover:bg-blue-800 transition-colors shadow-xs flex items-center gap-1.5"
+            title="Download Word .docx for Report"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Report (.docx)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onDownloadBoth}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg text-zinc-800 bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 transition-colors flex items-center gap-1.5"
+            title="Download Both Protocol and Report in one click"
+          >
+            <Layers className="w-3.5 h-3.5 text-zinc-600" />
+            <span>Both (.docx)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="px-2.5 py-1.5 text-xs font-medium rounded-lg text-zinc-700 bg-white border border-zinc-300 hover:bg-zinc-50 transition-colors"
+            title="Print or Save PDF"
+          >
+            <Printer className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* PAGE 1 OF 8: MASTHEAD, METADATA, 3-COL SIGN-OFF, SEC 1, 2, 3, 4.1 HEADING */}
+      {/* ========================================================================= */}
+      <div className="page-card bg-white border border-zinc-300 rounded-lg shadow-sm p-6 sm:p-8 max-w-5xl mx-auto mb-6">
+        {/* Company Title */}
+        <div className="text-center pb-1 pt-1">
+          <h1 className={`text-xl sm:text-2xl font-bold uppercase tracking-wide ${sectionHeadingClass}`}>
+            {data.companyName}
+          </h1>
+          <p className="text-xs text-zinc-600 font-medium mt-1">{data.companyAddress}</p>
+        </div>
+
+        {/* Solid Divider Line */}
+        <div className={`w-full h-1 my-3 ${isBlue ? 'bg-[#1F4E79]' : 'bg-zinc-800'}`}></div>
+
+        {/* Document Title */}
+        <div className="text-center py-1 mb-3">
+          <h2 className={`text-sm sm:text-base font-bold uppercase tracking-wider ${sectionHeadingClass}`}>
+            {isProtocol
+              ? 'ANALYTICAL METHOD VALIDATION PROTOCOL (Assay by HPLC)'
+              : 'ANALYTICAL METHOD VALIDATION REPORT (Assay by HPLC)'}
+          </h2>
+        </div>
+
+        {/* Metadata Table */}
+        <div className="overflow-x-auto mb-4">
+          <table className="w-full text-xs border-collapse border border-zinc-300">
+            <tbody>
+              <tr>
+                <td className="w-1/3 bg-zinc-50 font-bold border border-zinc-300 px-3 py-1.5 text-zinc-700">Document No.</td>
+                <td className="w-2/3 border border-zinc-300 px-3 py-1.5 font-mono font-bold text-zinc-900">{data.documentNo}</td>
+              </tr>
+              <tr>
+                <td className="bg-zinc-50 font-bold border border-zinc-300 px-3 py-1.5 text-zinc-700">Product Name</td>
+                <td className="border border-zinc-300 px-3 py-1.5 font-bold text-zinc-900">{data.productName}</td>
+              </tr>
+              <tr>
+                <td className="bg-zinc-50 font-bold border border-zinc-300 px-3 py-1.5 text-zinc-700">Label Claim</td>
+                <td className="border border-zinc-300 px-3 py-1.5 text-zinc-800">{data.labelClaim}</td>
+              </tr>
+              <tr>
+                <td className="bg-zinc-50 font-bold border border-zinc-300 px-3 py-1.5 text-zinc-700">Test Parameter</td>
+                <td className="border border-zinc-300 px-3 py-1.5 text-zinc-800">{data.testParameter}</td>
+              </tr>
+              <tr>
+                <td className="bg-zinc-50 font-bold border border-zinc-300 px-3 py-1.5 text-zinc-700">Reference</td>
+                <td className="border border-zinc-300 px-3 py-1.5 text-zinc-800">{data.reference}</td>
+              </tr>
+              <tr>
+                <td className="bg-zinc-50 font-bold border border-zinc-300 px-3 py-1.5 text-zinc-700">Batch No. Used</td>
+                <td className="border border-zinc-300 px-3 py-1.5 font-mono font-bold text-zinc-900">{data.batchNoUsed}</td>
+              </tr>
+              <tr>
+                <td className="bg-zinc-50 font-bold border border-zinc-300 px-3 py-1.5 text-zinc-700">Effective Date</td>
+                <td className="border border-zinc-300 px-3 py-1.5 text-zinc-800">{data.effectiveDate}</td>
+              </tr>
+              <tr>
+                <td className="bg-zinc-50 font-bold border border-zinc-300 px-3 py-1.5 text-zinc-700">Supersedes</td>
+                <td className="border border-zinc-300 px-3 py-1.5 text-zinc-800">{data.supersedes}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* 3-Column Sign-Off Table (Strict Parity with Reference PDF) */}
+        <div className="overflow-x-auto mb-4">
+          <table className="w-full text-xs border-collapse border border-zinc-300">
+            <thead>
+              <tr className={tableHeaderClass}>
+                <th className="p-2 border border-zinc-300 text-center w-1/3">Prepared By</th>
+                <th className="p-2 border border-zinc-300 text-center w-1/3">Reviewed / Checked By</th>
+                <th className="p-2 border border-zinc-300 text-center w-1/3">Approved By</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="p-2 border border-zinc-300 text-xs align-top space-y-1">
+                  <div><span className="font-bold">Name:</span> {data.signOffs.preparedBy.name || ''}</div>
+                  <div><span className="font-bold">Designation:</span> {data.signOffs.preparedBy.designation || 'Analyst – QC'}</div>
+                  <div><span className="font-bold">Signature / Date:</span> {data.signOffs.preparedBy.date || ''}</div>
+                </td>
+                <td className="p-2 border border-zinc-300 text-xs align-top space-y-1">
+                  <div><span className="font-bold">Name:</span> {data.signOffs.reviewedBy.name || ''}</div>
+                  <div><span className="font-bold">Designation:</span> {data.signOffs.reviewedBy.designation || 'Manager – QC'}</div>
+                  <div><span className="font-bold">Signature / Date:</span> {data.signOffs.reviewedBy.date || ''}</div>
+                </td>
+                <td className="p-2 border border-zinc-300 text-xs align-top space-y-1">
+                  <div><span className="font-bold">Name:</span> {data.signOffs.approvedBy.name || ''}</div>
+                  <div><span className="font-bold">Designation:</span> {data.signOffs.approvedBy.designation || 'Head – QA'}</div>
+                  <div><span className="font-bold">Signature / Date:</span> {data.signOffs.approvedBy.date || ''}</div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* 1. Objective */}
+        <div className="mb-3">
+          <h3 className={`text-xs font-bold uppercase mb-1 ${sectionHeadingClass}`}>1. Objective</h3>
+          <p className="text-xs text-zinc-800 leading-relaxed">{data.objective}</p>
+        </div>
+
+        {/* 2. Scope */}
+        <div className="mb-3">
+          <h3 className={`text-xs font-bold uppercase mb-1 ${sectionHeadingClass}`}>2. Scope</h3>
+          <p className="text-xs text-zinc-800 leading-relaxed">{data.scope}</p>
+        </div>
+
+        {/* 3. Reference Documents & Verification Details */}
+        <div className="mb-3">
+          <h3 className={`text-xs font-bold uppercase mb-1.5 ${sectionHeadingClass}`}>
+            3. Reference Documents &amp; Verification Details
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse border border-zinc-300">
+              <tbody>
+                <tr>
+                  <td className="w-1/4 bg-zinc-50 font-bold border border-zinc-300 px-2.5 py-1.5 text-zinc-700">Reference</td>
+                  <td className="w-3/4 border border-zinc-300 px-2.5 py-1.5 text-zinc-800">{data.verificationDetails?.reference || data.reference}</td>
+                </tr>
+                <tr>
+                  <td className="bg-zinc-50 font-bold border border-zinc-300 px-2.5 py-1.5 text-zinc-700">(a) Type of Verification</td>
+                  <td className="border border-zinc-300 px-2.5 py-1.5 text-zinc-800">{data.verificationDetails?.typeOfVerification || 'Verification of a compendial assay procedure under actual conditions of use, as per USP <1225> and ICH Q2(R2)'}</td>
+                </tr>
+                <tr>
+                  <td className="bg-zinc-50 font-bold border border-zinc-300 px-2.5 py-1.5 text-zinc-700">(b) Test to be Verified</td>
+                  <td className="border border-zinc-300 px-2.5 py-1.5 text-zinc-800">{data.verificationDetails?.testToBeVerified || `Assay by HPLC (${data.activeSubstance} content)`}</td>
+                </tr>
+                <tr>
+                  <td className="bg-zinc-50 font-bold border border-zinc-300 px-2.5 py-1.5 text-zinc-700">(c) Verification Team</td>
+                  <td className="border border-zinc-300 px-2.5 py-1.5 text-zinc-800">{data.verificationDetails?.verificationTeam || 'Analyst 1: Sahil Panchal (Chemist, QC); Analyst 2: Smit Patel (Executive, QC); Supervisor: Anil Parmar (Manager, QC)'}</td>
+                </tr>
+                <tr>
+                  <td className="bg-zinc-50 font-bold border border-zinc-300 px-2.5 py-1.5 text-zinc-700">(d) Experimental Details</td>
+                  <td className="border border-zinc-300 px-2.5 py-1.5 text-zinc-800">{data.verificationDetails?.experimentalDetails || `Specificity, system suitability, linearity (50 % to 150 %), accuracy / recovery (50 %, 100 %, 150 %), precision and intermediate precision, robustness and stability of analytical solutions up to 24 hours, executed on batch ${data.batchNoUsed}.`}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* 4. Analytical Method Summary Heading */}
+        <div>
+          <h3 className={`text-xs font-bold uppercase mb-1 ${sectionHeadingClass}`}>
+            4. Analytical Method Summary
+          </h3>
+          <h4 className="text-xs font-bold text-zinc-800">4.1 Chromatographic Conditions</h4>
+        </div>
+
+        <RunningFooter pageNum={1} />
+      </div>
+
+      {/* ========================================================================= */}
+      {/* PAGE 2 OF 8: SEC 4.1 TABLE, NOTE, SEC 4.2 TABLE, SEC 4.3 CALCULATION FORMULAE */}
+      {/* ========================================================================= */}
+      <div className="page-card bg-white border border-zinc-300 rounded-lg shadow-sm p-6 sm:p-8 max-w-5xl mx-auto mb-6">
+        <RunningHeader />
+
+        {/* 4.1 Chromatographic Conditions Table */}
+        <div className="mb-4">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse border border-zinc-300">
+              <thead>
+                <tr className={tableHeaderClass}>
+                  <th className="p-2 border border-zinc-300 text-left w-1/3">Parameter</th>
+                  <th className="p-2 border border-zinc-300 text-left w-2/3">Condition</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Column</td>
+                  <td className="p-1.5 border border-zinc-300">{c.column}</td>
+                </tr>
+                <tr>
+                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Mobile Phase</td>
+                  <td className="p-1.5 border border-zinc-300">{c.mobilePhase}</td>
+                </tr>
+                <tr>
+                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Flow Rate</td>
+                  <td className="p-1.5 border border-zinc-300">{c.flowRate}</td>
+                </tr>
+                <tr>
+                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Detection Wavelength</td>
+                  <td className="p-1.5 border border-zinc-300">{c.detectionWavelength}</td>
+                </tr>
+                <tr>
+                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Injection Volume</td>
+                  <td className="p-1.5 border border-zinc-300">{c.injectionVolume}</td>
+                </tr>
+                <tr>
+                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Column Temperature</td>
+                  <td className="p-1.5 border border-zinc-300">{c.columnTemperature}</td>
+                </tr>
+                <tr>
+                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Run Time</td>
+                  <td className="p-1.5 border border-zinc-300">{c.runTime}</td>
+                </tr>
+                <tr>
+                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Diluent</td>
+                  <td className="p-1.5 border border-zinc-300">{c.diluent}</td>
+                </tr>
+                <tr>
+                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Working Concentration</td>
+                  <td className="p-1.5 border border-zinc-300">{c.workingConcentration}</td>
+                </tr>
+                <tr>
+                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Approx. Retention Time</td>
+                  <td className="p-1.5 border border-zinc-300 font-medium">{c.approxRetentionTime || '6.5 min'}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[11px] italic text-zinc-500 mt-1.5">
+            Note: {c.note || 'Dissolve 1.36 g of Potassium Dihydrogen Phosphate in 1000 mL water, adjust pH to 6.0 with 0.1M KOH.'}
+          </p>
+        </div>
+
+        {/* 4.2 Preparation of Solutions (Summary) */}
+        <div className="mb-4">
+          <h4 className="text-xs font-bold text-zinc-800 mb-1.5">4.2 Preparation of Solutions (Summary)</h4>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse border border-zinc-300">
+              <thead>
+                <tr className={tableHeaderClass}>
+                  <th className="p-2 border border-zinc-300 text-left w-1/3">Solution</th>
+                  <th className="p-2 border border-zinc-300 text-left w-2/3">Preparation Procedure</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="p-2 font-semibold bg-zinc-50 border border-zinc-300 align-top">
+                    Standard Solution ({c.workingConcentration})
+                  </td>
+                  <td className="p-2 border border-zinc-300 text-zinc-800 leading-relaxed">
+                    {data.solutionPreparation.standardSolution}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="p-2 font-semibold bg-zinc-50 border border-zinc-300 align-top">
+                    Sample Solution ({c.workingConcentration})
+                  </td>
+                  <td className="p-2 border border-zinc-300 text-zinc-800 leading-relaxed">
+                    {data.solutionPreparation.sampleSolution}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* 4.3 Calculation Formula & Assay Equations */}
+        <div className="mb-2">
+          <h4 className="text-xs font-bold text-zinc-800 mb-2">4.3 Calculation Formula &amp; Assay Equations</h4>
+          <div className="p-3 bg-zinc-50 border border-zinc-200 rounded text-xs space-y-2 mb-2 font-mono">
+            <div className="font-bold text-[#1F4E79]">
+              {data.calculationFormula?.assayFormula || 'Assay (%) = (AT / AS) × (WS / 100) × (100 / WT) × (AVG_WT / LC) × Purity'}
+            </div>
+            <div className="font-bold text-[#1F4E79]">
+              {data.calculationFormula?.contentFormula || 'Content (mg/tablet) = Assay (%) × Label Claim (mg) / 100'}
+            </div>
+          </div>
+          <div className="text-xs text-zinc-700 space-y-1 pl-1">
+            {(data.calculationFormula?.notes || [
+              '• AT = Peak area of analyte in the sample chromatogram',
+              '• AS = Mean peak area of analyte in standard chromatograms',
+              `• WS = Weight of ${data.activeSubstance} working standard taken (mg)`,
+              '• WT = Weight of powdered dosage unit sample taken (mg)',
+              '• AVG_WT = Average weight of 20 tablets (mg)',
+              `• LC = Label claim of ${data.activeSubstance} per unit (mg)`,
+              `• Purity = Decimal purity of ${data.activeSubstance} reference standard`,
+            ]).map((note, i) => (
+              <p key={i}>{note}</p>
+            ))}
+          </div>
+        </div>
+
+        <RunningFooter pageNum={2} />
+      </div>
+
+      {/* ========================================================================= */}
+      {/* PAGE 3 OF 8: SEC 4.4 (REAGENTS & EQUIPMENT), SEC 5 (ROWS 1 TO 4)           */}
+      {/* ========================================================================= */}
+      <div className="page-card bg-white border border-zinc-300 rounded-lg shadow-sm p-6 sm:p-8 max-w-5xl mx-auto mb-6">
+        <RunningHeader />
+
+        {/* 4.4 Requirements — Reagents and Reference Standards */}
+        <div className="mb-4">
+          <h4 className="text-xs font-bold text-zinc-800 mb-2">
+            4.4 Requirements — Reagents and Reference Standards
+          </h4>
+          <div className="overflow-x-auto mb-3">
+            <table className="w-full text-xs border-collapse border border-zinc-300">
+              <thead>
+                <tr className={tableHeaderClass}>
+                  <th className="p-1.5 border border-zinc-300 text-left">Name of Chemical / Standard</th>
+                  <th className="p-1.5 border border-zinc-300 text-left">Grade</th>
+                  <th className="p-1.5 border border-zinc-300 text-left">Make / Catalogue</th>
+                  <th className="p-1.5 border border-zinc-300 text-left">Batch / Lot No.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.reagentsAndStandards.map((r, i) => (
+                  <tr key={i}>
+                    <td className="p-1.5 border border-zinc-300 font-semibold">{r.name}</td>
+                    <td className="p-1.5 border border-zinc-300">{r.grade}</td>
+                    <td className="p-1.5 border border-zinc-300">{r.make}</td>
+                    <td className="p-1.5 border border-zinc-300 font-mono">{r.batchNo}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* 5. Validation Parameters and Acceptance Criteria */}
+        <div>
+          <h3 className={`text-xs font-bold uppercase mb-2 ${sectionHeadingClass}`}>
+            5. Validation Parameters and Acceptance Criteria
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse border border-zinc-300">
+              <thead>
+                <tr className={tableHeaderClass}>
+                  <th className="p-2 border border-zinc-300 text-center w-12">Sr.</th>
+                  <th className="p-2 border border-zinc-300 text-left w-1/4">Parameter</th>
+                  <th className="p-2 border border-zinc-300 text-left w-2/5">Acceptance Criteria</th>
+                  <th className="p-2 border border-zinc-300 text-left w-1/3">
+                    {isProtocol ? 'Verification Requirement' : 'Result / Acceptance Status'}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="p-1.5 border border-zinc-300 text-center font-bold">1</td>
+                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Specificity</td>
+                  <td className="p-1.5 border border-zinc-300">
+                    No interference from blank (diluent) and placebo at the retention time of the analyte peak. Peak purity passed by PDA.
+                  </td>
+                  <td className="p-1.5 border border-zinc-300">
+                    {isProtocol ? 'To be verified as per protocol criteria' : 'No interference observed; peak purity passed (purity angle < threshold) — Complies'}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="p-1.5 border border-zinc-300 text-center font-bold">2</td>
+                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">System Suitability</td>
+                  <td className="p-1.5 border border-zinc-300">
+                    Tailing factor NMT 2.0; %RSD of area NMT 2.0 % (n=5); theoretical plates NLT 2000.
+                  </td>
+                  <td className="p-1.5 border border-zinc-300">
+                    {isProtocol ? 'To be verified as per protocol criteria' : `Tailing ${formatNum(ss.meanTailing, 2)}; %RSD ${formatNum(ss.rsdArea, 2)} %; plates ${formatInt(ss.meanPlates)} — Complies`}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="p-1.5 border border-zinc-300 text-center font-bold">3</td>
+                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Linearity (50%–150%)</td>
+                  <td className="p-1.5 border border-zinc-300">
+                    Correlation coefficient r ≥ 0.99 (or r² ≥ 0.998); slope and y-intercept reported; y-intercept bias at 100 % level within ±10.0 %.
+                  </td>
+                  <td className="p-1.5 border border-zinc-300">
+                    {isProtocol ? 'To be verified as per protocol criteria' : `r = ${formatNum(lin.regression.correlationR, 5)}; slope ${formatNum(lin.regression.slope, 1)}; y-intercept ${formatNum(lin.regression.yIntercept, 0)}; bias ${formatNum(lin.regression.yInterceptBiasPercent, 2)} % — Complies`}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="p-1.5 border border-zinc-300 text-center font-bold">4</td>
+                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Accuracy (50%–150%)</td>
+                  <td className="p-1.5 border border-zinc-300">
+                    Mean recovery of three levels in triplicate between 98.0 % and 102.0 %; %RSD at each level NMT 2.0 %.
+                  </td>
+                  <td className="p-1.5 border border-zinc-300">
+                    {isProtocol ? 'To be verified as per protocol criteria' : `Mean recovery ${formatNum(acc.meanRecoveryAllLevels, 2)} % (n = 9, %RSD ${formatNum(acc.rsdAllLevels, 2)} %) — Complies`}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <RunningFooter pageNum={3} />
+      </div>
+
+      {/* ========================================================================= */}
+      {/* PAGE 4 OF 8: SEC 5 (ROWS 5-9), SEC 6 SYSTEM SUITABILITY, SEC 7 SPECIFICITY */}
+      {/* ========================================================================= */}
+      <div className="page-card bg-white border border-zinc-300 rounded-lg shadow-sm p-6 sm:p-8 max-w-5xl mx-auto mb-6">
+        <RunningHeader />
+
+        {/* 5. Validation Parameters Continued (Rows 5 to 9) */}
+        <div className="mb-4">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse border border-zinc-300">
+              <thead>
+                <tr className={tableHeaderClass}>
+                  <th className="p-2 border border-zinc-300 text-center w-12">Sr.</th>
+                  <th className="p-2 border border-zinc-300 text-left w-1/4">Parameter</th>
+                  <th className="p-2 border border-zinc-300 text-left w-2/5">Acceptance Criteria</th>
+                  <th className="p-2 border border-zinc-300 text-left w-1/3">
+                    {isProtocol ? 'Verification Requirement' : 'Result / Acceptance Status'}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="p-1.5 border border-zinc-300 text-center font-bold">5</td>
+                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Range</td>
+                  <td className="p-1.5 border border-zinc-300">
+                    Mean recovery 98.0 % to 102.0 %; %RSD ≤ 2.0 at each level; correlation coefficient ≥ 0.99.
+                  </td>
+                  <td className="p-1.5 border border-zinc-300">
+                    {isProtocol ? 'To be verified as per protocol criteria' : `Mean recovery ${formatNum(acc.meanRecoveryAllLevels, 2)} %; %RSD ${formatNum(acc.rsdAllLevels, 2)} %; r = ${formatNum(lin.regression.correlationR, 5)} — Complies`}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="p-1.5 border border-zinc-300 text-center font-bold">6</td>
+                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Method Precision (Repeatability)</td>
+                  <td className="p-1.5 border border-zinc-300">%RSD for six assay sample preparations NMT 2.0 %.</td>
+                  <td className="p-1.5 border border-zinc-300">
+                    {isProtocol ? 'To be verified as per protocol criteria' : `Mean ${formatNum(prec.analyst1Mean, 2)} %; %RSD ${formatNum(prec.analyst1Rsd, 2)} % — Complies`}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="p-1.5 border border-zinc-300 text-center font-bold">7</td>
+                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Intermediate Precision (Ruggedness)</td>
+                  <td className="p-1.5 border border-zinc-300">
+                    %RSD for six results NMT 2.0 %; cumulative %RSD for twelve results NMT 2.0 %.
+                  </td>
+                  <td className="p-1.5 border border-zinc-300">
+                    {isProtocol ? 'To be verified as per protocol criteria' : `Analyst 2 %RSD ${formatNum(prec.analyst2Rsd, 2)} %; Cumulative %RSD ${formatNum(prec.cumulativeRsd, 2)} % (n = 12) — Complies`}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="p-1.5 border border-zinc-300 text-center font-bold">8</td>
+                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Robustness</td>
+                  <td className="p-1.5 border border-zinc-300">
+                    System suitability criteria met under all deliberately varied conditions (%RSD NMT 2.0, Tailing NMT 2.0, Plates NLT 2000).
+                  </td>
+                  <td className="p-1.5 border border-zinc-300">
+                    {isProtocol ? 'To be verified as per protocol criteria' : 'Maximum %RSD 0.63 %; all criteria met — Complies'}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="p-1.5 border border-zinc-300 text-center font-bold">9</td>
+                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Solution Stability</td>
+                  <td className="p-1.5 border border-zinc-300">
+                    %RSD of standard and sample areas ≤ 2.0 % over studied period (24 hours); difference from initial NMT 2.0 %.
+                  </td>
+                  <td className="p-1.5 border border-zinc-300">
+                    {isProtocol ? 'To be verified as per protocol criteria' : 'Standard %RSD 0.22 %; Sample %RSD 0.27 % up to 24 hours — Complies'}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* 6. System Suitability */}
+        <div className="mb-4">
+          <h3 className={`text-xs font-bold uppercase mb-1 ${sectionHeadingClass}`}>
+            6. System Suitability
+          </h3>
+          <p className="text-xs text-zinc-600 mb-2">
+            Inject five (5) replicate injections of the standard solution ({c.workingConcentration}). Record peak area, tailing factor, and theoretical plates into the execution table below.
+          </p>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse border border-zinc-300">
+              <thead>
+                <tr className={tableHeaderClass}>
+                  <th className="p-2 border border-zinc-300 text-center w-24">Injection No.</th>
+                  <th className="p-2 border border-zinc-300 text-right">Peak Area (µV·s)</th>
+                  <th className="p-2 border border-zinc-300 text-right">Tailing Factor</th>
+                  <th className="p-2 border border-zinc-300 text-right">Theoretical Plates</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ss.injections.map((inj, idx) => (
+                  <tr key={inj.injectionNo}>
+                    <td className="p-1.5 border border-zinc-300 text-center font-bold text-zinc-800">
+                      {inj.injectionNo}
+                    </td>
+                    <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                      {isProtocol ? (
+                        ''
+                      ) : isEditing ? (
+                        <input
+                          type="number"
+                          value={inj.peakArea}
+                          onChange={(e) => handleSSChange(idx, 'peakArea', parseFloat(e.target.value) || 0)}
+                          className="w-28 text-right px-1 py-0.5 border rounded bg-amber-50"
+                        />
+                      ) : (
+                        formatInt(inj.peakArea)
+                      )}
+                    </td>
+                    <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                      {isProtocol ? (
+                        ''
+                      ) : isEditing ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={inj.tailingFactor}
+                          onChange={(e) => handleSSChange(idx, 'tailingFactor', parseFloat(e.target.value) || 0)}
+                          className="w-20 text-right px-1 py-0.5 border rounded bg-amber-50"
+                        />
+                      ) : (
+                        formatNum(inj.tailingFactor, 2)
+                      )}
+                    </td>
+                    <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                      {isProtocol ? (
+                        ''
+                      ) : isEditing ? (
+                        <input
+                          type="number"
+                          value={inj.theoreticalPlates}
+                          onChange={(e) => handleSSChange(idx, 'theoreticalPlates', parseInt(e.target.value, 10) || 0)}
+                          className="w-20 text-right px-1 py-0.5 border rounded bg-amber-50"
+                        />
+                      ) : (
+                        formatInt(inj.theoreticalPlates)
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="bg-zinc-50 font-bold">
+                  <td className="p-1.5 border border-zinc-300 text-center text-zinc-900">Mean</td>
+                  <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                    {isProtocol ? '' : formatInt(ss.meanArea)}
+                  </td>
+                  <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                    {isProtocol ? '' : formatNum(ss.meanTailing, 2)}
+                  </td>
+                  <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                    {isProtocol ? '' : formatInt(ss.meanPlates)}
+                  </td>
+                </tr>
+                <tr className="bg-zinc-50 font-bold">
+                  <td className="p-1.5 border border-zinc-300 text-center text-zinc-900">%RSD</td>
+                  <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                    {isProtocol ? 'To be evaluated' : `${formatNum(ss.rsdArea, 2)} %`}
+                  </td>
+                  <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                    {isProtocol ? 'To be evaluated' : `${formatNum(ss.rsdTailing, 2)} %`}
+                  </td>
+                  <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                    {isProtocol ? 'To be evaluated' : `${formatNum(ss.rsdPlates, 2)} %`}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs font-bold text-zinc-800 mt-2">
+            {isProtocol
+              ? 'Acceptance Criteria: %RSD of Peak Area <= 2.0%, Tailing Factor <= 2.0, Theoretical Plates >= 2000. (Observed Result: To be recorded upon execution)'
+              : `Acceptance: %RSD of Peak Area <= 2.0%, Tailing Factor <= 2.0, Theoretical Plates >= 2000. (Result: Mean Area = ${formatInt(ss.meanArea)}, %RSD = ${formatNum(ss.rsdArea, 2)}%, Tailing = ${formatNum(ss.meanTailing, 2)}, Plates = ${formatInt(ss.meanPlates)} — Complies)`}
+          </p>
+        </div>
+
+        {/* 7. Specificity */}
+        <div className="mb-2">
+          <h3 className={`text-xs font-bold uppercase mb-1 ${sectionHeadingClass}`}>7. Specificity</h3>
+          <p className="text-xs text-zinc-600 mb-2">
+            Inject blank, placebo, reference standard, sample, and impurity solutions in duplicate. Record retention times and confirm absence of co-eluting peaks at the analyte retention window.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse border border-zinc-300">
+              <thead>
+                <tr className={tableHeaderClass}>
+                  <th className="p-2 border border-zinc-300 text-left w-2/5">Solution</th>
+                  <th className="p-2 border border-zinc-300 text-center w-3/10">Retention Time (min)</th>
+                  <th className="p-2 border border-zinc-300 text-center w-3/10">Interference Observed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {spec.rows.map((r, idx) => (
+                  <tr key={idx}>
+                    <td className="p-1.5 border border-zinc-300 font-semibold text-zinc-900">{r.solution}</td>
+                    <td className="p-1.5 border border-zinc-300 text-center font-mono">
+                      {isProtocol ? '' : r.retentionTime}
+                    </td>
+                    <td className="p-1.5 border border-zinc-300 text-center">
+                      {isProtocol ? '' : r.interference}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs font-bold text-zinc-800 mt-2">
+            {isProtocol
+              ? 'Acceptance Criteria: No interfering peak from blank or placebo matrix shall co-elute with the active substance peak. Peak purity shall be verified.'
+              : `Acceptance Criteria: No interfering peak from blank or placebo matrix shall co-elute with the active substance peak. (Result: No interfering peaks observed at ${data.activeSubstance} retention window. Peak purity passed — Complies)`}
+          </p>
+        </div>
+
+        <RunningFooter pageNum={4} />
+      </div>
+
+      {/* ========================================================================= */}
+      {/* PAGE 5 OF 8: SEC 8 LINEARITY (TABLES 1 & 2), SEC 9 ACCURACY (ROWS 1 TO 6) */}
+      {/* ========================================================================= */}
+      <div className="page-card bg-white border border-zinc-300 rounded-lg shadow-sm p-6 sm:p-8 max-w-5xl mx-auto mb-6">
+        <RunningHeader />
+
+        {/* 8. Linearity and Range */}
+        <div className="mb-4">
+          <h3 className={`text-xs font-bold uppercase mb-1 ${sectionHeadingClass}`}>
+            8. Linearity and Range
+          </h3>
+          <p className="text-xs text-zinc-600 mb-2">
+            Prepare linearity standard solutions across 5 concentration levels (50 % to 150 % of nominal working concentration). Inject in triplicate and construct calibration curve.
+          </p>
+          <div className="overflow-x-auto mb-3">
+            <table className="w-full text-xs border-collapse border border-zinc-300">
+              <thead>
+                <tr className={tableHeaderClass}>
+                  <th className="p-2 border border-zinc-300 text-center w-24">Level (%)</th>
+                  <th className="p-2 border border-zinc-300 text-right">Concentration (µg/mL)</th>
+                  <th className="p-2 border border-zinc-300 text-right">Mean Peak Area (µV·s)</th>
+                  <th className="p-2 border border-zinc-300 text-right">% of 100% Response</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lin.levels.map((lvl) => (
+                  <tr key={lvl.levelPercent}>
+                    <td className="p-1.5 border border-zinc-300 text-center font-semibold text-zinc-900">
+                      {lvl.levelPercent} %
+                    </td>
+                    <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                      {formatNum(lvl.concentration, 2)}
+                    </td>
+                    <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                      {isProtocol ? '' : formatInt(lvl.meanArea)}
+                    </td>
+                    <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                      {isProtocol ? '' : `${formatNum(lvl.percentOf100Response, 2)} %`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Regression Parameter Table */}
+          <div className="overflow-x-auto mb-2">
+            <table className="w-full text-xs border-collapse border border-zinc-300">
+              <thead>
+                <tr className={tableHeaderClass}>
+                  <th className="p-2 border border-zinc-300 text-left w-3/5">Regression Parameter</th>
+                  <th className="p-2 border border-zinc-300 text-right w-2/5">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="p-1.5 border border-zinc-300 font-semibold text-zinc-900">Correlation Coefficient (r)</td>
+                  <td className="p-1.5 border border-zinc-300 text-right font-mono font-bold">
+                    {isProtocol ? 'Criteria: ≥ 0.999' : formatNum(lin.regression.correlationR, 5)}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="p-1.5 border border-zinc-300 font-semibold text-zinc-900">Coefficient of Determination (r²)</td>
+                  <td className="p-1.5 border border-zinc-300 text-right font-mono font-bold">
+                    {isProtocol ? 'Criteria: ≥ 0.998' : formatNum(lin.regression.rSquared, 5)}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="p-1.5 border border-zinc-300 font-semibold text-zinc-900">Slope</td>
+                  <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                    {isProtocol ? '' : formatNum(lin.regression.slope, 2)}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="p-1.5 border border-zinc-300 font-semibold text-zinc-900">y-Intercept</td>
+                  <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                    {isProtocol ? '' : formatNum(lin.regression.yIntercept, 2)}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="p-1.5 border border-zinc-300 font-semibold text-zinc-900">y-Intercept bias as % of 100% response</td>
+                  <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                    {isProtocol ? 'Criteria: NMT ±2.0%' : `${formatNum(lin.regression.yInterceptBiasPercent, 2)} %`}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p className="text-xs font-bold text-zinc-800 mt-2">
+            {isProtocol
+              ? 'Acceptance Criteria: Correlation coefficient (r) shall be ≥ 0.999; r² ≥ 0.999. The y-intercept bias shall be within ±2.0% of nominal response.'
+              : `Acceptance: Correlation coefficient r ≥ 0.999 (r² ≥ 0.999). (Result: r = ${formatNum(lin.regression.correlationR, 5)}, r² = ${formatNum(lin.regression.rSquared, 5)}, y-Intercept Bias = ${formatNum(lin.regression.yInterceptBiasPercent, 2)}% — Complies)`}
+          </p>
+
+          {/* Interactive Linearity Plot Toggle (Browser Feature) */}
+          <div className="mt-2 print:hidden">
+            <button
+              type="button"
+              onClick={() => setShowChart(!showChart)}
+              className="text-xs text-blue-700 hover:text-blue-800 font-semibold flex items-center gap-1"
+            >
+              {showChart ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              <span>{showChart ? 'Hide Calibration Curve Plot' : 'Show Calibration Curve Plot'}</span>
+            </button>
+            {showChart && (
+              <div className="mt-2 p-3 bg-zinc-50 border border-zinc-200 rounded-lg">
+                <LinearityChart linearity={data.linearity} />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 9. Accuracy (Recovery) - Part 1 (Rows 1 to 6) */}
+        <div>
+          <h3 className={`text-xs font-bold uppercase mb-1 ${sectionHeadingClass}`}>
+            9. Accuracy (Recovery)
+          </h3>
+          <p className="text-xs text-zinc-600 mb-2">
+            Placebo blend spiked with {data.activeSubstance} working standard at 50%, 100%, and 150% of nominal target assay concentration in triplicate (9 determinations).
+          </p>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse border border-zinc-300">
+              <thead>
+                <tr className={tableHeaderClass}>
+                  <th className="p-2 border border-zinc-300 text-center w-20">Level (%)</th>
+                  <th className="p-2 border border-zinc-300 text-center w-20">Exp. No.</th>
+                  <th className="p-2 border border-zinc-300 text-right">Amount Added (mg)</th>
+                  <th className="p-2 border border-zinc-300 text-right">Amount Recovered (mg)</th>
+                  <th className="p-2 border border-zinc-300 text-right">% Recovery</th>
+                </tr>
+              </thead>
+              <tbody>
+                {acc.rows.slice(0, 6).map((row, idx) => (
+                  <tr key={idx}>
+                    <td className="p-1.5 border border-zinc-300 text-center font-semibold text-zinc-900">
+                      {row.levelPercent} %
+                    </td>
+                    <td className="p-1.5 border border-zinc-300 text-center font-medium text-zinc-700">
+                      {row.expNo}
+                    </td>
+                    <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                      {formatNum(row.amountAdded, 2)}
+                    </td>
+                    <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                      {isProtocol ? (
+                        ''
+                      ) : isEditing ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={row.amountRecovered}
+                          onChange={(e) => handleAccuracyChange(idx, 'amountRecovered', parseFloat(e.target.value) || 0)}
+                          className="w-20 text-right px-1 py-0.5 border rounded bg-amber-50"
+                        />
+                      ) : (
+                        formatNum(row.amountRecovered, 2)
+                      )}
+                    </td>
+                    <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                      {isProtocol ? '' : `${formatNum(row.percentRecovery, 2)} %`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <RunningFooter pageNum={5} />
+      </div>
+
+      {/* ========================================================================= */}
+      {/* PAGE 6 OF 8: SEC 9 ACCURACY (ROWS 7-9 + MEANS), SEC 10 PRECISION, SEC 11 (PART 1) */}
+      {/* ========================================================================= */}
+      <div className="page-card bg-white border border-zinc-300 rounded-lg shadow-sm p-6 sm:p-8 max-w-5xl mx-auto mb-6">
+        <RunningHeader />
+
+        {/* Section 9 Continued: Rows 7 to 9 + Summary */}
+        <div className="mb-4">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse border border-zinc-300">
+              <thead>
+                <tr className={tableHeaderClass}>
+                  <th className="p-2 border border-zinc-300 text-center w-20">Level (%)</th>
+                  <th className="p-2 border border-zinc-300 text-center w-20">Exp. No.</th>
+                  <th className="p-2 border border-zinc-300 text-right">Amount Added (mg)</th>
+                  <th className="p-2 border border-zinc-300 text-right">Amount Recovered (mg)</th>
+                  <th className="p-2 border border-zinc-300 text-right">% Recovery</th>
+                </tr>
+              </thead>
+              <tbody>
+                {acc.rows.slice(6, 9).map((row, idx) => {
+                  const actualIdx = idx + 6;
+                  return (
+                    <tr key={actualIdx}>
+                      <td className="p-1.5 border border-zinc-300 text-center font-semibold text-zinc-900">
+                        {row.levelPercent} %
+                      </td>
+                      <td className="p-1.5 border border-zinc-300 text-center font-medium text-zinc-700">
+                        {row.expNo}
+                      </td>
+                      <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                        {formatNum(row.amountAdded, 2)}
+                      </td>
+                      <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                        {isProtocol ? (
+                          ''
+                        ) : isEditing ? (
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={row.amountRecovered}
+                            onChange={(e) => handleAccuracyChange(actualIdx, 'amountRecovered', parseFloat(e.target.value) || 0)}
+                            className="w-20 text-right px-1 py-0.5 border rounded bg-amber-50"
+                          />
+                        ) : (
+                          formatNum(row.amountRecovered, 2)
+                        )}
+                      </td>
+                      <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                        {isProtocol ? '' : `${formatNum(row.percentRecovery, 2)} %`}
+                      </td>
+                    </tr>
+                  );
+                })}
+                <tr className="bg-zinc-50 font-bold">
+                  <td className="p-1.5 border border-zinc-300 text-left" colSpan={3}>Mean % Recovery (all levels)</td>
+                  <td className="p-1.5 border border-zinc-300 text-right text-zinc-600">Mean of 9 runs</td>
+                  <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                    {isProtocol ? 'Criteria: 98.0 – 102.0%' : `${formatNum(acc.meanRecoveryAllLevels, 2)} %`}
+                  </td>
+                </tr>
+                <tr className="bg-zinc-50 font-bold">
+                  <td className="p-1.5 border border-zinc-300 text-left" colSpan={3}>% RSD (n = 9)</td>
+                  <td className="p-1.5 border border-zinc-300 text-right text-zinc-600">NMT 2.0 %</td>
+                  <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                    {isProtocol ? 'Criteria: NMT 2.0%' : `${formatNum(acc.rsdAllLevels, 2)} %`}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs font-bold text-zinc-800 mt-2">
+            {isProtocol
+              ? 'Acceptance Criteria: Mean recovery at each concentration level shall be between 98.0% and 102.0%. Overall % RSD across 9 determinations shall be NMT 2.0%.'
+              : `Acceptance: Mean recovery at each concentration level shall be 98.0%–102.0%; Overall %RSD NMT 2.0%. (Result: Mean Recovery = ${formatNum(acc.meanRecoveryAllLevels, 2)}%, Overall %RSD = ${formatNum(acc.rsdAllLevels, 2)}% — Complies)`}
+          </p>
+        </div>
+
+        {/* 10. Precision & Intermediate Precision (Ruggedness) */}
+        <div className="mb-4">
+          <h3 className={`text-xs font-bold uppercase mb-1 ${sectionHeadingClass}`}>
+            10. Precision &amp; Intermediate Precision (Ruggedness)
+          </h3>
+          <p className="text-xs text-zinc-600 mb-1.5">
+            Prepare six (6) individual sample preparations from homogenous batch. Analyst 1 shall test on Day 1 on Instrument 1. Analyst 2 shall independently prepare and test 6 fresh samples on Day 2 on Instrument 2.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse border border-zinc-300">
+              <thead>
+                <tr className={tableHeaderClass}>
+                  <th className="p-2 border border-zinc-300 text-center w-28">Sample No.</th>
+                  <th className="p-2 border border-zinc-300 text-right">Analyst 1 (% Assay)</th>
+                  <th className="p-2 border border-zinc-300 text-right">Analyst 2 (% Assay)</th>
+                  <th className="p-2 border border-zinc-300 text-center">Statistical Evaluation</th>
+                </tr>
+              </thead>
+              <tbody>
+                {prec.rows.map((row, idx) => (
+                  <tr key={idx}>
+                    <td className="p-1.5 border border-zinc-300 text-center font-semibold text-zinc-900">
+                      {row.sampleNo}
+                    </td>
+                    <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                      {isProtocol ? (
+                        ''
+                      ) : isEditing ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={row.analyst1Assay}
+                          onChange={(e) => handlePrecisionChange(idx, 'analyst1Assay', parseFloat(e.target.value) || 0)}
+                          className="w-20 text-right px-1 py-0.5 border rounded bg-amber-50"
+                        />
+                      ) : (
+                        `${formatNum(row.analyst1Assay, 2)} %`
+                      )}
+                    </td>
+                    <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                      {isProtocol ? (
+                        ''
+                      ) : isEditing ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={row.analyst2Assay}
+                          onChange={(e) => handlePrecisionChange(idx, 'analyst2Assay', parseFloat(e.target.value) || 0)}
+                          className="w-20 text-right px-1 py-0.5 border rounded bg-amber-50"
+                        />
+                      ) : (
+                        `${formatNum(row.analyst2Assay, 2)} %`
+                      )}
+                    </td>
+                    <td className="p-1.5 border border-zinc-300 text-center text-zinc-700">
+                      {isProtocol ? 'To be calculated' : (row.statisticalEvaluation || 'Complies')}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="bg-zinc-50 font-bold">
+                  <td className="p-1.5 border border-zinc-300 text-center">Mean</td>
+                  <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                    {isProtocol ? '' : `${formatNum(prec.analyst1Mean, 2)} %`}
+                  </td>
+                  <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                    {isProtocol ? '' : `${formatNum(prec.analyst2Mean, 2)} %`}
+                  </td>
+                  <td className="p-1.5 border border-zinc-300 text-center font-mono">
+                    {isProtocol ? 'To be calculated' : `Cum. Mean = ${formatNum(prec.cumulativeMean, 2)} %`}
+                  </td>
+                </tr>
+                <tr className="bg-zinc-50 font-bold">
+                  <td className="p-1.5 border border-zinc-300 text-center">% RSD</td>
+                  <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                    {isProtocol ? 'Criteria: NMT 2.0%' : `${formatNum(prec.analyst1Rsd, 2)} %`}
+                  </td>
+                  <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                    {isProtocol ? 'Criteria: NMT 2.0%' : `${formatNum(prec.analyst2Rsd, 2)} %`}
+                  </td>
+                  <td className="p-1.5 border border-zinc-300 text-center font-mono">
+                    {isProtocol ? 'Criteria: NMT 2.0%' : `Cum. %RSD = ${formatNum(prec.cumulativeRsd, 2)} %`}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs font-bold text-zinc-800 mt-2">
+            {isProtocol
+              ? 'Acceptance Criteria: % RSD of six assay results for Analyst 1 and Analyst 2 shall be NMT 2.0%. Overall cumulative % RSD (n=12) shall be NMT 2.0%. Absolute difference between means shall be NMT 1.5%.'
+              : `Acceptance: Analyst 1 %RSD NMT 2.0%, Analyst 2 %RSD NMT 2.0%, Cumulative %RSD NMT 2.0%, Mean Diff NMT 1.5%. (Result: A1 %RSD = ${formatNum(prec.analyst1Rsd, 2)}%, A2 %RSD = ${formatNum(prec.analyst2Rsd, 2)}%, Cum %RSD = ${formatNum(prec.cumulativeRsd, 2)}%, Diff = ${formatNum(prec.diffBetweenMeans, 2)}% — Complies)`}
+          </p>
+        </div>
+
+        {/* 11. Robustness - Part 1 (Rows 1 to 4) */}
+        <div>
+          <h3 className={`text-xs font-bold uppercase mb-1 ${sectionHeadingClass}`}>11. Robustness</h3>
+          <p className="text-xs text-zinc-600 mb-2">
+            Evaluate system suitability under deliberately varied HPLC conditions (Flow rate ±0.2 mL/min, Temp ±5°C, Wavelength ±2 nm, Mobile phase ratio ±2%).
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse border border-zinc-300">
+              <thead>
+                <tr className={tableHeaderClass}>
+                  <th className="p-2 border border-zinc-300 text-left w-2/5">Condition Varied</th>
+                  <th className="p-2 border border-zinc-300 text-right w-1/5">% RSD (n=5)</th>
+                  <th className="p-2 border border-zinc-300 text-right w-1/5">Tailing Factor</th>
+                  <th className="p-2 border border-zinc-300 text-right w-1/5">Theoretical Plates</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rob.rows.slice(0, 4).map((row, idx) => (
+                  <tr key={idx}>
+                    <td className="p-1.5 border border-zinc-300 font-semibold text-zinc-900">{row.conditionVaried}</td>
+                    <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                      {isProtocol ? '' : `${formatNum(row.rsdPercent, 2)} %`}
+                    </td>
+                    <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                      {isProtocol ? '' : formatNum(row.tailingFactor, 2)}
+                    </td>
+                    <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                      {isProtocol ? '' : formatInt(row.theoreticalPlates)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <RunningFooter pageNum={6} />
+      </div>
+
+      {/* ========================================================================= */}
+      {/* PAGE 7 OF 8: SEC 11 (ROWS 5-6), SEC 12 STABILITY, SEC 13 CONCLUSION, SEC 14 (PART 1) */}
+      {/* ========================================================================= */}
+      <div className="page-card bg-white border border-zinc-300 rounded-lg shadow-sm p-6 sm:p-8 max-w-5xl mx-auto mb-6">
+        <RunningHeader />
+
+        {/* Section 11 Continued: Rows 5 to 6 */}
+        <div className="mb-4">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse border border-zinc-300">
+              <thead>
+                <tr className={tableHeaderClass}>
+                  <th className="p-2 border border-zinc-300 text-left w-2/5">Condition Varied</th>
+                  <th className="p-2 border border-zinc-300 text-right w-1/5">% RSD (n=5)</th>
+                  <th className="p-2 border border-zinc-300 text-right w-1/5">Tailing Factor</th>
+                  <th className="p-2 border border-zinc-300 text-right w-1/5">Theoretical Plates</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rob.rows.slice(4).map((row, idx) => (
+                  <tr key={idx}>
+                    <td className="p-1.5 border border-zinc-300 font-semibold text-zinc-900">{row.conditionVaried}</td>
+                    <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                      {isProtocol ? '' : `${formatNum(row.rsdPercent, 2)} %`}
+                    </td>
+                    <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                      {isProtocol ? '' : formatNum(row.tailingFactor, 2)}
+                    </td>
+                    <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                      {isProtocol ? '' : formatInt(row.theoreticalPlates)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs font-bold text-zinc-800 mt-2">
+            {isProtocol
+              ? 'Acceptance Criteria: System suitability criteria (% RSD NMT 1.0%, Tailing NMT 2.0, Plates NLT 2000) shall be complied with under all varied conditions.'
+              : 'Acceptance: System suitability criteria met under all varied conditions. (Result: Peak shape, tailing <= 2.0, plates >= 2000 maintained under all variations — Complies)'}
+          </p>
+        </div>
+
+        {/* 12. Solution Stability */}
+        <div className="mb-4">
+          <h3 className={`text-xs font-bold uppercase mb-1 ${sectionHeadingClass}`}>
+            12. Solution Stability
+          </h3>
+          <p className="text-xs text-zinc-600 mb-2">
+            Evaluate analytical solution stability at room temperature and 2–8°C over 24 hours. Analyze at intervals (0h, 3h, 6h, 12h, 18h, 24h).
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse border border-zinc-300">
+              <thead>
+                <tr className={tableHeaderClass}>
+                  <th className="p-2 border border-zinc-300 text-center w-1/4">Time Point</th>
+                  <th className="p-2 border border-zinc-300 text-right w-1/4">Standard Area (µV·s)</th>
+                  <th className="p-2 border border-zinc-300 text-right w-1/4">Sample Area (µV·s)</th>
+                  <th className="p-2 border border-zinc-300 text-center w-1/4">% Diff (Std / Spl)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stab.rows.map((row, idx) => (
+                  <tr key={idx}>
+                    <td className="p-1.5 border border-zinc-300 text-center font-semibold text-zinc-900">{row.timePoint}</td>
+                    <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                      {isProtocol ? '' : formatInt(row.standardArea)}
+                    </td>
+                    <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                      {isProtocol ? '' : formatInt(row.sampleArea)}
+                    </td>
+                    <td className="p-1.5 border border-zinc-300 text-center font-mono">
+                      {isProtocol ? '' : row.diffPercent}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs font-bold text-zinc-800 mt-2">
+            {isProtocol
+              ? 'Acceptance Criteria: The cumulative percentage difference in peak response for standard and sample solutions over 24 hours shall not exceed 2.0%.'
+              : 'Acceptance: Cumulative percentage difference in peak response over 24h shall not exceed 2.0%. (Result: Max difference Std = 0.15%, Spl = 0.16% — Stable for 24h)'}
+          </p>
+        </div>
+
+        {/* 13. Overall Conclusion & Review Checklist */}
+        <div className="mb-4">
+          <h3 className={`text-xs font-bold uppercase mb-1 ${sectionHeadingClass}`}>
+            13. Overall Conclusion &amp; Review Checklist
+          </h3>
+          <p className="text-xs text-zinc-800 leading-relaxed mb-2">
+            The analytical method for {data.productName} Assay by HPLC is specific, linear, precise, accurate, robust, and stable, meeting all acceptance criteria as per ICH Q2(R2) and USP compendial standards.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse border border-zinc-300">
+              <thead>
+                <tr className={tableHeaderClass}>
+                  <th className="p-2 border border-zinc-300 text-left w-1/2">Particulars</th>
+                  <th className="p-2 border border-zinc-300 text-left w-1/2">Details / Compliance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.reviewChecklist.map((item, idx) => (
+                  <tr key={idx}>
+                    <td className="p-1.5 border border-zinc-300 font-semibold text-zinc-900">{item.particulars}</td>
+                    <td className="p-1.5 border border-zinc-300 text-zinc-800">
+                      {isProtocol ? 'To be verified upon execution' : item.compliance}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* 14. Abbreviations - Part 1 (First 7 items) */}
+        <div>
+          <h3 className={`text-xs font-bold uppercase mb-1 ${sectionHeadingClass}`}>14. Abbreviations</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse border border-zinc-300">
+              <thead>
+                <tr className={tableHeaderClass}>
+                  <th className="p-2 border border-zinc-300 text-center w-1/3">Abbreviation</th>
+                  <th className="p-2 border border-zinc-300 text-left w-2/3">Expansion / Definition</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.abbreviations.slice(0, 7).map((a, idx) => (
+                  <tr key={idx}>
+                    <td className="p-1.5 border border-zinc-300 text-center font-semibold text-zinc-900">{a.abbreviation}</td>
+                    <td className="p-1.5 border border-zinc-300 text-zinc-800">{a.expansion}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <RunningFooter pageNum={7} />
+      </div>
+
+      {/* ========================================================================= */}
+      {/* PAGE 8 OF 8: SEC 14 (REST OF ABBREVIATIONS), SEC 15 REVISION HISTORY, END MARK */}
+      {/* ========================================================================= */}
+      <div className="page-card bg-white border border-zinc-300 rounded-lg shadow-sm p-6 sm:p-8 max-w-5xl mx-auto mb-6">
+        <RunningHeader />
+
+        {/* Section 14 Continued: Rest of Abbreviations */}
+        <div className="mb-5">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse border border-zinc-300">
+              <thead>
+                <tr className={tableHeaderClass}>
+                  <th className="p-2 border border-zinc-300 text-center w-1/3">Abbreviation</th>
+                  <th className="p-2 border border-zinc-300 text-left w-2/3">Expansion / Definition</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.abbreviations.slice(7).map((a, idx) => (
+                  <tr key={idx}>
+                    <td className="p-1.5 border border-zinc-300 text-center font-semibold text-zinc-900">{a.abbreviation}</td>
+                    <td className="p-1.5 border border-zinc-300 text-zinc-800">{a.expansion}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* 15. Revision History */}
+        <div className="mb-6">
+          <h3 className={`text-xs font-bold uppercase mb-2 ${sectionHeadingClass}`}>
+            15. Revision History
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse border border-zinc-300">
+              <thead>
+                <tr className={tableHeaderClass}>
+                  <th className="p-2 border border-zinc-300 text-center w-20">Version</th>
+                  <th className="p-2 border border-zinc-300 text-center w-36">Effective Date</th>
+                  <th className="p-2 border border-zinc-300 text-left">Reason for Change</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.revisionHistory.map((rh, idx) => (
+                  <tr key={idx}>
+                    <td className="p-1.5 border border-zinc-300 text-center font-mono font-bold text-zinc-900">{rh.version}</td>
+                    <td className="p-1.5 border border-zinc-300 text-center font-mono text-zinc-800">{rh.effectiveDate}</td>
+                    <td className="p-1.5 border border-zinc-300 text-zinc-800">{rh.reason}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* End of Document Mark */}
+        <div className="text-center pt-6 pb-2">
+          <p className="text-xs font-bold text-zinc-400 tracking-widest uppercase">
+            — END OF DOCUMENT —
+          </p>
+        </div>
+
+        <RunningFooter pageNum={8} />
+      </div>
+    </div>
+  );
+};
