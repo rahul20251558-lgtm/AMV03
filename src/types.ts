@@ -253,6 +253,8 @@ export interface RSApprovalPerson {
   name: string;
   signature: string;
   date: string;
+  dateProtocol?: string;
+  dateReport?: string;
 }
 
 export interface RSApprovalTable {
@@ -462,6 +464,8 @@ export interface RSCompletionRecordItem {
   particulars: string;
   details: string;
   signatureDate: string;
+  detailsProtocol?: string;
+  signatureDateProtocol?: string;
 }
 
 export interface RSAMVDocumentData {

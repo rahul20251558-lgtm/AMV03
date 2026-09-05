@@ -65,8 +65,51 @@ export function App() {
       documentNo: 'WC/QC/AMV/033',
       validationBatchNo: 'ACT-2601',
       standardLotNo: 'WS/2026/042',
+      companyName: 'WESTCOAST PHARMACEUTICAL WORKS LTD.',
     })
   );
+
+  // Dedicated reactive field handlers to instantly reflect user input changes across active documents
+  const handleCompanyNameChange = (newCompany: string) => {
+    setCompanyName(newCompany);
+    setDissolutionData((prev) => ({ ...prev, companyName: newCompany }));
+    setRsData((prev) => ({ ...prev, companyName: newCompany }));
+    setAssayData((prev) => ({ ...prev, companyName: newCompany }));
+  };
+
+  const handleDocumentNoChange = (newDocNo: string) => {
+    setDocumentNo(newDocNo);
+    if (validationMethod === 'dissolution') {
+      setDissolutionData((prev) => ({ ...prev, protocolNo: newDocNo }));
+    } else if (validationMethod === 'related_substances') {
+      setRsData((prev) => ({ ...prev, protocolNo: newDocNo }));
+    } else {
+      setAssayData((prev) => ({ ...prev, documentNo: newDocNo }));
+    }
+  };
+
+  const handleBatchNoChange = (newBatchNo: string) => {
+    setBatchNo(newBatchNo);
+    if (validationMethod === 'dissolution') {
+      setDissolutionData((prev) => ({ ...prev, batchNoUsed: newBatchNo }));
+    } else if (validationMethod === 'related_substances') {
+      setRsData((prev) => ({ ...prev, batchNoUsed: newBatchNo }));
+    } else {
+      setAssayData((prev) => ({ ...prev, batchNoUsed: newBatchNo }));
+    }
+  };
+
+  const handleStandardLotChange = (newLot: string) => {
+    setStandardLot(newLot);
+    setAssayData((prev) => ({
+      ...prev,
+      reagentsAndStandards: prev.reagentsAndStandards.map((r) =>
+        r.name.includes('Standard') || r.name.includes('WS') || r.name.includes('RS')
+          ? { ...r, batchNo: newLot }
+          : r
+      ),
+    }));
+  };
 
   // Handle switching between Dissolution, Related Substances, and Assay methods
   const handleValidationMethodChange = (newMethod: ValidationMethodType) => {
@@ -108,6 +151,7 @@ export function App() {
           documentNo: 'WC/QC/AMV/033',
           validationBatchNo: 'ACT-2601',
           standardLotNo: 'WS/2026/042',
+          companyName,
         })
       );
     }
@@ -221,6 +265,7 @@ export function App() {
             productName,
             protocolNo: documentNo,
             batchNo,
+            companyName,
           }),
         });
 
@@ -260,6 +305,7 @@ export function App() {
           productName,
           documentNo,
           batchNo,
+          companyName,
         }),
       });
 
@@ -282,6 +328,7 @@ export function App() {
       documentNo,
       validationBatchNo: batchNo,
       standardLotNo: standardLot,
+      companyName,
     });
     setAssayData(localData);
     setDocumentNo(localData.documentNo);
@@ -369,13 +416,13 @@ export function App() {
           productName={productName}
           onProductNameChange={handleProductNameChange}
           documentNo={documentNo}
-          onDocumentNoChange={setDocumentNo}
+          onDocumentNoChange={handleDocumentNoChange}
           batchNo={batchNo}
-          onBatchNoChange={setBatchNo}
+          onBatchNoChange={handleBatchNoChange}
           standardLot={standardLot}
-          onStandardLotChange={setStandardLot}
+          onStandardLotChange={handleStandardLotChange}
           companyName={companyName}
-          onCompanyNameChange={setCompanyName}
+          onCompanyNameChange={handleCompanyNameChange}
           validationMethod={validationMethod}
           onValidationMethodChange={handleValidationMethodChange}
           onGenerate={handleGenerate}

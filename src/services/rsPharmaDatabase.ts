@@ -87,7 +87,8 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     detectorTempOrWavelength: 'FID at 220 °C',
     injectionVolume: '1 µL',
     splitRatio: '1 : 10',
-    ovenProgrammeOrGradient: 'Temperature gradient: 80 °C (5 min) to 190 °C at 8 °C/min, then to 250 °C at 15 °C/min',
+    ovenProgrammeOrGradient:
+      'Multi-ramp temperature programme: 80 °C (hold 5 min) to 150 °C at 7.0 °C/min, to 190 °C at 3.0 °C/min (hold 1.7 min), to 250 °C at 12.0 °C/min (hold 10 min); total run time 45 min',
     totalRunTime: '45 minutes',
     diluent: 'Dichloromethane',
     internalStandard: 'Octanoic acid, 0.005 % w/v in dichloromethane',
@@ -99,12 +100,12 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     internalStandardRtMin: 16.94,
     nominalArea: 482500,
     ovenProgramme: [
-      { timeRange: '0 — 5', temperature: '80', comment: 'Isothermal' },
-      { timeRange: '5 — 15', temperature: '80 → 150', comment: 'Linear gradient' },
-      { timeRange: '15 — 28.3', temperature: '150 → 190', comment: 'Linear gradient' },
-      { timeRange: '28.3 — 30', temperature: '190', comment: 'Isothermal' },
-      { timeRange: '30 — 35', temperature: '190 → 250', comment: 'Linear gradient' },
-      { timeRange: '35 — 45', temperature: '250', comment: 'Isothermal' },
+      { timeRange: '0 — 5', temperature: '80', comment: 'Isothermal (5 min)' },
+      { timeRange: '5 — 15', temperature: '80 → 150', comment: 'Linear ramp at 7.0 °C/min' },
+      { timeRange: '15 — 28.3', temperature: '150 → 190', comment: 'Linear ramp at 3.0 °C/min' },
+      { timeRange: '28.3 — 30', temperature: '190', comment: 'Isothermal (1.7 min)' },
+      { timeRange: '30 — 35', temperature: '190 → 250', comment: 'Linear ramp at 12.0 °C/min' },
+      { timeRange: '35 — 45', temperature: '250', comment: 'Isothermal (10 min)' },
     ],
     solutionPreparation: {
       internalStandard: 'Prepare a 0.005 % w/v solution of octanoic acid in dichloromethane.',
@@ -1136,7 +1137,8 @@ export function buildFullRSAMVData(
   const docNo = options?.protocolNo || 'WC/QC/AMV/0285';
   const docDate = options?.protocolDate || '09/07/2024';
   const batchNo = options?.batchNo || `WC-${productName.substring(0, 3).toUpperCase()}-2401`;
-  const companyName = options?.companyName || 'WESTCOAST PHARMACEUTICAL WORKS LTD.';
+  const rawCompanyName = options?.companyName || 'WESTCOAST PHARMACEUTICAL WORKS LTD.';
+  const companyName = rawCompanyName.replace(/\.+$/, '');
 
   const { strengthNum, unit } = parseProductStrength(seed.productName || productName);
   const nomPpm = seed.nominalPpm || 250;
@@ -1222,7 +1224,7 @@ export function buildFullRSAMVData(
     sampleId: `Finished Product Prep ${i + 1}`,
     volumeUsed: '10.0 mL',
     peakArea: r.peakArea,
-    contentPercentLa: Number((0.045 + (r.determinationNo % 3) * 0.002).toFixed(3)),
+    contentPercentLa: r.percentAssayOrDissolved,
   }));
 
   // 6. LOD & LOQ
@@ -1346,25 +1348,33 @@ export function buildFullRSAMVData(
         designation: 'Chemist, Quality Control',
         name: 'Riya Patel',
         signature: 'Signed',
-        date: docDate,
+        date: '16/07/2024',
+        dateProtocol: '09/07/2024',
+        dateReport: '16/07/2024',
       },
       checkedBy: {
         designation: 'Executive, Quality Control',
         name: 'Jeel Patel',
         signature: 'Signed',
-        date: docDate,
+        date: '16/07/2024',
+        dateProtocol: '09/07/2024',
+        dateReport: '16/07/2024',
       },
       reviewedBy: {
         designation: 'Manager, Quality Assurance',
         name: 'Anil Parmar',
         signature: 'Signed',
-        date: docDate,
+        date: '17/07/2024',
+        dateProtocol: '10/07/2024',
+        dateReport: '17/07/2024',
       },
       authorisedBy: {
         designation: 'General Manager, Quality (Head QA/QC)',
         name: 'Suresh Shah',
         signature: 'Signed',
-        date: docDate,
+        date: '17/07/2024',
+        dateProtocol: '10/07/2024',
+        dateReport: '17/07/2024',
       },
     },
 
@@ -1433,7 +1443,7 @@ export function buildFullRSAMVData(
         rSquared: linMath.regression.rSquared,
         slope: linMath.regression.slope,
         yIntercept: linMath.regression.yIntercept,
-        sdYIntercepts: linMath.regression.residualSumOfSquares,
+        sdYIntercepts: Number(((Number((nomPpm * 0.10).toFixed(2)) * linMath.regression.slope) / 10).toFixed(1)),
         conclusionProtocol: `Linearity will be evaluated from ${p50} ppm to ${p150} ppm with acceptance criteria r² ≥ 0.995.`,
         conclusionReport: `The linear regression analysis yielded a correlation coefficient (r²) of ${linMath.regression.rSquared}, exceeding the threshold of 0.995. Excellent linearity is confirmed across ${p50} ppm to ${p150} ppm.`,
       },
@@ -1510,14 +1520,46 @@ export function buildFullRSAMVData(
       seed.technique === 'GC' ? 'gas chromatography' : 'high performance liquid chromatography'
     }, and to demonstrate that the procedure is suitable for its intended purpose and gives specific, linear, accurate, and precise results under standard laboratory operating conditions as per ${seed.reference}.`,
 
-    overallConclusionReport: `The analytical method for the determination of Organic Impurities (Related Substances) in ${seed.productName} has been validated in accordance with ${seed.reference} and ICH Q2(R2). All validation parameters meet predefined acceptance criteria. The method is declared validated for routine QC testing.`,
+    overallConclusionReport: `The analytical method for the determination of Organic Impurities (Related Substances) in ${seed.productName} has been validated in accordance with ${
+      seed.reference.includes('ICH Q2(R2)') ? seed.reference : `${seed.reference} and ICH Q2(R2)`
+    }. All validation parameters meet predefined acceptance criteria. The method is declared validated for routine QC testing.`,
 
     completionRecord: [
-      { particulars: 'Protocol Preparation', details: 'Prepared by Chemist QC', signatureDate: `Signed / ${docDate}` },
-      { particulars: 'Protocol Approval', details: 'Approved by Head QA/QC', signatureDate: `Signed / ${docDate}` },
-      { particulars: 'Verification Execution', details: 'Executed by Analytical Team', signatureDate: `Signed / ${docDate}` },
-      { particulars: 'Report Preparation', details: 'Compiled with all chromatographic chromatograms', signatureDate: `Signed / ${docDate}` },
-      { particulars: 'Final Report Approval', details: 'Authorised by Head QA/QC', signatureDate: `Signed / ${docDate}` },
+      {
+        particulars: 'Protocol Preparation',
+        details: 'Prepared by Chemist QC',
+        signatureDate: 'Signed / 09/07/2024',
+        detailsProtocol: 'Prepared by Chemist QC',
+        signatureDateProtocol: 'Signed / 09/07/2024',
+      },
+      {
+        particulars: 'Protocol Approval',
+        details: 'Approved by Head QA/QC',
+        signatureDate: 'Signed / 10/07/2024',
+        detailsProtocol: 'Approved by Head QA/QC',
+        signatureDateProtocol: 'Signed / 10/07/2024',
+      },
+      {
+        particulars: 'Verification Execution',
+        details: 'Executed by Analytical Team (11/07/2024 – 15/07/2024)',
+        signatureDate: 'Signed / 15/07/2024',
+        detailsProtocol: 'To be executed as per approved protocol',
+        signatureDateProtocol: '—',
+      },
+      {
+        particulars: 'Report Preparation',
+        details: 'Compiled with all chromatographic data and integration reports',
+        signatureDate: 'Signed / 16/07/2024',
+        detailsProtocol: 'To be compiled with chromatograms upon execution',
+        signatureDateProtocol: '—',
+      },
+      {
+        particulars: 'Final Report Approval',
+        details: 'Authorised by Head QA/QC',
+        signatureDate: 'Signed / 17/07/2024',
+        detailsProtocol: 'To be authorised upon completion',
+        signatureDateProtocol: '—',
+      },
     ],
 
     abbreviations: [
@@ -1525,10 +1567,14 @@ export function buildFullRSAMVData(
       { abbreviation: 'RS', expansion: 'Related Substances' },
       { abbreviation: 'GC', expansion: 'Gas Chromatography' },
       { abbreviation: 'HPLC', expansion: 'High Performance Liquid Chromatography' },
+      { abbreviation: 'LA', expansion: 'Label Amount / Claim' },
       { abbreviation: 'LOD', expansion: 'Limit of Detection' },
       { abbreviation: 'LOQ', expansion: 'Limit of Quantification' },
       { abbreviation: 'FID', expansion: 'Flame Ionization Detector' },
       { abbreviation: 'RSD', expansion: 'Relative Standard Deviation' },
+      { abbreviation: 'SD', expansion: 'Standard Deviation' },
+      { abbreviation: 'S/N', expansion: 'Signal-to-Noise Ratio' },
+      { abbreviation: 'BP', expansion: 'British Pharmacopoeia' },
       { abbreviation: 'ICH', expansion: 'International Council for Harmonisation' },
     ],
 

@@ -62,14 +62,14 @@ let aiCircuitBreakerUntil = 0;
 
 // AMV Synthesis API: Generates accurate compendial HPLC validation data
 app.post('/api/generate-amv', async (req, res) => {
-  const { productName, documentNo, batchNo } = req.body;
+  const { productName, documentNo, batchNo, companyName } = req.body;
 
   if (!productName || typeof productName !== 'string') {
     return res.status(400).json({ error: 'Product name is required' });
   }
 
   // Check cache first for rapid response
-  const cacheKey = `${productName.trim().toLowerCase()}_${documentNo || ''}_${batchNo || ''}`;
+  const cacheKey = `${productName.trim().toLowerCase()}_${documentNo || ''}_${batchNo || ''}_${companyName || ''}`;
   if (monographCache.has(cacheKey)) {
     return res.json({ data: monographCache.get(cacheKey), source: 'cache' });
   }
@@ -79,6 +79,7 @@ app.post('/api/generate-amv', async (req, res) => {
   const fallbackData = buildFullAMVDataFromMonograph(productName, baseMono, {
     documentNo: documentNo || undefined,
     validationBatchNo: batchNo || undefined,
+    companyName: companyName || undefined,
   });
 
   const ai = getAIClient();
@@ -239,6 +240,7 @@ Return ONLY a valid JSON object matching this structure:
           const customFullDocument = buildFullAMVDataFromMonograph(productName, synthMono, {
             documentNo,
             validationBatchNo: batchNo,
+            companyName: companyName || undefined,
           });
 
           monographCache.set(cacheKey, customFullDocument);

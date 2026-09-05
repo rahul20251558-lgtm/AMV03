@@ -372,19 +372,21 @@ export function generateAccuracyRecoveryData(
 
     for (let j = 1; j <= 3; j++) {
       const added = Number((nominalAdded + (rand() - 0.5) * (nominalAdded * 0.008)).toFixed(strengthMg >= 50 ? 1 : strengthMg >= 1 ? 2 : 3));
-      // % recovery between 98.8% and 101.2%
+      // % recovery target between 98.8% and 101.2%
       const recPct = Number(normalRandom(rand, 99.85, 0.45).toFixed(2));
       const recovered = Number(((recPct / 100) * added).toFixed(strengthMg >= 50 ? 1 : strengthMg >= 1 ? 2 : 3));
+      // Derive actual percentRecovery strictly from the rounded display numbers so (recovered / added) * 100 is 100% exact
+      const actualRecPct = Number(((recovered / added) * 100).toFixed(2));
 
       reps.push({
         prepNo: j,
         amountAddedMg: added,
         amountRecoveredMg: recovered,
-        percentRecovery: recPct,
+        percentRecovery: actualRecPct,
       });
 
-      repVals.push(recPct);
-      totalRecoveries.push(recPct);
+      repVals.push(actualRecPct);
+      totalRecoveries.push(actualRecPct);
     }
 
     const mean = Number((repVals.reduce((a, b) => a + b, 0) / 3).toFixed(2));

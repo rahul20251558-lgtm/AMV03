@@ -293,27 +293,27 @@ export async function generateAndDownloadRSAMVDocx(
     ], true),
     createRow([
       createDataCell('Prepared By', AlignmentType.LEFT, true, undefined, 2200),
-      createDataCell(isProtocol ? '' : data.signOffs.preparedBy.designation, AlignmentType.LEFT, false, undefined, 2600),
-      createDataCell(isProtocol ? '' : data.signOffs.preparedBy.name, AlignmentType.LEFT, false, undefined, 2600),
-      createDataCell(isProtocol ? '' : `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
+      createDataCell(data.signOffs.preparedBy.designation, AlignmentType.LEFT, false, undefined, 2600),
+      createDataCell(data.signOffs.preparedBy.name, AlignmentType.LEFT, false, undefined, 2600),
+      createDataCell(isProtocol ? `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.dateProtocol || '09/07/2024'}` : `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.dateReport || data.signOffs.preparedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
     ]),
     createRow([
       createDataCell('Checked By', AlignmentType.LEFT, true, undefined, 2200),
-      createDataCell(isProtocol ? '' : data.signOffs.checkedBy.designation, AlignmentType.LEFT, false, undefined, 2600),
-      createDataCell(isProtocol ? '' : data.signOffs.checkedBy.name, AlignmentType.LEFT, false, undefined, 2600),
-      createDataCell(isProtocol ? '' : `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
+      createDataCell(data.signOffs.checkedBy.designation, AlignmentType.LEFT, false, undefined, 2600),
+      createDataCell(data.signOffs.checkedBy.name, AlignmentType.LEFT, false, undefined, 2600),
+      createDataCell(isProtocol ? `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.dateProtocol || '09/07/2024'}` : `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.dateReport || data.signOffs.checkedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
     ]),
     createRow([
       createDataCell('Reviewed By', AlignmentType.LEFT, true, undefined, 2200),
-      createDataCell(isProtocol ? '' : data.signOffs.reviewedBy.designation, AlignmentType.LEFT, false, undefined, 2600),
-      createDataCell(isProtocol ? '' : data.signOffs.reviewedBy.name, AlignmentType.LEFT, false, undefined, 2600),
-      createDataCell(isProtocol ? '' : `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
+      createDataCell(data.signOffs.reviewedBy.designation, AlignmentType.LEFT, false, undefined, 2600),
+      createDataCell(data.signOffs.reviewedBy.name, AlignmentType.LEFT, false, undefined, 2600),
+      createDataCell(isProtocol ? `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.dateProtocol || '10/07/2024'}` : `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.dateReport || data.signOffs.reviewedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
     ]),
     createRow([
       createDataCell('Authorised By', AlignmentType.LEFT, true, undefined, 2200),
-      createDataCell(isProtocol ? '' : data.signOffs.authorisedBy.designation, AlignmentType.LEFT, false, undefined, 2600),
-      createDataCell(isProtocol ? '' : data.signOffs.authorisedBy.name, AlignmentType.LEFT, false, undefined, 2600),
-      createDataCell(isProtocol ? '' : `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
+      createDataCell(data.signOffs.authorisedBy.designation, AlignmentType.LEFT, false, undefined, 2600),
+      createDataCell(data.signOffs.authorisedBy.name, AlignmentType.LEFT, false, undefined, 2600),
+      createDataCell(isProtocol ? `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.dateProtocol || '10/07/2024'}` : `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.dateReport || data.signOffs.authorisedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
     ]),
   ];
   docElements.push(createDocxTable(signColWidths, signRows));
@@ -764,23 +764,23 @@ export async function generateAndDownloadRSAMVDocx(
   // 12. Accuracy (Recovery)
   const acc = data.accuracy;
   docElements.push(createSectionHeader('12. ACCURACY (RECOVERY)', 40, 50));
-  const accColWidths = [800, 1600, 1900, 1900, 1900, 1806];
+  const accColWidths = [700, 2000, 1800, 1800, 1800, 1806];
   const accRows: TableRow[] = [
     createRow([
-      createHeaderCell('Sr.', 800),
-      createHeaderCell('Level (ppm)', 1600),
-      createHeaderCell('Spiked (mg)', 1900),
-      createHeaderCell('Peak Area', 1900),
-      createHeaderCell('Recovered (mg)', 1900),
+      createHeaderCell('Sr.', 700),
+      createHeaderCell('Spike Level (%)', 2000),
+      createHeaderCell('Spiked (mg)', 1800),
+      createHeaderCell('Peak Area', 1800),
+      createHeaderCell('Recovered (mg)', 1800),
       createHeaderCell('% Recovery', 1806),
     ], true),
     ...acc.rows.map((row, i) =>
       createRow([
-        createDataCell(row.srNo, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 800),
-        createDataCell(row.levelPpm, AlignmentType.CENTER, true, i % 2 === 1 ? altRowBgColor : undefined, 1600),
-        createDataCell(isProtocol ? '' : row.standardSpikedMg, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1900),
-        createDataCell(isProtocol ? '' : row.sampleArea, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 1900),
-        createDataCell(isProtocol ? '' : row.amountRecoveredMg, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1900),
+        createDataCell(row.srNo, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 700),
+        createDataCell(`${row.levelPpm} % (${Math.round((row.levelPpm / 100) * (data.linearityAndRange.linearityLevels[2]?.nominalPpm || 300))} ppm)`, AlignmentType.CENTER, true, i % 2 === 1 ? altRowBgColor : undefined, 2000),
+        createDataCell(isProtocol ? '' : row.standardSpikedMg, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1800),
+        createDataCell(isProtocol ? '' : Number(row.sampleArea).toLocaleString(), AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 1800),
+        createDataCell(isProtocol ? '' : row.amountRecoveredMg, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1800),
         createDataCell(isProtocol ? '' : `${row.percentRecovery} %`, AlignmentType.CENTER, true, i % 2 === 1 ? altRowBgColor : undefined, 1806),
       ])
     ),
@@ -808,8 +808,8 @@ export async function generateAndDownloadRSAMVDocx(
     ...data.completionRecord.map((rec, i) =>
       createRow([
         createDataCell(rec.particulars, AlignmentType.LEFT, true, i % 2 === 1 ? altRowBgColor : undefined, 3800),
-        createDataCell(isProtocol ? '' : rec.details, AlignmentType.LEFT, false, i % 2 === 1 ? altRowBgColor : undefined, 3100),
-        createDataCell(isProtocol ? '' : rec.signatureDate, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 3006),
+        createDataCell(isProtocol ? (rec.detailsProtocol || '') : rec.details, AlignmentType.LEFT, false, i % 2 === 1 ? altRowBgColor : undefined, 3100),
+        createDataCell(isProtocol ? (rec.signatureDateProtocol || '—') : rec.signatureDate, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 3006),
       ])
     ),
   ];

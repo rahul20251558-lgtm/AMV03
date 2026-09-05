@@ -907,7 +907,9 @@ export function buildFullDissolutionAMVData(
 
     overallConclusionProtocol: `To verify the analytical method for the determination of Dissolution of ${mono.productName} by HPLC, and to demonstrate that the procedure is suitable for its intended purpose and provides specific, linear, accurate, and precise results under standard laboratory operating conditions as per ${mono.reference}.`,
 
-    overallConclusionReport: `The Analytical Method Verification for the Dissolution of ${mono.productName} by HPLC has been successfully performed in accordance with ${mono.reference} and ICH Q2(R2). All validation parameters—System Suitability, Linearity, Range, Method Precision, Intermediate Precision, and Accuracy—meet all predefined acceptance criteria. The method is formally verified for routine batch release testing.`,
+    overallConclusionReport: `The Analytical Method Verification for the Dissolution of ${mono.productName} by HPLC has been successfully performed in accordance with ${
+      mono.reference.includes('ICH Q2(R2)') ? mono.reference : `${mono.reference} and ICH Q2(R2)`
+    }. All validation parameters—System Suitability, Linearity, Range, Method Precision, Intermediate Precision, and Accuracy—meet all predefined acceptance criteria. The method is formally verified for routine batch release testing.`,
 
     completionRecord: [
       { particulars: 'Protocol Preparation', detailsProtocol: 'Prepared by Chemist QC', detailsReport: 'Prepared by Chemist QC', signatureDateProtocol: `Signed / ${date}`, signatureDateReport: `Signed / ${date}` },

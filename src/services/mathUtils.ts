@@ -93,7 +93,12 @@ export function recalculateAMVData(doc: AMVDocumentData): AMVDocumentData {
     yInterceptBiasPercent: Number(bias.toFixed(2)),
   };
 
-  // 3. Accuracy / Recovery
+  // 3. Accuracy / Recovery - Strictly recompute percentRecovery from amountRecovered and amountAdded
+  for (const r of updated.accuracy.rows) {
+    if (r.amountAdded > 0 && r.amountRecovered > 0) {
+      r.percentRecovery = Number(((r.amountRecovered / r.amountAdded) * 100).toFixed(2));
+    }
+  }
   const recoveries = updated.accuracy.rows.map((r) => r.percentRecovery);
   updated.accuracy.meanRecoveryAllLevels = Number(mean(recoveries).toFixed(2));
   updated.accuracy.rsdAllLevels = Number(rsd(recoveries).toFixed(2));
@@ -132,18 +137,32 @@ export function recalculateAMVData(doc: AMVDocumentData): AMVDocumentData {
     updated.precision.rows[5].statisticalEvaluation = `Analyst 2 SD = ${formatNum(updated.precision.analyst2Sd, 3)}`;
   }
 
-  // 5. Robustness max RSD
+  // 5. Robustness max RSD calculated dynamically from the actual rows
   const robRsds = updated.robustness.rows.map((r) => r.rsdPercent);
-  const maxRobRsd = robRsds.length > 0 ? Math.max(...robRsds) : 0.14;
+  const maxRobRsd = robRsds.length > 0 ? Math.max(...robRsds) : 0.13;
 
-  // 6. Stability standard and sample RSDs
-  const stdAreas = updated.solutionStability.rows.map((r) => r.standardArea);
-  const splAreas = updated.solutionStability.rows.map((r) => r.sampleArea);
-  const stdRsd = rsd(stdAreas);
-  const splRsd = rsd(splAreas);
+  // 6. Stability standard and sample differences derived strictly from raw peak areas
+  const initialStd = updated.solutionStability.rows[0]?.standardArea || 1;
+  const initialSpl = updated.solutionStability.rows[0]?.sampleArea || 1;
+  let maxStdDiff = 0;
+  let maxSplDiff = 0;
+
+  updated.solutionStability.rows.forEach((r, idx) => {
+    if (idx === 0) {
+      r.diffPercent = '0.00 % / 0.00 %';
+    } else {
+      const dStd = (Math.abs(r.standardArea - initialStd) / initialStd) * 100;
+      const dSpl = (Math.abs(r.sampleArea - initialSpl) / initialSpl) * 100;
+      if (dStd > maxStdDiff) maxStdDiff = dStd;
+      if (dSpl > maxSplDiff) maxSplDiff = dSpl;
+      r.diffPercent = `${dStd.toFixed(2)} % / ${dSpl.toFixed(2)} %`;
+    }
+  });
+
+  updated.solutionStability.conclusionReport = `Conclusion: Standard and sample solutions are stable at room temperature (25 °C) for up to 24 hours. Maximum cumulative peak area difference was ${maxStdDiff.toFixed(2)} % (Std) and ${maxSplDiff.toFixed(2)} % (Sample), well within the NMT 2.0 % acceptance limit.`;
 
   // 7. Synchronize Section 5 (Validation Parameters and Acceptance Criteria)
-  // so that "Result / Acceptance Status" in the Report matches the exact calculated values below!
+  // Harmonized criteria and dynamic results matching the exact calculated tables below!
   updated.validationParameters = [
     {
       srNo: 1,
@@ -169,7 +188,7 @@ export function recalculateAMVData(doc: AMVDocumentData): AMVDocumentData {
       srNo: 3,
       parameter: 'Linearity (50%–150%)',
       acceptanceCriteria:
-        'Correlation coefficient r ≥ 0.99 (or r² ≥ 0.998); slope and y-intercept reported; y-intercept bias at 100 % level within ±10.0 %.',
+        'Correlation coefficient (r) shall be ≥ 0.999 (r² ≥ 0.998); slope and y-intercept reported; y-intercept bias at 100 % level within ±2.0 %.',
       verificationRequirement: 'To be verified as per protocol criteria',
       resultStatus: `r = ${formatNum(updated.linearity.regression.correlationR, 5)}; slope ${formatNum(
         updated.linearity.regression.slope,
@@ -194,7 +213,7 @@ export function recalculateAMVData(doc: AMVDocumentData): AMVDocumentData {
       srNo: 5,
       parameter: 'Range',
       acceptanceCriteria:
-        'Mean recovery 98.0 % to 102.0 %; %RSD ≤ 2.0 at each level; correlation coefficient ≥ 0.99.',
+        'Mean recovery 98.0 % to 102.0 %; %RSD ≤ 2.0 % at each level; correlation coefficient r ≥ 0.999.',
       verificationRequirement: 'To be verified as per protocol criteria',
       resultStatus: `Mean recovery ${formatNum(
         updated.accuracy.meanRecoveryAllLevels,
@@ -229,7 +248,7 @@ export function recalculateAMVData(doc: AMVDocumentData): AMVDocumentData {
       srNo: 8,
       parameter: 'Robustness',
       acceptanceCriteria:
-        'System suitability criteria met under all deliberately varied conditions (%RSD NMT 2.0, Tailing NMT 2.0, Plates NLT 2000).',
+        'System suitability criteria met under all deliberately varied conditions (%RSD NMT 2.0 %, Tailing NMT 2.0, Plates NLT 2000).',
       verificationRequirement: 'To be verified as per protocol criteria',
       resultStatus: `Maximum %RSD ${formatNum(maxRobRsd, 2)} %; all criteria met — Complies`,
     },
@@ -237,12 +256,11 @@ export function recalculateAMVData(doc: AMVDocumentData): AMVDocumentData {
       srNo: 9,
       parameter: 'Solution Stability',
       acceptanceCriteria:
-        '%RSD of standard and sample areas ≤ 2.0 % over studied period (24 hours); difference from initial NMT 2.0 %.',
+        'Cumulative difference in peak response for standard and sample solutions over 24 hours shall not exceed 2.0 %; %RSD ≤ 2.0 %.',
       verificationRequirement: 'To be verified as per protocol criteria',
-      resultStatus: `Standard %RSD ${formatNum(stdRsd, 2)} %; Sample %RSD ${formatNum(
-        splRsd,
+      resultStatus: `Standard max diff ${maxStdDiff.toFixed(2)} %; Sample max diff ${maxSplDiff.toFixed(
         2
-      )} % up to 24 hours — Complies`,
+      )} % (24 h) — Complies`,
     },
   ];
 

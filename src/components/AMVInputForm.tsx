@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Sparkles, RefreshCw, Layers, Calendar, FileCode2, FlaskConical, Beaker } from 'lucide-react';
+import { Search, Sparkles, RefreshCw, Layers, Calendar, FileCode2, FlaskConical, Beaker, Building2 } from 'lucide-react';
 import { ThemeFormat, ValidationMethodType } from '../types';
 
 interface AMVInputFormProps {
@@ -34,6 +34,8 @@ const RS_QUICK_SUGGESTIONS = [
 
 const ASSAY_QUICK_SUGGESTIONS = [
   'Acarbose Tablets 100 mg',
+  'Rosuvastatin Tablets 10 mg',
+  'Rosuvastatin Calcium Tablets USP 20 mg',
   'Paracetamol Tablets 500 mg',
   'Ciprofloxacin Tablets 500 mg',
   'Ibuprofen Tablets 400 mg',
@@ -259,9 +261,22 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
           </div>
         </div>
 
-        {/* Advanced Identifiers Configuration (Unique Document No, Batch No, Standard Lot) */}
+        {/* Advanced Identifiers Configuration (Company Name, Unique Document No, Batch No, Standard Lot) */}
         {showAdvanced && (
-          <div className="pt-3 border-t border-zinc-200 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-zinc-50/70 p-3 rounded-lg border border-zinc-200">
+          <div className="pt-3 border-t border-zinc-200 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 bg-zinc-50/70 p-3 rounded-lg border border-zinc-200">
+            <div>
+              <label className="block text-[11px] font-semibold text-zinc-600 uppercase tracking-wider mb-1 flex items-center gap-1">
+                <Building2 className="w-3 h-3" /> Company / Site Name
+              </label>
+              <input
+                type="text"
+                value={companyName}
+                onChange={(e) => onCompanyNameChange(e.target.value)}
+                placeholder="Company Name"
+                className="w-full px-2.5 py-1.5 text-xs bg-white border border-zinc-300 rounded font-sans font-medium text-zinc-800 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
             <div>
               <label className="block text-[11px] font-semibold text-zinc-600 uppercase tracking-wider mb-1 flex items-center gap-1">
                 <FileCode2 className="w-3 h-3" /> Document / Protocol No.
@@ -270,7 +285,7 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
                 type="text"
                 value={documentNo}
                 onChange={(e) => onDocumentNoChange(e.target.value)}
-                className="w-full px-2.5 py-1.5 text-xs bg-white border border-zinc-300 rounded font-mono font-medium text-zinc-800"
+                className="w-full px-2.5 py-1.5 text-xs bg-white border border-zinc-300 rounded font-mono font-medium text-zinc-800 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
@@ -282,7 +297,7 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
                 type="text"
                 value={batchNo}
                 onChange={(e) => onBatchNoChange(e.target.value)}
-                className="w-full px-2.5 py-1.5 text-xs bg-white border border-zinc-300 rounded font-mono font-medium text-zinc-800"
+                className="w-full px-2.5 py-1.5 text-xs bg-white border border-zinc-300 rounded font-mono font-medium text-zinc-800 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
@@ -294,7 +309,7 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
                 type="text"
                 value={standardLot}
                 onChange={(e) => onStandardLotChange(e.target.value)}
-                className="w-full px-2.5 py-1.5 text-xs bg-white border border-zinc-300 rounded font-mono font-medium text-zinc-800"
+                className="w-full px-2.5 py-1.5 text-xs bg-white border border-zinc-300 rounded font-mono font-medium text-zinc-800 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 

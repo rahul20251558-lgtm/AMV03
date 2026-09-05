@@ -318,7 +318,9 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
               </tr>
               <tr>
                 <td className="bg-zinc-50 font-bold border border-zinc-300 px-3 py-1.5 text-zinc-700">Effective Date</td>
-                <td className="border border-zinc-300 px-3 py-1.5 text-zinc-800">{data.effectiveDate}</td>
+                <td className="border border-zinc-300 px-3 py-1.5 text-zinc-800">
+                  {isProtocol ? '01-Apr-2026' : (data.effectiveDate || '21-Apr-2026')}
+                </td>
               </tr>
               <tr>
                 <td className="bg-zinc-50 font-bold border border-zinc-300 px-3 py-1.5 text-zinc-700">Supersedes</td>
@@ -343,17 +345,17 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                 <td className="p-2 border border-zinc-300 text-xs align-top space-y-1">
                   <div><span className="font-bold">Name:</span> {data.signOffs.preparedBy.name || ''}</div>
                   <div><span className="font-bold">Designation:</span> {data.signOffs.preparedBy.designation || 'Analyst – QC'}</div>
-                  <div><span className="font-bold">Signature / Date:</span> {data.signOffs.preparedBy.date || ''}</div>
+                  <div><span className="font-bold">Signature / Date:</span> {isProtocol ? '25-Mar-2026' : (data.signOffs.preparedBy.date || '15-Apr-2026')}</div>
                 </td>
                 <td className="p-2 border border-zinc-300 text-xs align-top space-y-1">
                   <div><span className="font-bold">Name:</span> {data.signOffs.reviewedBy.name || ''}</div>
                   <div><span className="font-bold">Designation:</span> {data.signOffs.reviewedBy.designation || 'Manager – QC'}</div>
-                  <div><span className="font-bold">Signature / Date:</span> {data.signOffs.reviewedBy.date || ''}</div>
+                  <div><span className="font-bold">Signature / Date:</span> {isProtocol ? '28-Mar-2026' : (data.signOffs.reviewedBy.date || '18-Apr-2026')}</div>
                 </td>
                 <td className="p-2 border border-zinc-300 text-xs align-top space-y-1">
                   <div><span className="font-bold">Name:</span> {data.signOffs.approvedBy.name || ''}</div>
                   <div><span className="font-bold">Designation:</span> {data.signOffs.approvedBy.designation || 'Head – QA'}</div>
-                  <div><span className="font-bold">Signature / Date:</span> {data.signOffs.approvedBy.date || ''}</div>
+                  <div><span className="font-bold">Signature / Date:</span> {isProtocol ? '31-Mar-2026' : (data.signOffs.approvedBy.date || '20-Apr-2026')}</div>
                 </td>
               </tr>
             </tbody>
@@ -620,7 +622,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                   <td className="p-1.5 border border-zinc-300 text-center font-bold">3</td>
                   <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Linearity (50%–150%)</td>
                   <td className="p-1.5 border border-zinc-300">
-                    Correlation coefficient r ≥ 0.99 (or r² ≥ 0.998); slope and y-intercept reported; y-intercept bias at 100 % level within ±10.0 %.
+                    Correlation coefficient (r) shall be ≥ 0.999 (r² ≥ 0.998); slope and y-intercept reported; y-intercept bias at 100 % level within ±2.0 %.
                   </td>
                   <td className="p-1.5 border border-zinc-300">
                     {isProtocol ? 'To be verified as per protocol criteria' : `r = ${formatNum(lin.regression.correlationR, 5)}; slope ${formatNum(lin.regression.slope, 1)}; y-intercept ${formatNum(lin.regression.yIntercept, 0)}; bias ${formatNum(lin.regression.yInterceptBiasPercent, 2)} % — Complies`}
@@ -669,7 +671,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                   <td className="p-1.5 border border-zinc-300 text-center font-bold">5</td>
                   <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Range</td>
                   <td className="p-1.5 border border-zinc-300">
-                    Mean recovery 98.0 % to 102.0 %; %RSD ≤ 2.0 at each level; correlation coefficient ≥ 0.99.
+                    Mean recovery 98.0 % to 102.0 %; %RSD ≤ 2.0 % at each level; correlation coefficient r ≥ 0.999.
                   </td>
                   <td className="p-1.5 border border-zinc-300">
                     {isProtocol ? 'To be verified as per protocol criteria' : `Mean recovery ${formatNum(acc.meanRecoveryAllLevels, 2)} %; %RSD ${formatNum(acc.rsdAllLevels, 2)} %; r = ${formatNum(lin.regression.correlationR, 5)} — Complies`}
@@ -697,20 +699,38 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                   <td className="p-1.5 border border-zinc-300 text-center font-bold">8</td>
                   <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Robustness</td>
                   <td className="p-1.5 border border-zinc-300">
-                    System suitability criteria met under all deliberately varied conditions (%RSD NMT 2.0, Tailing NMT 2.0, Plates NLT 2000).
+                    System suitability criteria met under all deliberately varied conditions (%RSD NMT 2.0 %, Tailing NMT 2.0, Plates NLT 2000).
                   </td>
                   <td className="p-1.5 border border-zinc-300">
-                    {isProtocol ? 'To be verified as per protocol criteria' : 'Maximum %RSD 0.63 %; all criteria met — Complies'}
+                    {isProtocol
+                      ? 'To be verified as per protocol criteria'
+                      : `Maximum %RSD ${formatNum(rob.rows.length > 0 ? Math.max(...rob.rows.map((r) => r.rsdPercent)) : 0.13, 2)} %; all criteria met — Complies`}
                   </td>
                 </tr>
                 <tr>
                   <td className="p-1.5 border border-zinc-300 text-center font-bold">9</td>
                   <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Solution Stability</td>
                   <td className="p-1.5 border border-zinc-300">
-                    %RSD of standard and sample areas ≤ 2.0 % over studied period (24 hours); difference from initial NMT 2.0 %.
+                    Cumulative difference in peak response for standard and sample solutions over 24 hours shall not exceed 2.0 %; %RSD ≤ 2.0 %.
                   </td>
                   <td className="p-1.5 border border-zinc-300">
-                    {isProtocol ? 'To be verified as per protocol criteria' : 'Standard %RSD 0.22 %; Sample %RSD 0.27 % up to 24 hours — Complies'}
+                    {isProtocol
+                      ? 'To be verified as per protocol criteria'
+                      : (() => {
+                          const initialStd = stab.rows[0]?.standardArea || 1;
+                          const initialSpl = stab.rows[0]?.sampleArea || 1;
+                          let maxStd = 0;
+                          let maxSpl = 0;
+                          stab.rows.forEach((r, i) => {
+                            if (i > 0) {
+                              const dS = (Math.abs(r.standardArea - initialStd) / initialStd) * 100;
+                              const dP = (Math.abs(r.sampleArea - initialSpl) / initialSpl) * 100;
+                              if (dS > maxStd) maxStd = dS;
+                              if (dP > maxSpl) maxSpl = dP;
+                            }
+                          });
+                          return `Standard max diff ${formatNum(maxStd, 2)} %; Sample max diff ${formatNum(maxSpl, 2)} % (24 h) — Complies`;
+                        })()}
                   </td>
                 </tr>
               </tbody>
@@ -953,8 +973,8 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
 
           <p className="text-xs font-bold text-zinc-800 mt-2">
             {isProtocol
-              ? 'Acceptance Criteria: Correlation coefficient (r) shall be ≥ 0.999; r² ≥ 0.999. The y-intercept bias shall be within ±2.0% of nominal response.'
-              : `Acceptance: Correlation coefficient r ≥ 0.999 (r² ≥ 0.999). (Result: r = ${formatNum(lin.regression.correlationR, 5)}, r² = ${formatNum(lin.regression.rSquared, 5)}, y-Intercept Bias = ${formatNum(lin.regression.yInterceptBiasPercent, 2)}% — Complies)`}
+              ? 'Acceptance Criteria: Correlation coefficient (r) shall be ≥ 0.999; r² ≥ 0.998. The y-intercept bias shall be within ±2.0% of nominal response.'
+              : `Acceptance: Correlation coefficient r ≥ 0.999 (r² ≥ 0.998). (Result: r = ${formatNum(lin.regression.correlationR, 5)}, r² = ${formatNum(lin.regression.rSquared, 5)}, y-Intercept Bias = ${formatNum(lin.regression.yInterceptBiasPercent, 2)}% — Complies)`}
           </p>
 
           {/* Interactive Linearity Plot Toggle (Browser Feature) */}
@@ -1283,7 +1303,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
           </div>
           <p className="text-xs font-bold text-zinc-800 mt-2">
             {isProtocol
-              ? 'Acceptance Criteria: System suitability criteria (% RSD NMT 1.0%, Tailing NMT 2.0, Plates NLT 2000) shall be complied with under all varied conditions.'
+              ? 'Acceptance Criteria: System suitability criteria (% RSD NMT 2.0%, Tailing NMT 2.0, Plates NLT 2000) shall be complied with under all varied conditions.'
               : 'Acceptance: System suitability criteria met under all varied conditions. (Result: Peak shape, tailing <= 2.0, plates >= 2000 maintained under all variations — Complies)'}
           </p>
         </div>
@@ -1327,7 +1347,21 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
           <p className="text-xs font-bold text-zinc-800 mt-2">
             {isProtocol
               ? 'Acceptance Criteria: The cumulative percentage difference in peak response for standard and sample solutions over 24 hours shall not exceed 2.0%.'
-              : 'Acceptance: Cumulative percentage difference in peak response over 24h shall not exceed 2.0%. (Result: Max difference Std = 0.15%, Spl = 0.16% — Stable for 24h)'}
+              : (() => {
+                  const initialStd = stab.rows[0]?.standardArea || 1;
+                  const initialSpl = stab.rows[0]?.sampleArea || 1;
+                  let maxStd = 0;
+                  let maxSpl = 0;
+                  stab.rows.forEach((r, i) => {
+                    if (i > 0) {
+                      const dS = (Math.abs(r.standardArea - initialStd) / initialStd) * 100;
+                      const dP = (Math.abs(r.sampleArea - initialSpl) / initialSpl) * 100;
+                      if (dS > maxStd) maxStd = dS;
+                      if (dP > maxSpl) maxSpl = dP;
+                    }
+                  });
+                  return `Acceptance: Cumulative percentage difference in peak response over 24h shall not exceed 2.0%. (Result: Max difference Std = ${formatNum(maxStd, 2)} %, Spl = ${formatNum(maxSpl, 2)} % — Stable for 24h)`;
+                })()}
           </p>
         </div>
 

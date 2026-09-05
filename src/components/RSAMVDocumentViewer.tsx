@@ -269,22 +269,22 @@ export const RSAMVDocumentViewer: React.FC<RSAMVDocumentViewerProps> = ({
                 <td className="p-2 border border-zinc-300 text-xs align-top space-y-1">
                   <div><span className="font-bold">Designation:</span> {data.signOffs.preparedBy.designation}</div>
                   <div><span className="font-bold">Name:</span> {data.signOffs.preparedBy.name}</div>
-                  <div><span className="font-bold">Sign/Date:</span> {isProtocol ? '' : `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.date}`}</div>
+                  <div><span className="font-bold">Sign/Date:</span> {isProtocol ? `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.dateProtocol || '09/07/2024'}` : `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.dateReport || data.signOffs.preparedBy.date}`}</div>
                 </td>
                 <td className="p-2 border border-zinc-300 text-xs align-top space-y-1">
                   <div><span className="font-bold">Designation:</span> {data.signOffs.checkedBy.designation}</div>
                   <div><span className="font-bold">Name:</span> {data.signOffs.checkedBy.name}</div>
-                  <div><span className="font-bold">Sign/Date:</span> {isProtocol ? '' : `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.date}`}</div>
+                  <div><span className="font-bold">Sign/Date:</span> {isProtocol ? `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.dateProtocol || '09/07/2024'}` : `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.dateReport || data.signOffs.checkedBy.date}`}</div>
                 </td>
                 <td className="p-2 border border-zinc-300 text-xs align-top space-y-1">
                   <div><span className="font-bold">Designation:</span> {data.signOffs.reviewedBy.designation}</div>
                   <div><span className="font-bold">Name:</span> {data.signOffs.reviewedBy.name}</div>
-                  <div><span className="font-bold">Sign/Date:</span> {isProtocol ? '' : `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.date}`}</div>
+                  <div><span className="font-bold">Sign/Date:</span> {isProtocol ? `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.dateProtocol || '10/07/2024'}` : `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.dateReport || data.signOffs.reviewedBy.date}`}</div>
                 </td>
                 <td className="p-2 border border-zinc-300 text-xs align-top space-y-1">
                   <div><span className="font-bold">Designation:</span> {data.signOffs.authorisedBy.designation}</div>
                   <div><span className="font-bold">Name:</span> {data.signOffs.authorisedBy.name}</div>
-                  <div><span className="font-bold">Sign/Date:</span> {isProtocol ? '' : `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.date}`}</div>
+                  <div><span className="font-bold">Sign/Date:</span> {isProtocol ? `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.dateProtocol || '10/07/2024'}` : `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.dateReport || data.signOffs.authorisedBy.date}`}</div>
                 </td>
               </tr>
             </tbody>
@@ -887,7 +887,7 @@ export const RSAMVDocumentViewer: React.FC<RSAMVDocumentViewerProps> = ({
             <thead>
               <tr className={tableHeaderClass}>
                 <th className="p-1.5 border border-zinc-300 text-center w-12">Sr.</th>
-                <th className="p-1.5 border border-zinc-300 text-center">Level (ppm)</th>
+                <th className="p-1.5 border border-zinc-300 text-center">Spike Level (%)</th>
                 <th className="p-1.5 border border-zinc-300 text-center">Spiked (mg)</th>
                 <th className="p-1.5 border border-zinc-300 text-right">Sample Area</th>
                 <th className="p-1.5 border border-zinc-300 text-center">Recovered (mg)</th>
@@ -898,7 +898,7 @@ export const RSAMVDocumentViewer: React.FC<RSAMVDocumentViewerProps> = ({
               {data.accuracy.rows.map((row, i) => (
                 <tr key={i} className={i % 2 === 1 ? 'bg-zinc-50' : ''}>
                   <td className="p-1.5 border border-zinc-300 text-center font-mono">{row.srNo}</td>
-                  <td className="p-1.5 border border-zinc-300 text-center font-semibold">{row.levelPpm}</td>
+                  <td className="p-1.5 border border-zinc-300 text-center font-semibold">{row.levelPpm} % ({Math.round((row.levelPpm / 100) * (data.linearityAndRange.linearityLevels[2]?.nominalPpm || 300))} ppm)</td>
                   <td className="p-1.5 border border-zinc-300 text-center font-mono">{isProtocol ? '' : row.standardSpikedMg}</td>
                   <td className="p-1.5 border border-zinc-300 text-right font-mono">{isProtocol ? '' : Number(row.sampleArea).toLocaleString()}</td>
                   <td className="p-1.5 border border-zinc-300 text-center font-mono">{isProtocol ? '' : row.amountRecoveredMg}</td>
@@ -914,7 +914,7 @@ export const RSAMVDocumentViewer: React.FC<RSAMVDocumentViewerProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
             {data.accuracy.stats.levelStats.map((st) => (
               <div key={st.levelPpm} className="bg-zinc-50 border border-zinc-200 p-2 rounded text-xs">
-                <div className="font-bold text-zinc-700">{st.levelPpm} ppm Level</div>
+                <div className="font-bold text-zinc-700">{Math.round((st.levelPpm / (data.linearityAndRange.linearityLevels[2]?.nominalPpm || 300)) * 100)} % Level ({st.levelPpm} ppm)</div>
                 <div>Mean Recovery: <span className="font-mono font-semibold">{isProtocol ? 'Criteria: 98.0 – 102.0 %' : `${st.meanRecovery} %`}</span></div>
                 <div>% RSD: <span className="font-mono font-semibold">{isProtocol ? 'Criteria: ≤ 2.0 %' : `${st.rsdRecovery} %`}</span></div>
               </div>
@@ -976,9 +976,9 @@ export const RSAMVDocumentViewer: React.FC<RSAMVDocumentViewerProps> = ({
               {data.completionRecord.map((rec, i) => (
                 <tr key={i} className={i % 2 === 1 ? 'bg-zinc-50' : ''}>
                   <td className="p-1.5 border border-zinc-300 font-semibold text-zinc-800">{rec.particulars}</td>
-                  <td className="p-1.5 border border-zinc-300 text-zinc-700">{isProtocol ? '' : rec.details}</td>
+                  <td className="p-1.5 border border-zinc-300 text-zinc-700">{isProtocol ? (rec.detailsProtocol || '') : rec.details}</td>
                   <td className="p-1.5 border border-zinc-300 text-center font-mono text-zinc-600">
-                    {isProtocol ? '' : rec.signatureDate}
+                    {isProtocol ? (rec.signatureDateProtocol || '—') : rec.signatureDate}
                   </td>
                 </tr>
               ))}
