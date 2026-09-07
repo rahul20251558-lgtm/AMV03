@@ -1,6 +1,6 @@
 import React from 'react';
 import { ThemeFormat, DocumentType, ValidationMethodType, FontFamilyType, FontSizePt } from '../types';
-import { FileText, Award, Palette, CheckCircle2, Download, Printer, Sparkles } from 'lucide-react';
+import { FileText, Award, Palette, CheckCircle2, Download, Printer, Sparkles, ShieldCheck } from 'lucide-react';
 import { FontAndSizeControl } from './FontAndSizeControl';
 
 interface HeaderProps {
@@ -16,6 +16,8 @@ interface HeaderProps {
   onFontSizeChange: (size: FontSizePt) => void;
   onDownloadDocx: () => void;
   onPrint: () => void;
+  onOpenAuditGate?: () => void;
+  auditPassed?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -31,6 +33,8 @@ export const Header: React.FC<HeaderProps> = ({
   onFontSizeChange,
   onDownloadDocx,
   onPrint,
+  onOpenAuditGate,
+  auditPassed,
 }) => {
   return (
     <header className="bg-white border-b border-zinc-200 sticky top-0 z-30 shadow-xs">
@@ -177,6 +181,23 @@ export const Header: React.FC<HeaderProps> = ({
               onFontFamilyChange={onFontFamilyChange}
               onFontSizeChange={onFontSizeChange}
             />
+
+            {/* Compliance Gate Status & Audit Modal Launcher */}
+            {onOpenAuditGate && (
+              <button
+                type="button"
+                onClick={onOpenAuditGate}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors shadow-2xs ${
+                  auditPassed !== false
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                    : 'bg-rose-50 text-rose-800 border-rose-300 hover:bg-rose-100'
+                }`}
+                title="Review 10-Point Pre-Output Compliance & Contamination Audit"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Compliance Gate: {auditPassed !== false ? '10/10 Clear' : 'Blocked'}</span>
+              </button>
+            )}
 
             {/* Quick Export Actions */}
             <button

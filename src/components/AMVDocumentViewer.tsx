@@ -1230,7 +1230,8 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
         <div>
           <h3 className={`text-xs font-bold uppercase mb-1 ${sectionHeadingClass}`}>11. Robustness</h3>
           <p className="text-xs text-zinc-600 mb-2">
-            Evaluate system suitability under deliberately varied HPLC conditions (Flow rate ±0.2 mL/min, Temp ±5°C, Wavelength ±2 nm, Mobile phase ratio ±2%).
+            {rob.instructionParagraph ||
+              'Evaluate system suitability under deliberately varied HPLC conditions (Flow rate ±0.1 mL/min, Column Temp ±3°C, Mobile phase pH ±0.2).'}
           </p>
           <div className="overflow-x-auto">
             <table className="w-full text-xs border-collapse border border-zinc-300">

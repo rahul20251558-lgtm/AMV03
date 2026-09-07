@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   AMVDocumentData,
   RSAMVDocumentData,
@@ -19,11 +19,13 @@ import { recalculateAMVData } from './services/mathUtils';
 import { generateAndDownloadAMVDocx } from './services/amvDocxGenerator';
 import { generateAndDownloadRSAMVDocx } from './services/rsDocxGenerator';
 import { generateAndDownloadDissolutionDocx } from './services/dissolutionDocxGenerator';
+import { runPreOutputAuditGate, ComplianceGateResult } from './services/complianceAuditGate';
 import { Header } from './components/Header';
 import { AMVInputForm } from './components/AMVInputForm';
 import { AMVDocumentViewer } from './components/AMVDocumentViewer';
 import { RSAMVDocumentViewer } from './components/RSAMVDocumentViewer';
 import { DissolutionDocumentViewer } from './components/DissolutionDocumentViewer';
+import { ComplianceAuditModal } from './components/ComplianceAuditModal';
 
 export function App() {
   // Method Type: Default to 'dissolution' as requested by the user, with RS and Assay readily available
@@ -40,6 +42,10 @@ export function App() {
   const [fontFamily, setFontFamily] = useState<FontFamilyType>('Times New Roman'); // Matches authentic monograph
   const [fontSize, setFontSize] = useState<FontSizePt>(12); // Standard 12pt pharma standard
   const [isLoading, setIsLoading] = useState(false);
+
+  // Pre-Output Compliance & Contamination Audit Gate State
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
+  const [pendingExport, setPendingExport] = useState<'protocol' | 'report' | 'both' | null>(null);
 
   // Initialize authentic Dissolution document state
   const [dissolutionData, setDissolutionData] = useState<DissolutionAMVDocumentData>(() =>
@@ -336,8 +342,38 @@ export function App() {
     setIsLoading(false);
   };
 
-  // Download .docx handlers
+  // Helper to get active document data
+  const getCurrentDocData = () => {
+    if (validationMethod === 'dissolution') return dissolutionData;
+    if (validationMethod === 'related_substances') return rsData;
+    return assayData;
+  };
+
+  const [auditNonce, setAuditNonce] = useState(0);
+
+  // Live computed compliance audit result
+  const auditResult = useMemo(() => {
+    const data = getCurrentDocData();
+    return runPreOutputAuditGate(data, validationMethod);
+  }, [dissolutionData, rsData, assayData, validationMethod, auditNonce]);
+
+  const handleReAudit = () => {
+    setAuditNonce((n) => n + 1);
+  };
+
+  // Run Pre-Output Compliance & Contamination Audit Gate before export
+  const verifyComplianceGate = (targetExport: 'protocol' | 'report' | 'both'): boolean => {
+    if (!auditResult.passed) {
+      setPendingExport(targetExport);
+      setIsAuditModalOpen(true);
+      return false;
+    }
+    return true;
+  };
+
+  // Download .docx handlers protected by Compliance Gate
   const handleDownloadProtocol = async () => {
+    if (!verifyComplianceGate('protocol')) return;
     if (validationMethod === 'dissolution') {
       await generateAndDownloadDissolutionDocx(dissolutionData, { docType: 'protocol', theme, fontFamily, fontSize });
     } else if (validationMethod === 'related_substances') {
@@ -348,6 +384,7 @@ export function App() {
   };
 
   const handleDownloadReport = async () => {
+    if (!verifyComplianceGate('report')) return;
     if (validationMethod === 'dissolution') {
       await generateAndDownloadDissolutionDocx(dissolutionData, { docType: 'report', theme, fontFamily, fontSize });
     } else if (validationMethod === 'related_substances') {
@@ -358,6 +395,7 @@ export function App() {
   };
 
   const handleDownloadBoth = async () => {
+    if (!verifyComplianceGate('both')) return;
     if (validationMethod === 'dissolution') {
       await generateAndDownloadDissolutionDocx(dissolutionData, { docType: 'protocol', theme, fontFamily, fontSize });
       setTimeout(async () => {
@@ -373,6 +411,21 @@ export function App() {
       setTimeout(async () => {
         await generateAndDownloadAMVDocx(assayData, { docType: 'report', theme, fontFamily, fontSize });
       }, 600);
+    }
+  };
+
+  const handleOpenAuditGate = () => {
+    setPendingExport(null);
+    setIsAuditModalOpen(true);
+  };
+
+  const handleProceedExportFromModal = async () => {
+    if (pendingExport === 'protocol') {
+      await handleDownloadProtocol();
+    } else if (pendingExport === 'report') {
+      await handleDownloadReport();
+    } else if (pendingExport === 'both') {
+      await handleDownloadBoth();
     }
   };
 
@@ -407,6 +460,8 @@ export function App() {
           docType === 'protocol' ? handleDownloadProtocol() : handleDownloadReport()
         }
         onPrint={() => window.print()}
+        onOpenAuditGate={handleOpenAuditGate}
+        auditPassed={auditResult ? auditResult.passed : true}
       />
 
       {/* Main Body */}
@@ -482,6 +537,16 @@ export function App() {
           />
         )}
       </main>
+
+      {/* Pre-Output Compliance & Contamination Audit Modal */}
+      <ComplianceAuditModal
+        isOpen={isAuditModalOpen}
+        onClose={() => setIsAuditModalOpen(false)}
+        auditResult={auditResult}
+        onReAudit={handleReAudit}
+        onProceedExport={pendingExport ? handleProceedExportFromModal : undefined}
+        exportType={pendingExport || undefined}
+      />
     </div>
   );
 }

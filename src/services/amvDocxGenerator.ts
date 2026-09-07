@@ -947,7 +947,12 @@ export async function generateAndDownloadAMVDocx(
         : `Acceptance: Analyst 1 %RSD NMT 2.0%, Analyst 2 %RSD NMT 2.0%, Cumulative %RSD NMT 2.0%, Mean Diff NMT 1.5%. (Result: A1 %RSD = ${formatNum(prec.analyst1Rsd, 2)}%, A2 %RSD = ${formatNum(prec.analyst2Rsd, 2)}%, Cum %RSD = ${formatNum(prec.cumulativeRsd, 2)}%, Diff = ${formatNum(prec.diffBetweenMeans, 2)}% — Complies)`
     ),
     createSectionHeader('11. Robustness', 70, 30),
-    createBodyParagraph('Evaluate system suitability under deliberately varied HPLC conditions (Flow rate ±0.2 mL/min, Temp ±5°C, Wavelength ±2 nm, Mobile phase ratio ±2%).', 20, 40),
+    createBodyParagraph(
+      rob.instructionParagraph ||
+        'Evaluate system suitability under deliberately varied HPLC conditions (Flow rate ±0.1 mL/min, Column Temp ±3°C, Mobile phase pH ±0.2).',
+      20,
+      40
+    ),
     robTable,
     createAcceptanceParagraph(
       isProtocol

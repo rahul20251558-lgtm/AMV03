@@ -395,7 +395,17 @@ app.post('/api/generate-dissolution-amv', async (req, res) => {
 
   const cacheKey = `diss_${productName.trim().toLowerCase()}_${protocolNo || ''}_${batchNo || ''}`;
   if (monographCache.has(cacheKey)) {
-    return res.json({ data: monographCache.get(cacheKey), source: 'cache' });
+    const cached = monographCache.get(cacheKey);
+    const prodFirst = productName.trim().toLowerCase().split(' ')[0];
+    if (cached && String(cached.productName || '').toLowerCase().includes(prodFirst)) {
+      return res.json({
+        data: cached,
+        source: 'cache_hit',
+        timestamp: new Date().toISOString(),
+        verifiedSource: 'Compendial Cache Layer',
+      });
+    }
+    monographCache.delete(cacheKey);
   }
 
   const fallbackData = buildFullDissolutionAMVData(productName, {
@@ -408,7 +418,12 @@ app.post('/api/generate-dissolution-amv', async (req, res) => {
   const ai = getAIClient();
   if (!ai || Date.now() < aiCircuitBreakerUntil) {
     monographCache.set(cacheKey, fallbackData);
-    return res.json({ data: fallbackData, source: 'dissolution_compendium' });
+    return res.json({
+      data: fallbackData,
+      source: 'dissolution_compendium',
+      timestamp: new Date().toISOString(),
+      verifiedSource: fallbackData.reference,
+    });
   }
 
   try {
@@ -489,6 +504,10 @@ Return ONLY a valid JSON object matching this structure:
     if (aiResponseText) {
       const parsed = extractJSONFromText(aiResponseText);
       if (parsed && (parsed.medium || parsed.column || parsed.wavelength)) {
+        // Schema & Unit Bounds Validation (Pillar B.2)
+        const parsedWl = parsed.wavelengthNum ? Number(parsed.wavelengthNum) : undefined;
+        const validWl = parsedWl && parsedWl >= 190 && parsedWl <= 800 ? parsedWl : undefined;
+
         const verifiedDissData = buildFullDissolutionAMVData(productName, {
           protocolNo: protocolNo || undefined,
           batchNo: batchNo || undefined,
@@ -502,14 +521,19 @@ Return ONLY a valid JSON object matching this structure:
             apparatus: parsed.apparatus || undefined,
             paddleSpeed: parsed.paddleSpeed || undefined,
             wavelength: parsed.wavelength || undefined,
-            wavelengthNum: parsed.wavelengthNum ? Number(parsed.wavelengthNum) : undefined,
+            wavelengthNum: validWl,
             column: parsed.column || undefined,
             mobilePhase: parsed.mobilePhase || undefined,
             flowRate: parsed.flowRate || undefined,
           },
         });
         monographCache.set(cacheKey, verifiedDissData);
-        return res.json({ data: verifiedDissData, source: 'ai_dissolution_compendium' });
+        return res.json({
+          data: verifiedDissData,
+          source: 'ai_dissolution_compendium',
+          timestamp: new Date().toISOString(),
+          verifiedSource: parsed.reference || 'Compendial AI Ingestion Pipeline',
+        });
       }
     }
   } catch (_e) {
@@ -517,7 +541,12 @@ Return ONLY a valid JSON object matching this structure:
   }
 
   monographCache.set(cacheKey, fallbackData);
-  return res.json({ data: fallbackData, source: 'dissolution_compendium' });
+  return res.json({
+    data: fallbackData,
+    source: 'dissolution_compendium',
+    timestamp: new Date().toISOString(),
+    verifiedSource: fallbackData.reference,
+  });
 });
 
 // Vite Middleware & Static Serving

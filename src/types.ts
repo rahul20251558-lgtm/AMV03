@@ -158,6 +158,7 @@ export interface RobustnessRow {
 }
 
 export interface RobustnessData {
+  instructionParagraph?: string;
   rows: RobustnessRow[];
   acceptanceTextProtocol: string;
   conclusionReport: string;
@@ -735,6 +736,68 @@ export interface DissolutionAccuracyStats {
   conclusionReport: string;
 }
 
+export interface DissolutionSpecificitySolutionRow {
+  solutionName: string;
+  retentionTime: string;
+  peakArea: string | number;
+  interferenceObserved: string;
+}
+
+export interface DissolutionSpecificityStressRow {
+  condition: string;
+  stressParameters: string;
+  activeRtMin: string;
+  degradantRtMin: string;
+  activePeakArea: number | string;
+  degradantPeakArea: number | string;
+  degradationPercent: number | string;
+  resolution: number | string;
+  peakPurity: string;
+  interference: string;
+}
+
+export interface DissolutionSpecificityData {
+  solutionRows: DissolutionSpecificitySolutionRow[];
+  stressRows: DissolutionSpecificityStressRow[];
+  acceptanceTextProtocol: string;
+  conclusionReport: string;
+  degradationAssessment: string;
+}
+
+export interface DissolutionRobustnessRow {
+  conditionVaried: string;
+  retentionTimeMin: string;
+  tailingFactor: number | string;
+  theoreticalPlates: number | string;
+  rsdPercent: number | string;
+  remark: string;
+}
+
+export interface DissolutionRobustnessData {
+  rows: DissolutionRobustnessRow[];
+  acceptanceCriteria: string;
+  conclusionProtocol: string;
+  conclusionReport: string;
+}
+
+export interface DissolutionSolutionStabilityRow {
+  timePoint: string;
+  standardArea: number | string;
+  standardDiffPercent: number | string;
+  sampleArea: number | string;
+  sampleDiffPercent: number | string;
+  dissolvedPercent: number | string;
+  remark: string;
+}
+
+export interface DissolutionSolutionStabilityData {
+  rowsRoomTemp: DissolutionSolutionStabilityRow[];
+  rowsRefrigerated: DissolutionSolutionStabilityRow[];
+  acceptanceCriteria: string;
+  conclusionProtocol: string;
+  conclusionReport: string;
+}
+
 export interface DissolutionCompletionRecordItem {
   particulars: string;
   detailsProtocol: string;
@@ -754,6 +817,7 @@ export interface DissolutionAMVDocumentData {
   testParameter: string;
   reference: string;
   batchNoUsed: string;
+  supersedes?: string;
 
   signOffs: RSApprovalTable;
 
@@ -783,6 +847,8 @@ export interface DissolutionAMVDocumentData {
     stats: DissolutionSystemSuitabilityStats;
   };
 
+  specificity: DissolutionSpecificityData;
+
   linearity: {
     levels: DissolutionLinearityLevelRow[];
     regression: DissolutionLinearityRegression;
@@ -807,6 +873,9 @@ export interface DissolutionAMVDocumentData {
     rows: DissolutionAccuracyRow[];
     stats: DissolutionAccuracyStats;
   };
+
+  robustness: DissolutionRobustnessData;
+  solutionStability: DissolutionSolutionStabilityData;
 
   overallConclusionProtocol: string;
   overallConclusionReport: string;

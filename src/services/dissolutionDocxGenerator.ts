@@ -274,6 +274,14 @@ export async function generateAndDownloadDissolutionDocx(
       createDataCell(isProtocol ? 'Batch No. to be used' : 'Batch No. used', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
       createDataCell(isProtocol ? '' : data.batchNoUsed, AlignmentType.LEFT, true, undefined, 7106),
     ]),
+    ...(data.supersedes
+      ? [
+          createRow([
+            createDataCell('Supersedes', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
+            createDataCell(data.supersedes, AlignmentType.LEFT, false, undefined, 7106),
+          ]),
+        ]
+      : []),
   ];
   docElements.push(createDocxTable(metaColWidths, metaRows));
 
@@ -374,7 +382,16 @@ export async function generateAndDownloadDissolutionDocx(
   const dcRows: TableRow[] = [
     createRow([createDataCell('Compliance', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(dc.compliance, AlignmentType.LEFT, false, undefined, 6606)]),
     createRow([createDataCell('Apparatus', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(dc.apparatus, AlignmentType.LEFT, false, undefined, 6606)]),
-    createRow([createDataCell('Paddle Speed', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(dc.paddleSpeed, AlignmentType.LEFT, false, undefined, 6606)]),
+    createRow([
+      createDataCell(
+        dc.apparatus.includes('1') || dc.apparatus.toLowerCase().includes('basket') ? 'Basket Speed' : 'Paddle Speed',
+        AlignmentType.LEFT,
+        true,
+        metaLabelBgColor,
+        3300
+      ),
+      createDataCell(dc.paddleSpeed, AlignmentType.LEFT, false, undefined, 6606),
+    ]),
     createRow([createDataCell('Medium', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(dc.medium, AlignmentType.LEFT, false, undefined, 6606)]),
     createRow([createDataCell('Medium Temperature', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(dc.mediumTemperature, AlignmentType.LEFT, false, undefined, 6606)]),
     createRow([createDataCell('Sampling Time', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(dc.samplingTime, AlignmentType.LEFT, false, undefined, 6606)]),
@@ -528,9 +545,87 @@ export async function generateAndDownloadDissolutionDocx(
   docElements.push(createDocxTable(ssColWidths, ssRows));
   docElements.push(createConclusionBlock('Conclusion', isProtocol ? ssStats.conclusionProtocol : ssStats.conclusionReport));
 
-  // 7. LINEARITY AND RANGE
-  docElements.push(createSectionHeader('7. LINEARITY AND RANGE'));
-  docElements.push(createSubSectionHeader('7.1 Linearity'));
+  // 7. SPECIFICITY & SELECTIVITY (BLANK, PLACEBO & FORCED DEGRADATION)
+  if (data.specificity) {
+    docElements.push(createSectionHeader('7. SPECIFICITY & SELECTIVITY (BLANK, PLACEBO & FORCED DEGRADATION)'));
+    const stdRow = data.specificity.solutionRows.find((r) => r.solutionName.toLowerCase().includes('standard'));
+    const analyteRtStr = stdRow?.retentionTime && stdRow.retentionTime !== '—' ? ` (~${stdRow.retentionTime})` : '';
+    docElements.push(
+      createBodyText(
+        `Specificity is the ability to assess unequivocally the analyte in the presence of components that may be expected to be present, such as impurities, degradation products, and matrix components. Specificity is established by demonstrating that blank diluent and placebo matrix do not exhibit interfering peaks at the retention window of the active drug substance${analyteRtStr}, and that under forced degradation stress conditions (Acid, Base, Oxidation, Thermal, Photolytic), all generated degradation products are chromatographically resolved from the active drug peak with a resolution factor (Rs) of NLT 2.0, with confirmed spectral peak purity.`
+      )
+    );
+
+    // 7.1 Solution Interference Table
+    docElements.push(createSubSectionHeader('7.1 Blank, Placebo & Test Solution Interference'));
+    const specSolColWidths = [3400, 1800, 2000, 2706];
+    const specSolRows: TableRow[] = [
+      createRow([
+        createHeaderCell('Solution Description', AlignmentType.LEFT, 3400),
+        createHeaderCell('Retention Time', AlignmentType.CENTER, 1800),
+        createHeaderCell('Peak Area', AlignmentType.CENTER, 2000),
+        createHeaderCell('Interference / Remark', AlignmentType.LEFT, 2706),
+      ], true),
+      ...data.specificity.solutionRows.map((row, i) =>
+        createRow([
+          createDataCell(row.solutionName, AlignmentType.LEFT, true, i % 2 === 1 ? altRowBgColor : undefined, 3400),
+          createDataCell(isProtocol ? '—' : row.retentionTime, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1800),
+          createDataCell(isProtocol ? '—' : row.peakArea, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 2000),
+          createDataCell(isProtocol ? 'To be verified' : row.interferenceObserved, AlignmentType.LEFT, false, i % 2 === 1 ? altRowBgColor : undefined, 2706),
+        ])
+      ),
+    ];
+    docElements.push(createDocxTable(specSolColWidths, specSolRows));
+
+    // 7.2 Forced Degradation Table
+    docElements.push(createSubSectionHeader('7.2 Forced Degradation & Stress Testing (Stability-Indicating Evaluation)'));
+    docElements.push(
+      createBodyText(
+        'Stress testing was conducted across five regulatory stress conditions. In all stress samples, an extra peak is consistently observed at RT ~3.65 min (labeled Impurity / Degradant, RRT ~0.65). Baseline resolution (Rs > 2.0) and photodiode array (PDA) spectral peak purity were evaluated.'
+      )
+    );
+
+    const specStressColWidths = [2106, 1200, 1200, 1350, 1350, 1350, 1350];
+    const specStressRows: TableRow[] = [
+      createRow([
+        createHeaderCell('Stress Condition', AlignmentType.LEFT, 2106),
+        createHeaderCell('Degradant RT', AlignmentType.CENTER, 1200),
+        createHeaderCell('Active RT', AlignmentType.CENTER, 1200),
+        createHeaderCell('Degradant Area', AlignmentType.RIGHT, 1350),
+        createHeaderCell('Active Area', AlignmentType.RIGHT, 1350),
+        createHeaderCell('% Degradation', AlignmentType.CENTER, 1350),
+        createHeaderCell('Resolution (Rs)', AlignmentType.CENTER, 1350),
+      ], true),
+      ...data.specificity.stressRows.map((row, i) =>
+        createRow([
+          createDataCell(`${row.condition} (${row.stressParameters})`, AlignmentType.LEFT, true, i % 2 === 1 ? altRowBgColor : undefined, 2106),
+          createDataCell(isProtocol ? '—' : `${row.degradantRtMin} min`, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1200),
+          createDataCell(isProtocol ? '—' : `${row.activeRtMin} min`, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1200),
+          createDataCell(isProtocol ? '—' : (typeof row.degradantPeakArea === 'number' ? row.degradantPeakArea.toLocaleString() : row.degradantPeakArea), AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 1350),
+          createDataCell(isProtocol ? '—' : (typeof row.activePeakArea === 'number' ? row.activePeakArea.toLocaleString() : row.activePeakArea), AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 1350),
+          createDataCell(isProtocol ? '—' : `${row.degradationPercent} %`, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1350),
+          createDataCell(isProtocol ? 'NLT 2.0' : row.resolution, AlignmentType.CENTER, true, i % 2 === 1 ? altRowBgColor : undefined, 1350),
+        ])
+      ),
+    ];
+    docElements.push(createDocxTable(specStressColWidths, specStressRows));
+
+    docElements.push(
+      createBodyText(
+        `Scientific & Regulatory Assessment of the ~3.65 min Peak: ${data.specificity.degradationAssessment}`
+      )
+    );
+    docElements.push(
+      createConclusionBlock(
+        'Conclusion',
+        isProtocol ? data.specificity.acceptanceTextProtocol : data.specificity.conclusionReport
+      )
+    );
+  }
+
+  // 8. LINEARITY AND RANGE
+  docElements.push(createSectionHeader('8. LINEARITY AND RANGE'));
+  docElements.push(createSubSectionHeader('8.1 Linearity'));
   docElements.push(
     createBodyText(
       'A calibration curve is a general method for determining the concentration of a substance in an unknown sample by comparing it to a set of standard solutions of known concentration. Concentration is plotted along the x-axis and the response (peak area) along the y-axis; the points obtained from the calibration standards are plotted and the line through them represents the calibration curve.'
@@ -580,8 +675,8 @@ export async function generateAndDownloadDissolutionDocx(
   docElements.push(createDocxTable(ssStatColWidths, regRows));
   docElements.push(createConclusionBlock('Conclusion', isProtocol ? reg.conclusionProtocol : reg.conclusionReport));
 
-  // 7.2 Range
-  docElements.push(createSubSectionHeader('7.2 Range'));
+  // 8.2 Range
+  docElements.push(createSubSectionHeader('8.2 Range'));
   docElements.push(
     createBodyText(
       'The data obtained during the linearity and accuracy studies is used to assess the range of the method. The precision data used for the assessment is the precision of the three replicate samples analysed at each level. The sample solutions of 75 ppm and 125 ppm of the nominal concentration prepared under linearity are used.'
@@ -634,8 +729,8 @@ export async function generateAndDownloadDissolutionDocx(
   docElements.push(createDocxTable(ssStatColWidths, rngStatRows));
   docElements.push(createConclusionBlock('Conclusion', isProtocol ? rngStats.conclusionProtocol : rngStats.conclusionReport));
 
-  // 8. PRECISION (REPEATABILITY)
-  docElements.push(createSectionHeader('8. PRECISION (REPEATABILITY)'));
+  // 9. PRECISION (REPEATABILITY)
+  docElements.push(createSectionHeader('9. PRECISION (REPEATABILITY)'));
   docElements.push(
     createBodyText(
       'Precision is the degree of repeatability of an analytical method under normal operational conditions. Precision may also be expressed by the terms Intermediate Precision and Repeatability. Six sample preparations are analysed against the standard solution and the content is calculated as a percentage of the label amount.'
@@ -679,8 +774,8 @@ export async function generateAndDownloadDissolutionDocx(
   docElements.push(createDocxTable(ssStatColWidths, precStatRows));
   docElements.push(createConclusionBlock('Conclusion', isProtocol ? pStats.conclusionProtocol : pStats.conclusionReport));
 
-  // 9. INTERMEDIATE PRECISION (ANALYST 1 VS ANALYST 2)
-  docElements.push(createSectionHeader('9. INTERMEDIATE PRECISION (ANALYST 1 VS ANALYST 2)'));
+  // 10. INTERMEDIATE PRECISION (ANALYST 1 VS ANALYST 2)
+  docElements.push(createSectionHeader('10. INTERMEDIATE PRECISION (ANALYST 1 VS ANALYST 2)'));
   docElements.push(
     createBodyText(
       'Intermediate precision refers to variations within a laboratory, as with different instruments, on different days and by different analysts. Six preparations are analysed by each analyst using the standard and sample solutions described in section 4.3.'
@@ -738,8 +833,8 @@ export async function generateAndDownloadDissolutionDocx(
   docElements.push(createDocxTable(ssStatColWidths, ipStatRows));
   docElements.push(createConclusionBlock('Conclusion', isProtocol ? ipStats.conclusionProtocol : ipStats.conclusionReport));
 
-  // 10. ACCURACY (RECOVERY)
-  docElements.push(createSectionHeader('10. ACCURACY (RECOVERY)'));
+  // 11. ACCURACY (RECOVERY)
+  docElements.push(createSectionHeader('11. ACCURACY (RECOVERY)'));
   docElements.push(
     createBodyText(
       'The difference between the theoretical added amount and the practically achieved amount is the accuracy of the analytical method. Accuracy is determined at three levels — 75 ppm, 100 ppm and 125 ppm of the target concentration — in triplicate, by spiking a known amount of reference standard into the placebo and processing as per the test method.'
@@ -795,12 +890,104 @@ export async function generateAndDownloadDissolutionDocx(
   docElements.push(createDocxTable(ssStatColWidths, accStatRows));
   docElements.push(createConclusionBlock('Conclusion', isProtocol ? accStats.conclusionProtocol : accStats.conclusionReport));
 
-  // 11. OVERALL CONCLUSION
-  docElements.push(createSectionHeader('11. OVERALL CONCLUSION'));
+  // 12. ROBUSTNESS
+  docElements.push(createSectionHeader('12. ROBUSTNESS'));
+  docElements.push(
+    createBodyText(
+      'The robustness of an analytical procedure is a measure of its capacity to remain unaffected by small, but deliberate variations in method parameters and provides an indication of its reliability during normal usage. Deliberate variations in flow rate (±0.1 mL/min), column temperature (±3 °C), and mobile phase organic composition (±2 % v/v) were evaluated. System suitability parameters were verified under each condition.'
+    )
+  );
+
+  const robColWidths = [2700, 1500, 1400, 1400, 1400, 1506];
+  const robRows: TableRow[] = [
+    createRow([
+      createHeaderCell('Condition / Parameter Varied', AlignmentType.LEFT, 2700),
+      createHeaderCell('Rt (min)', AlignmentType.CENTER, 1500),
+      createHeaderCell('Tailing (T)', AlignmentType.CENTER, 1400),
+      createHeaderCell('Plates (N)', AlignmentType.CENTER, 1400),
+      createHeaderCell('% RSD (Std)', AlignmentType.CENTER, 1400),
+      createHeaderCell('Remark', AlignmentType.CENTER, 1506),
+    ], true),
+    ...data.robustness.rows.map((row, i) =>
+      createRow([
+        createDataCell(row.conditionVaried, AlignmentType.LEFT, true, i % 2 === 1 ? altRowBgColor : undefined, 2700),
+        createDataCell(isProtocol ? '—' : `${row.retentionTimeMin} min`, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1500),
+        createDataCell(isProtocol ? '—' : row.tailingFactor, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1400),
+        createDataCell(isProtocol ? '—' : row.theoreticalPlates, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1400),
+        createDataCell(isProtocol ? 'To be evaluated' : `${row.rsdPercent} %`, AlignmentType.CENTER, true, i % 2 === 1 ? altRowBgColor : undefined, 1400),
+        createDataCell(isProtocol ? '—' : row.remark, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1506),
+      ])
+    ),
+  ];
+  docElements.push(createDocxTable(robColWidths, robRows));
+  docElements.push(createConclusionBlock('Conclusion', isProtocol ? data.robustness.conclusionProtocol : data.robustness.conclusionReport));
+
+  // 13. SOLUTION STABILITY
+  docElements.push(createSectionHeader('13. SOLUTION STABILITY'));
+  docElements.push(
+    createBodyText(
+      'The stability of the reference standard and sample dissolution solution was evaluated when stored at controlled room temperature (20–25 °C) and refrigerated (2–8 °C) over an extended period (0 h, 12 h, 24 h, and 48 h). Filtered test solutions and standard solutions were analysed at each time point against freshly prepared standard.'
+    )
+  );
+
+  docElements.push(createSubSectionHeader('13.1 Solution Stability at Controlled Room Temperature (20–25 °C)'));
+  const solColWidths = [1800, 1600, 1300, 1600, 1300, 1100, 1206];
+  const solRows1: TableRow[] = [
+    createRow([
+      createHeaderCell('Time Interval', AlignmentType.CENTER, 1800),
+      createHeaderCell('Std Area', AlignmentType.RIGHT, 1600),
+      createHeaderCell('% Diff (Std)', AlignmentType.CENTER, 1300),
+      createHeaderCell('Sample Area', AlignmentType.RIGHT, 1600),
+      createHeaderCell('% Diff (Sample)', AlignmentType.CENTER, 1300),
+      createHeaderCell('% Dissolved', AlignmentType.CENTER, 1100),
+      createHeaderCell('Remark', AlignmentType.CENTER, 1206),
+    ], true),
+    ...data.solutionStability.rowsRoomTemp.map((row, i) =>
+      createRow([
+        createDataCell(row.timePoint, AlignmentType.LEFT, true, i % 2 === 1 ? altRowBgColor : undefined, 1800),
+        createDataCell(isProtocol ? '—' : typeof row.standardArea === 'number' ? row.standardArea.toLocaleString() : row.standardArea, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 1600),
+        createDataCell(isProtocol ? '—' : row.standardDiffPercent, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1300),
+        createDataCell(isProtocol ? '—' : typeof row.sampleArea === 'number' ? row.sampleArea.toLocaleString() : row.sampleArea, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 1600),
+        createDataCell(isProtocol ? '—' : row.sampleDiffPercent, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1300),
+        createDataCell(isProtocol ? '—' : row.dissolvedPercent, AlignmentType.CENTER, true, i % 2 === 1 ? altRowBgColor : undefined, 1100),
+        createDataCell(isProtocol ? '—' : row.remark, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1206),
+      ])
+    ),
+  ];
+  docElements.push(createDocxTable(solColWidths, solRows1));
+
+  docElements.push(createSubSectionHeader('13.2 Solution Stability at Refrigerated Temperature (2–8 °C)'));
+  const solRows2: TableRow[] = [
+    createRow([
+      createHeaderCell('Time Interval', AlignmentType.CENTER, 1800),
+      createHeaderCell('Std Area', AlignmentType.RIGHT, 1600),
+      createHeaderCell('% Diff (Std)', AlignmentType.CENTER, 1300),
+      createHeaderCell('Sample Area', AlignmentType.RIGHT, 1600),
+      createHeaderCell('% Diff (Sample)', AlignmentType.CENTER, 1300),
+      createHeaderCell('% Dissolved', AlignmentType.CENTER, 1100),
+      createHeaderCell('Remark', AlignmentType.CENTER, 1206),
+    ], true),
+    ...data.solutionStability.rowsRefrigerated.map((row, i) =>
+      createRow([
+        createDataCell(row.timePoint, AlignmentType.LEFT, true, i % 2 === 1 ? altRowBgColor : undefined, 1800),
+        createDataCell(isProtocol ? '—' : typeof row.standardArea === 'number' ? row.standardArea.toLocaleString() : row.standardArea, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 1600),
+        createDataCell(isProtocol ? '—' : row.standardDiffPercent, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1300),
+        createDataCell(isProtocol ? '—' : typeof row.sampleArea === 'number' ? row.sampleArea.toLocaleString() : row.sampleArea, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 1600),
+        createDataCell(isProtocol ? '—' : row.sampleDiffPercent, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1300),
+        createDataCell(isProtocol ? '—' : row.dissolvedPercent, AlignmentType.CENTER, true, i % 2 === 1 ? altRowBgColor : undefined, 1100),
+        createDataCell(isProtocol ? '—' : row.remark, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1206),
+      ])
+    ),
+  ];
+  docElements.push(createDocxTable(solColWidths, solRows2));
+  docElements.push(createConclusionBlock('Conclusion', isProtocol ? data.solutionStability.conclusionProtocol : data.solutionStability.conclusionReport));
+
+  // 14. OVERALL CONCLUSION
+  docElements.push(createSectionHeader('14. OVERALL CONCLUSION'));
   docElements.push(createBodyText(isProtocol ? data.overallConclusionProtocol : data.overallConclusionReport));
 
-  // 12. COMPLETION RECORD
-  docElements.push(createSectionHeader('12. COMPLETION RECORD'));
+  // 15. COMPLETION RECORD
+  docElements.push(createSectionHeader('15. COMPLETION RECORD'));
   const compColWidths = [3800, 3100, 3006];
   const compRows: TableRow[] = [
     createRow([
@@ -818,8 +1005,8 @@ export async function generateAndDownloadDissolutionDocx(
   ];
   docElements.push(createDocxTable(compColWidths, compRows));
 
-  // 13. ABBREVIATIONS
-  docElements.push(createSectionHeader('13. ABBREVIATIONS'));
+  // 16. ABBREVIATIONS
+  docElements.push(createSectionHeader('16. ABBREVIATIONS'));
   const abbColWidths = [2400, 7506];
   const abbRows: TableRow[] = [
     createRow([
@@ -835,8 +1022,8 @@ export async function generateAndDownloadDissolutionDocx(
   ];
   docElements.push(createDocxTable(abbColWidths, abbRows));
 
-  // 14. REVISION HISTORY
-  docElements.push(createSectionHeader('14. REVISION HISTORY'));
+  // 17. REVISION HISTORY
+  docElements.push(createSectionHeader('17. REVISION HISTORY'));
   const revColWidths = [1500, 2200, 6206];
   const revRows: TableRow[] = [
     createRow([
@@ -848,7 +1035,7 @@ export async function generateAndDownloadDissolutionDocx(
       createRow([
         createDataCell(rev.version, AlignmentType.CENTER, true, i % 2 === 1 ? altRowBgColor : undefined, 1500),
         createDataCell(rev.effectiveDate, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 2200),
-        createDataCell(rev.reason, AlignmentType.LEFT, false, i % 2 === 1 ? altRowBgColor : undefined, 6206),
+        createDataCell(rev.reason || (rev as any).reasonForChange, AlignmentType.LEFT, false, i % 2 === 1 ? altRowBgColor : undefined, 6206),
       ])
     ),
   ];

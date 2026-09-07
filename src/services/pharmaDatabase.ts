@@ -1347,11 +1347,15 @@ export function buildFullAMVDataFromMonograph(
     },
 
     robustness: {
+      instructionParagraph:
+        pH !== undefined
+          ? 'Evaluate system suitability under deliberately varied HPLC conditions (Flow rate ±0.1 mL/min, Column Temp ±3°C, Mobile phase pH ±0.2).'
+          : 'Evaluate system suitability under deliberately varied HPLC conditions (Flow rate ±0.1 mL/min, Column Temp ±3°C, Mobile phase composition ±2% v/v).',
       rows: robustnessRows,
       acceptanceTextProtocol:
         'Acceptance Criteria: System suitability criteria (%RSD NMT 2.0%, Tailing NMT 2.0, Plates NLT 2000) shall be complied with under all varied conditions.',
       conclusionReport:
-        'Conclusion: Deliberate minor variations in flow rate, temperature, pH, and mobile phase ratio did not significantly impact system suitability or test results.',
+        'Conclusion: Deliberate minor variations in flow rate, temperature, and mobile phase did not significantly impact system suitability or test results.',
     },
 
     solutionStability: {

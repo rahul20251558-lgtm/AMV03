@@ -36,6 +36,7 @@ export interface GeneratedRecoveryLevel {
     amountAddedMg: number;
     amountRecoveredMg: number;
     percentRecovery: number;
+    peakArea?: number;
   }[];
   meanRecovery: number;
   rsdRecovery: number;
@@ -359,11 +360,15 @@ export function generatePrecisionData(
 export function generateAccuracyRecoveryData(
   productName: string,
   strengthMg: number,
-  recoveryLevels: number[] = [75, 100, 125]
+  recoveryLevels: number[] = [75, 100, 125],
+  nominalArea?: number
 ) {
-  const rand = createSeededRandom(`${productName.toLowerCase()}_recovery`);
+  const rand = createSeededRandom(`${productName.toLowerCase()}_recovery_v2`);
   const levels: GeneratedRecoveryLevel[] = [];
   let totalRecoveries: number[] = [];
+  const usedAreas = new Set<number>();
+
+  const baseArea = nominalArea || computeNominalDissolutionPeakArea(productName);
 
   for (const lvlPct of recoveryLevels) {
     const nominalAdded = (lvlPct / 100) * strengthMg;
@@ -371,11 +376,31 @@ export function generateAccuracyRecoveryData(
     const repVals = [];
 
     for (let j = 1; j <= 3; j++) {
-      const added = Number((nominalAdded + (rand() - 0.5) * (nominalAdded * 0.008)).toFixed(strengthMg >= 50 ? 1 : strengthMg >= 1 ? 2 : 3));
-      // % recovery target between 98.8% and 101.2%
-      const recPct = Number(normalRandom(rand, 99.85, 0.45).toFixed(2));
-      const recovered = Number(((recPct / 100) * added).toFixed(strengthMg >= 50 ? 1 : strengthMg >= 1 ? 2 : 3));
-      // Derive actual percentRecovery strictly from the rounded display numbers so (recovered / added) * 100 is 100% exact
+      // 5-place analytical microbalance weighing variance for low strength formulations (< 10 mg)
+      const decimals = strengthMg >= 50 ? 1 : strengthMg >= 10 ? 2 : 3;
+      const weightDelta = (rand() - 0.5) * (nominalAdded * 0.008);
+      const added = Number((nominalAdded + weightDelta).toFixed(decimals));
+
+      // Authentic chromatographic injection variance (realistic %RSD ~0.25% - 0.45%)
+      const levelNominalArea = (lvlPct / 100) * baseArea;
+      // Normal distributed area jitter to prevent identical values
+      let areaJitter = Math.round((rand() - 0.5) * (levelNominalArea * 0.006));
+      if (areaJitter === 0) {
+        areaJitter = j === 1 ? -38 : j === 2 ? 45 : -19;
+      }
+      let area = Math.round(levelNominalArea + areaJitter);
+      while (usedAreas.has(area)) {
+        area += j % 2 === 0 ? 17 : -23;
+      }
+      usedAreas.add(area);
+
+      // Derive amount recovered and percent recovery from chromatographic response
+      // Response Factor Rf = baseArea / strengthMg
+      const rf = baseArea / strengthMg;
+      const theoreticalRecovered = area / rf;
+      const recovered = Number(theoreticalRecovered.toFixed(decimals));
+      
+      // Calculate percent recovery from the reported physical quantities
       const actualRecPct = Number(((recovered / added) * 100).toFixed(2));
 
       reps.push({
@@ -383,6 +408,7 @@ export function generateAccuracyRecoveryData(
         amountAddedMg: added,
         amountRecoveredMg: recovered,
         percentRecovery: actualRecPct,
+        peakArea: area,
       });
 
       repVals.push(actualRecPct);

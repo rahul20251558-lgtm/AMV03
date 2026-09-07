@@ -1037,6 +1037,22 @@ export function getRSMonograph(productName: string): RSMonographSeed {
   if (norm.includes('ibuprofen')) {
     return RS_MONOGRAPH_LIBRARY.ibuprofen;
   }
+  if (norm.includes('rosuvastatin')) {
+    const is10mg = norm.includes('10');
+    const base = RS_MONOGRAPH_LIBRARY.rosuvastatin;
+    if (is10mg) {
+      return {
+        ...base,
+        productName: 'Rosuvastatin Tablets 10 mg',
+        labelClaim: 'Each tablet contains Rosuvastatin Calcium eq. to Rosuvastatin 10 mg',
+        solutionPreparation: {
+          ...base.solutionPreparation,
+          testSolution: 'Powder 20 tablets. Disperse powder containing 10 mg Rosuvastatin in 50 mL diluent, sonicate 20 min, filter through 0.45 µm PVDF.',
+        },
+      };
+    }
+    return base;
+  }
 
   // Check other keys
   for (const [k, v] of Object.entries(RS_MONOGRAPH_LIBRARY)) {

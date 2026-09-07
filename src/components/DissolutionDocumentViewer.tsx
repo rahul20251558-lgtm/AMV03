@@ -74,7 +74,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
 
   const runningFooter = (pageNum: number) => (
     <div className="text-center pt-3 mt-5 border-t border-zinc-200 text-[0.85em] text-zinc-400">
-      Page {pageNum} of 8
+      Page {pageNum} of 10
     </div>
   );
 
@@ -455,6 +455,16 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                       {isProtocol ? '' : data.batchNoUsed}
                     </td>
                   </tr>
+                  {data.supersedes && (
+                    <tr className="border-t border-zinc-200">
+                      <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">
+                        Supersedes
+                      </td>
+                      <td className="p-2 text-zinc-700 font-mono text-[11px]">
+                        {data.supersedes}
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -606,16 +616,20 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse border border-zinc-300 text-xs">
                   <tbody>
-                    {Object.entries({
-                      'Compliance': data.methodSummary.dissolutionConditions.compliance,
-                      'Apparatus': data.methodSummary.dissolutionConditions.apparatus,
-                      'Paddle Speed': data.methodSummary.dissolutionConditions.paddleSpeed,
-                      'Medium': data.methodSummary.dissolutionConditions.medium,
-                      'Medium Temperature': data.methodSummary.dissolutionConditions.mediumTemperature,
-                      'Sampling Time': data.methodSummary.dissolutionConditions.samplingTime,
-                      'Sample Treatment': data.methodSummary.dissolutionConditions.sampleTreatment,
-                      'Number of Units': data.methodSummary.dissolutionConditions.numberOfUnits,
-                    }).map(([k, v], idx) => (
+                    {(() => {
+                      const appStr = (data.methodSummary.dissolutionConditions.apparatus || '').toLowerCase();
+                      const speedKey = appStr.includes('basket') || appStr.includes('apparatus 1') ? 'Basket Speed' : 'Paddle Speed';
+                      return Object.entries({
+                        'Compliance': data.methodSummary.dissolutionConditions.compliance,
+                        'Apparatus': data.methodSummary.dissolutionConditions.apparatus,
+                        [speedKey]: data.methodSummary.dissolutionConditions.paddleSpeed,
+                        'Medium': data.methodSummary.dissolutionConditions.medium,
+                        'Medium Temperature': data.methodSummary.dissolutionConditions.mediumTemperature,
+                        'Sampling Time': data.methodSummary.dissolutionConditions.samplingTime,
+                        'Sample Treatment': data.methodSummary.dissolutionConditions.sampleTreatment,
+                        'Number of Units': data.methodSummary.dissolutionConditions.numberOfUnits,
+                      });
+                    })().map(([k, v], idx) => (
                       <tr key={idx} className="border-b border-zinc-200 last:border-b-0">
                         <td className="w-1/3 bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">{k}</td>
                         <td className="p-2">{v}</td>
@@ -942,17 +956,130 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
           {runningFooter(4)}
         </section>
 
-        {/* ================= PAGE 5: LINEARITY AND RANGE ================= */}
+        {/* ================= PAGE 5: SPECIFICITY & FORCED DEGRADATION (SELECTIVITY) ================= */}
         <section className="min-h-[900px] flex flex-col justify-between mb-16 pb-8 border-b border-zinc-200 print:mb-0 print:pb-0 print:border-none print:break-after-page">
           <div>
             {runningHeader}
 
             <div className="mb-6">
               <h3 className={`text-xs font-bold uppercase tracking-wider mb-2 ${sectionHeadingClass}`}>
-                {isMonograph ? '3.3 LINEARITY AND RANGE' : '7. LINEARITY AND RANGE'}
+                {isMonograph ? '3.3 SPECIFICITY & SELECTIVITY (BLANK, PLACEBO & FORCED DEGRADATION)' : '7. SPECIFICITY & SELECTIVITY (BLANK, PLACEBO & FORCED DEGRADATION)'}
+              </h3>
+              <p className="text-zinc-700 text-justify mb-3">
+                Specificity is the ability to assess unequivocally the analyte in the presence of components that may be expected to be present, such as impurities, degradation products, and matrix components. Specificity is established by demonstrating that blank diluent and placebo matrix do not exhibit interfering peaks at the retention window of the active drug substance (~5.60 min), and that under forced degradation stress conditions (Acid, Base, Oxidation, Thermal, Photolytic), all generated degradation products are chromatographically resolved from the active drug peak with a resolution factor (Rs) of NLT 2.0, with confirmed spectral peak purity.
+              </p>
+
+              {/* Table A: Blank, Placebo, Standard & Test Solutions */}
+              <h4 className="text-xs font-semibold text-zinc-800 mb-2">
+                7.1 Blank, Placebo & Test Solution Interference
+              </h4>
+              <div className="overflow-x-auto mb-4">
+                <table className="w-full border-collapse border border-zinc-300 text-xs">
+                  <thead>
+                    <tr className={tableHeaderClass}>
+                      <th className="p-2 border border-zinc-300 text-left">Solution Description</th>
+                      <th className="p-2 border border-zinc-300 text-center w-28">Retention Time</th>
+                      <th className="p-2 border border-zinc-300 text-center w-32">Peak Area</th>
+                      <th className="p-2 border border-zinc-300 text-left">Interference / Remark</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.specificity?.solutionRows?.map((row, idx) => (
+                      <tr key={idx} className="border-b border-zinc-200 last:border-b-0 hover:bg-zinc-50">
+                        <td className="p-2 font-medium border-r border-zinc-200 text-zinc-900">{row.solutionName}</td>
+                        <td className="p-2 text-center border-r border-zinc-200 font-mono">{isProtocol ? '—' : row.retentionTime}</td>
+                        <td className="p-2 text-center border-r border-zinc-200 font-mono">{isProtocol ? '—' : row.peakArea}</td>
+                        <td className="p-2 border-zinc-200 text-zinc-700">{isProtocol ? 'To be verified' : row.interferenceObserved}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Table B: Forced Degradation & Stress Testing */}
+              <h4 className="text-xs font-semibold text-zinc-800 mb-2">
+                7.2 Forced Degradation & Stress Testing (Stability-Indicating Evaluation)
+              </h4>
+              <p className="text-zinc-600 text-xs mb-2">
+                Stress testing was conducted across five regulatory conditions. In all stress samples, an extra peak is consistently observed at RT ~3.65 min (labeled Impurity / Degradant, RRT ~0.65). Baseline resolution (Rs &gt; 2.0) and photodiode array (PDA) spectral peak purity were evaluated.
+              </p>
+
+              <div className="overflow-x-auto mb-4">
+                <table className="w-full border-collapse border border-zinc-300 text-xs">
+                  <thead>
+                    <tr className={tableHeaderClass}>
+                      <th className="p-1.5 border border-zinc-300 text-left">Stress Condition</th>
+                      <th className="p-1.5 border border-zinc-300 text-center">Degradant RT</th>
+                      <th className="p-1.5 border border-zinc-300 text-center">Active RT</th>
+                      <th className="p-1.5 border border-zinc-300 text-center">Degradant Area</th>
+                      <th className="p-1.5 border border-zinc-300 text-center">Active Area</th>
+                      <th className="p-1.5 border border-zinc-300 text-center">% Degradation</th>
+                      <th className="p-1.5 border border-zinc-300 text-center">Resolution (Rs)</th>
+                      <th className="p-1.5 border border-zinc-300 text-left">Peak Purity (PDA)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.specificity?.stressRows?.map((row, idx) => (
+                      <tr key={idx} className="border-b border-zinc-200 last:border-b-0 hover:bg-zinc-50 text-[11px]">
+                        <td className="p-1.5 border-r border-zinc-200 font-medium text-zinc-900">
+                          <div>{row.condition}</div>
+                          <div className="text-[10px] text-zinc-500 font-normal">{row.stressParameters}</div>
+                        </td>
+                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono text-amber-700 font-semibold">
+                          {isProtocol ? '—' : `${row.degradantRtMin} min`}
+                        </td>
+                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono text-emerald-800 font-semibold">
+                          {isProtocol ? '—' : `${row.activeRtMin} min`}
+                        </td>
+                        <td className="p-1.5 text-right border-r border-zinc-200 font-mono">
+                          {isProtocol ? '—' : typeof row.degradantPeakArea === 'number' ? row.degradantPeakArea.toLocaleString() : row.degradantPeakArea}
+                        </td>
+                        <td className="p-1.5 text-right border-r border-zinc-200 font-mono">
+                          {isProtocol ? '—' : typeof row.activePeakArea === 'number' ? row.activePeakArea.toLocaleString() : row.activePeakArea}
+                        </td>
+                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono font-bold text-zinc-800">
+                          {isProtocol ? '—' : `${row.degradationPercent} %`}
+                        </td>
+                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono font-bold text-emerald-700">
+                          {isProtocol ? 'NLT 2.0' : row.resolution}
+                        </td>
+                        <td className="p-1.5 text-left border-zinc-200 text-zinc-700">
+                          {isProtocol ? 'Purity Angle < Threshold' : row.peakPurity}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Assessment note regarding the 3.65 min peak */}
+              <div className="p-2.5 bg-blue-50/70 border border-blue-200 rounded-lg text-xs mb-3 text-blue-900">
+                <strong>Scientific & Regulatory Assessment of the ~3.65 min Peak: </strong>
+                <span>{data.specificity?.degradationAssessment}</span>
+              </div>
+
+              <div className="p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs">
+                <strong>Conclusion: </strong>
+                <span className="text-zinc-700">
+                  {isProtocol ? data.specificity?.acceptanceTextProtocol : data.specificity?.conclusionReport}
+                </span>
+              </div>
+            </div>
+          </div>
+          {runningFooter(5)}
+        </section>
+
+        {/* ================= PAGE 6: LINEARITY AND RANGE ================= */}
+        <section className="min-h-[900px] flex flex-col justify-between mb-16 pb-8 border-b border-zinc-200 print:mb-0 print:pb-0 print:border-none print:break-after-page">
+          <div>
+            {runningHeader}
+
+            <div className="mb-6">
+              <h3 className={`text-xs font-bold uppercase tracking-wider mb-2 ${sectionHeadingClass}`}>
+                {isMonograph ? '3.4 LINEARITY AND RANGE' : '8. LINEARITY AND RANGE'}
               </h3>
               <h4 className="text-xs font-semibold text-zinc-800 mb-2">
-                {isMonograph ? '3.3.1 Linearity' : '7.1 Linearity'}
+                {isMonograph ? '3.4.1 Linearity' : '8.1 Linearity'}
               </h4>
               <p className="text-zinc-700 text-justify mb-3">
                 A calibration curve is a general method for determining the concentration of a substance in an unknown sample by comparing it to a set of standard solutions of known concentration. Concentration is plotted along the x-axis and the response (peak area) along the y-axis; the points obtained from the calibration standards are plotted and the line through them represents the calibration curve.
@@ -1015,7 +1142,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
 
               {/* Range */}
               <h4 className="text-xs font-semibold text-zinc-800 mb-2">
-                {isMonograph ? '3.3.2 Range' : '7.2 Range'}
+                {isMonograph ? '3.3.2 Range' : '8.2 Range'}
               </h4>
               <p className="text-zinc-700 text-justify mb-3">
                 The data obtained during the linearity and accuracy studies is used to assess the range of the method. The precision data used for the assessment is the precision of the three replicate samples analysed at each level. The sample solutions of 75 ppm and 125 ppm of the nominal concentration prepared under linearity are used.
@@ -1078,10 +1205,10 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
               </div>
             </div>
           </div>
-          {runningFooter(5)}
+          {runningFooter(6)}
         </section>
 
-        {/* ================= PAGE 6: PRECISION & INTERMEDIATE PRECISION ================= */}
+        {/* ================= PAGE 7: PRECISION & INTERMEDIATE PRECISION ================= */}
         <section className="min-h-[900px] flex flex-col justify-between mb-16 pb-8 border-b border-zinc-200 print:mb-0 print:pb-0 print:border-none print:break-after-page">
           <div>
             {runningHeader}
@@ -1089,7 +1216,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
             {/* Precision (Repeatability) */}
             <div className="mb-6">
               <h3 className={`text-xs font-bold uppercase tracking-wider mb-2 ${sectionHeadingClass}`}>
-                {isMonograph ? '3.4 PRECISION (REPEATABILITY)' : '8. PRECISION (REPEATABILITY)'}
+                {isMonograph ? '3.5 PRECISION (REPEATABILITY)' : '9. PRECISION (REPEATABILITY)'}
               </h3>
               <p className="text-zinc-700 text-justify mb-3">
                 Precision is the degree of repeatability of an analytical method under normal operational conditions. Precision may also be expressed by the terms Intermediate Precision and Repeatability. Six sample preparations are analysed against the standard solution and the content is calculated as a percentage of the label amount.
@@ -1147,7 +1274,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
             {/* Intermediate Precision */}
             <div className="mb-6">
               <h3 className={`text-xs font-bold uppercase tracking-wider mb-2 ${sectionHeadingClass}`}>
-                {isMonograph ? '3.5 INTERMEDIATE PRECISION (ANALYST 1 VS ANALYST 2)' : '9. INTERMEDIATE PRECISION (ANALYST 1 VS ANALYST 2)'}
+                {isMonograph ? '3.6 INTERMEDIATE PRECISION (ANALYST 1 VS ANALYST 2)' : '10. INTERMEDIATE PRECISION (ANALYST 1 VS ANALYST 2)'}
               </h3>
               <p className="text-zinc-700 text-justify mb-3">
                 Intermediate precision refers to variations within a laboratory, as with different instruments, on different days and by different analysts. Six preparations are analysed by each analyst using the standard and sample solutions described in section 4.3.
@@ -1216,17 +1343,17 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
               </div>
             </div>
           </div>
-          {runningFooter(6)}
+          {runningFooter(7)}
         </section>
 
-        {/* ================= PAGE 7: ACCURACY (RECOVERY) ================= */}
+        {/* ================= PAGE 8: ACCURACY (RECOVERY) ================= */}
         <section className="min-h-[900px] flex flex-col justify-between mb-16 pb-8 border-b border-zinc-200 print:mb-0 print:pb-0 print:border-none print:break-after-page">
           <div>
             {runningHeader}
 
             <div className="mb-6">
               <h3 className={`text-xs font-bold uppercase tracking-wider mb-2 ${sectionHeadingClass}`}>
-                {isMonograph ? '3.6 ACCURACY (RECOVERY)' : '10. ACCURACY (RECOVERY)'}
+                {isMonograph ? '3.7 ACCURACY (RECOVERY)' : '11. ACCURACY (RECOVERY)'}
               </h3>
               <p className="text-zinc-700 text-justify mb-3">
                 The difference between the theoretical added amount and the practically achieved amount is the accuracy of the analytical method. Accuracy is determined at three levels — 75 ppm, 100 ppm and 125 ppm of the target concentration — in triplicate, by spiking a known amount of reference standard into the placebo and processing as per the test method.
@@ -1293,28 +1420,159 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
               </div>
             </div>
           </div>
-          {runningFooter(7)}
+          {runningFooter(8)}
         </section>
 
-        {/* ================= PAGE 8: CONCLUSION, COMPLETION RECORD, ABBREVIATIONS & REVISION ================= */}
+        {/* ================= PAGE 9: ROBUSTNESS & SOLUTION STABILITY ================= */}
+        <section className="min-h-[900px] flex flex-col justify-between mb-16 pb-8 border-b border-zinc-200 print:mb-0 print:pb-0 print:border-none print:break-after-page">
+          <div>
+            {runningHeader}
+
+            {/* 12. Robustness */}
+            <div className="mb-6">
+              <h3 className={`text-xs font-bold uppercase tracking-wider mb-2 ${sectionHeadingClass}`}>
+                {isMonograph ? '3.8 ROBUSTNESS' : '12. ROBUSTNESS'}
+              </h3>
+              <p className="text-zinc-700 text-justify mb-3">
+                The robustness of an analytical procedure is a measure of its capacity to remain unaffected by small, but deliberate variations in method parameters and provides an indication of its reliability during normal usage. Deliberate variations in flow rate (±0.1 mL/min), column temperature (±3 °C), and mobile phase organic composition (±2 % v/v) were evaluated. System suitability parameters were verified under each condition.
+              </p>
+
+              <div className="overflow-x-auto mb-4">
+                <table className="w-full border-collapse border border-zinc-300 text-xs">
+                  <thead>
+                    <tr className={tableHeaderClass}>
+                      <th className="p-1.5 border border-zinc-300 text-left">Condition / Parameter Varied</th>
+                      <th className="p-1.5 border border-zinc-300 text-center">Retention Time (min)</th>
+                      <th className="p-1.5 border border-zinc-300 text-center">Tailing Factor (T)</th>
+                      <th className="p-1.5 border border-zinc-300 text-center">Theoretical Plates (N)</th>
+                      <th className="p-1.5 border border-zinc-300 text-center">% RSD (Standard)</th>
+                      <th className="p-1.5 border border-zinc-300 text-center">Remark</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.robustness.rows.map((row, idx) => (
+                      <tr key={idx} className="border-b border-zinc-200 last:border-b-0 hover:bg-zinc-50">
+                        <td className="p-1.5 font-medium border-r border-zinc-200 text-zinc-900">{row.conditionVaried}</td>
+                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono">{isProtocol ? '—' : `${row.retentionTimeMin} min`}</td>
+                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono">{isProtocol ? '—' : row.tailingFactor}</td>
+                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono">{isProtocol ? '—' : row.theoreticalPlates}</td>
+                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono font-bold text-emerald-700">{isProtocol ? 'To be evaluated' : `${row.rsdPercent} %`}</td>
+                        <td className="p-1.5 text-center font-semibold text-emerald-700">{isProtocol ? '—' : row.remark}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs mb-6">
+                <strong>Conclusion: </strong>
+                <span className="text-zinc-700">{isProtocol ? data.robustness.conclusionProtocol : data.robustness.conclusionReport}</span>
+              </div>
+            </div>
+
+            {/* 13. Solution Stability */}
+            <div className="mb-6">
+              <h3 className={`text-xs font-bold uppercase tracking-wider mb-2 ${sectionHeadingClass}`}>
+                {isMonograph ? '3.9 SOLUTION STABILITY' : '13. SOLUTION STABILITY'}
+              </h3>
+              <p className="text-zinc-700 text-justify mb-3">
+                The stability of the reference standard and sample dissolution solution was evaluated when stored at controlled room temperature (20–25 °C) and refrigerated (2–8 °C) over an extended period (0 h, 12 h, 24 h, and 48 h). Filtered test solutions and standard solutions were analysed at each time point against freshly prepared standard.
+              </p>
+
+              {/* Room Temperature Table */}
+              <h4 className="text-xs font-semibold text-zinc-800 mb-1.5">
+                Table 13.1: Solution Stability at Controlled Room Temperature (20–25 °C)
+              </h4>
+              <div className="overflow-x-auto mb-4">
+                <table className="w-full border-collapse border border-zinc-300 text-xs">
+                  <thead>
+                    <tr className={tableHeaderClass}>
+                      <th className="p-1.5 border border-zinc-300 text-center w-28">Time Interval</th>
+                      <th className="p-1.5 border border-zinc-300 text-right">Standard Peak Area</th>
+                      <th className="p-1.5 border border-zinc-300 text-center">% Difference (Std)</th>
+                      <th className="p-1.5 border border-zinc-300 text-right">Sample Peak Area</th>
+                      <th className="p-1.5 border border-zinc-300 text-center">% Difference (Sample)</th>
+                      <th className="p-1.5 border border-zinc-300 text-center">% Dissolved</th>
+                      <th className="p-1.5 border border-zinc-300 text-center">Remark</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.solutionStability.rowsRoomTemp.map((row, idx) => (
+                      <tr key={idx} className="border-b border-zinc-200 last:border-b-0 hover:bg-zinc-50">
+                        <td className="p-1.5 font-medium border-r border-zinc-200 text-zinc-900">{row.timePoint}</td>
+                        <td className="p-1.5 text-right border-r border-zinc-200 font-mono">{isProtocol ? '—' : typeof row.standardArea === 'number' ? row.standardArea.toLocaleString() : row.standardArea}</td>
+                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono">{isProtocol ? '—' : row.standardDiffPercent}</td>
+                        <td className="p-1.5 text-right border-r border-zinc-200 font-mono">{isProtocol ? '—' : typeof row.sampleArea === 'number' ? row.sampleArea.toLocaleString() : row.sampleArea}</td>
+                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono">{isProtocol ? '—' : row.sampleDiffPercent}</td>
+                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono font-bold text-emerald-700">{isProtocol ? '—' : row.dissolvedPercent}</td>
+                        <td className="p-1.5 text-center font-semibold text-emerald-700">{isProtocol ? '—' : row.remark}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Refrigerated Table */}
+              <h4 className="text-xs font-semibold text-zinc-800 mb-1.5">
+                Table 13.2: Solution Stability at Refrigerated Temperature (2–8 °C)
+              </h4>
+              <div className="overflow-x-auto mb-4">
+                <table className="w-full border-collapse border border-zinc-300 text-xs">
+                  <thead>
+                    <tr className={tableHeaderClass}>
+                      <th className="p-1.5 border border-zinc-300 text-center w-28">Time Interval</th>
+                      <th className="p-1.5 border border-zinc-300 text-right">Standard Peak Area</th>
+                      <th className="p-1.5 border border-zinc-300 text-center">% Difference (Std)</th>
+                      <th className="p-1.5 border border-zinc-300 text-right">Sample Peak Area</th>
+                      <th className="p-1.5 border border-zinc-300 text-center">% Difference (Sample)</th>
+                      <th className="p-1.5 border border-zinc-300 text-center">% Dissolved</th>
+                      <th className="p-1.5 border border-zinc-300 text-center">Remark</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.solutionStability.rowsRefrigerated.map((row, idx) => (
+                      <tr key={idx} className="border-b border-zinc-200 last:border-b-0 hover:bg-zinc-50">
+                        <td className="p-1.5 font-medium border-r border-zinc-200 text-zinc-900">{row.timePoint}</td>
+                        <td className="p-1.5 text-right border-r border-zinc-200 font-mono">{isProtocol ? '—' : typeof row.standardArea === 'number' ? row.standardArea.toLocaleString() : row.standardArea}</td>
+                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono">{isProtocol ? '—' : row.standardDiffPercent}</td>
+                        <td className="p-1.5 text-right border-r border-zinc-200 font-mono">{isProtocol ? '—' : typeof row.sampleArea === 'number' ? row.sampleArea.toLocaleString() : row.sampleArea}</td>
+                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono">{isProtocol ? '—' : row.sampleDiffPercent}</td>
+                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono font-bold text-emerald-700">{isProtocol ? '—' : row.dissolvedPercent}</td>
+                        <td className="p-1.5 text-center font-semibold text-emerald-700">{isProtocol ? '—' : row.remark}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs">
+                <strong>Conclusion: </strong>
+                <span className="text-zinc-700">{isProtocol ? data.solutionStability.conclusionProtocol : data.solutionStability.conclusionReport}</span>
+              </div>
+            </div>
+          </div>
+          {runningFooter(9)}
+        </section>
+
+        {/* ================= PAGE 10: CONCLUSION, COMPLETION RECORD, ABBREVIATIONS & REVISION ================= */}
         <section className="min-h-[900px] flex flex-col justify-between print:break-after-page">
           <div>
             {runningHeader}
 
-            {/* 11. Overall Conclusion */}
+            {/* 14. Overall Conclusion */}
             <div className="mb-6">
               <h3 className={`text-xs font-bold uppercase tracking-wider mb-2 ${sectionHeadingClass}`}>
-                11. OVERALL CONCLUSION
+                {isMonograph ? '3.10 OVERALL CONCLUSION' : '14. OVERALL CONCLUSION'}
               </h3>
               <p className="text-zinc-700 text-justify">
                 {isProtocol ? data.overallConclusionProtocol : data.overallConclusionReport}
               </p>
             </div>
 
-            {/* 12. Completion Record */}
+            {/* 15. Completion Record */}
             <div className="mb-6">
               <h3 className={`text-xs font-bold uppercase tracking-wider mb-2 ${sectionHeadingClass}`}>
-                12. COMPLETION RECORD
+                {isMonograph ? '4. COMPLETION RECORD' : '15. COMPLETION RECORD'}
               </h3>
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse border border-zinc-300 text-xs">
@@ -1340,10 +1598,10 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
               </div>
             </div>
 
-            {/* 13. Abbreviations */}
+            {/* 16. Abbreviations */}
             <div className="mb-6">
               <h3 className={`text-xs font-bold uppercase tracking-wider mb-2 ${sectionHeadingClass}`}>
-                13. ABBREVIATIONS
+                {isMonograph ? '5. ABBREVIATIONS' : '16. ABBREVIATIONS'}
               </h3>
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse border border-zinc-300 text-xs">
@@ -1365,10 +1623,10 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
               </div>
             </div>
 
-            {/* 14. Revision History */}
+            {/* 17. Revision History */}
             <div className="mb-6">
               <h3 className={`text-xs font-bold uppercase tracking-wider mb-2 ${sectionHeadingClass}`}>
-                14. REVISION HISTORY
+                {isMonograph ? '6. REVISION HISTORY' : '17. REVISION HISTORY'}
               </h3>
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse border border-zinc-300 text-xs">
@@ -1384,7 +1642,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                       <tr key={idx} className="border-b border-zinc-200 last:border-b-0 hover:bg-zinc-50">
                         <td className="p-2 text-center font-mono font-bold border-r border-zinc-200">{rev.version}</td>
                         <td className="p-2 text-center border-r border-zinc-200">{rev.effectiveDate}</td>
-                        <td className="p-2 text-zinc-700">{rev.reasonForChange}</td>
+                        <td className="p-2 text-zinc-700">{rev.reason || (rev as any).reasonForChange}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1396,7 +1654,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
               — END OF DOCUMENT —
             </div>
           </div>
-          {runningFooter(8)}
+          {runningFooter(10)}
         </section>
 
       </div>
