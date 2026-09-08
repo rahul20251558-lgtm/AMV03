@@ -210,6 +210,11 @@ export async function generateAndDownloadAMVDocx(
   const rob = data.robustness;
   const stab = data.solutionStability;
 
+  // Single document number source of truth for exact character-by-character consistency
+  const singleDocNumber = isProtocol
+    ? data.documentNo
+    : (data.reportNo || (data.documentNo.includes('/AMV/') ? data.documentNo.replace('/AMV/', '/AMVR/') : `${data.documentNo}/R`));
+
   // =========================================================================
   // PAGE 1: MASTHEAD, METADATA, 3-COL SIGN-OFF, SEC 1, 2, 3, 4.1 HEADING
   // =========================================================================
@@ -262,8 +267,8 @@ export async function generateAndDownloadAMVDocx(
   const colMeta = [3106, 6800];
   const page1MetaTable = createDocxTable(colMeta, [
     createRow([
-      createDataCell('Document No.', AlignmentType.LEFT, true, metaLabelBgColor, colMeta[0]),
-      createDataCell(data.documentNo, AlignmentType.LEFT, true, undefined, colMeta[1]),
+      createDataCell(isProtocol ? 'Protocol No.' : 'Report No.', AlignmentType.LEFT, true, metaLabelBgColor, colMeta[0]),
+      createDataCell(singleDocNumber, AlignmentType.LEFT, true, undefined, colMeta[1]),
     ]),
     createRow([
       createDataCell('Product Name', AlignmentType.LEFT, true, metaLabelBgColor, colMeta[0]),
@@ -991,7 +996,7 @@ export async function generateAndDownloadAMVDocx(
         spacing: { before: 0, after: 80 },
         children: [
           new TextRun({
-            text: `${data.companyName}  |  ${isProtocol ? 'AMV Protocol' : 'AMV Report'} – ${data.productName}  |  Doc No. ${data.documentNo}`,
+            text: `${data.companyName}  |  ${isProtocol ? 'AMV Protocol' : 'AMV Report'} – ${data.productName}  |  Doc No. ${singleDocNumber}`,
             size: 18, // 9pt (increased from 8pt)
             font: FONT_FAMILY,
             color: '6B7280',
@@ -1067,7 +1072,7 @@ export async function generateAndDownloadAMVDocx(
   const blob = await Packer.toBlob(doc);
   const cleanDocType = isProtocol ? 'AMV_Protocol' : 'AMV_Report';
   const cleanProduct = data.productName.replace(/[^a-zA-Z0-9_-]/g, '_');
-  const filename = `${cleanDocType}_${cleanProduct}_${data.documentNo.replace(/\//g, '-')}.docx`;
+  const filename = `${cleanDocType}_${cleanProduct}_${singleDocNumber.replace(/\//g, '-')}.docx`;
 
   saveAs(blob, filename);
 }

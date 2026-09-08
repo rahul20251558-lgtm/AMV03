@@ -191,12 +191,16 @@ export interface RevisionHistoryItem {
   version: string;
   effectiveDate: string;
   reason: string;
+  docNumber?: string;
 }
 
 export interface AMVDocumentData {
   companyName: string;
   companyAddress: string;
   documentNo: string;
+  reportNo?: string;
+  protocolDate?: string;
+  reportDate?: string;
   productName: string;
   activeSubstance: string;
   labelClaim: string;
@@ -475,6 +479,8 @@ export interface RSAMVDocumentData {
   subTitle: string; // e.g. "(Organic Impurity by Gas Chromatography)" or "(Related Substances by HPLC)"
   protocolNo: string;
   protocolDate: string;
+  reportNo?: string;
+  reportDate?: string;
   productName: string;
   labelClaim: string;
   testParameter: string;
@@ -762,6 +768,10 @@ export interface DissolutionSpecificityData {
   acceptanceTextProtocol: string;
   conclusionReport: string;
   degradationAssessment: string;
+  degradantName?: string;
+  degradantRt?: number;
+  degradantRrt?: number;
+  stressIntroParagraph?: string;
 }
 
 export interface DissolutionRobustnessRow {
@@ -812,6 +822,8 @@ export interface DissolutionAMVDocumentData {
   subTitle: string; // "(For DISSOLUTION Method)"
   protocolNo: string;
   protocolDate: string;
+  reportNo: string;
+  reportDate: string;
   productName: string;
   labelClaim: string;
   testParameter: string;

@@ -609,13 +609,55 @@ export function getDissolutionMonograph(productName: string): DissolutionMonogra
   };
 }
 
+export function parsePharmaDate(dateStr: string | undefined | null): Date | null {
+  if (!dateStr) return null;
+  const clean = String(dateStr).replace(/Signed\s*\/?\s*/i, '').trim();
+  if (!clean || clean === '—' || clean === '-') return null;
+
+  const dmyMatch = clean.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (dmyMatch) {
+    return new Date(parseInt(dmyMatch[3], 10), parseInt(dmyMatch[2], 10) - 1, parseInt(dmyMatch[1], 10));
+  }
+
+  const dMmmYMatch = clean.match(/^(\d{1,2})[\-\/\s]([A-Za-z]{3})[\-\/\s](\d{4})$/);
+  if (dMmmYMatch) {
+    const months: Record<string, number> = {
+      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+    };
+    const m = months[dMmmYMatch[2].toLowerCase()];
+    if (m !== undefined) {
+      return new Date(parseInt(dMmmYMatch[3], 10), m, parseInt(dMmmYMatch[1], 10));
+    }
+  }
+
+  const isoMatch = clean.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (isoMatch) {
+    return new Date(parseInt(isoMatch[1], 10), parseInt(isoMatch[2], 10) - 1, parseInt(isoMatch[3], 10));
+  }
+
+  const parsed = new Date(clean);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+export function formatPharmaDate(d: Date): string {
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
 export function buildFullDissolutionAMVData(
   productName: string,
   overrides?: {
     protocolNo?: string;
+    reportNo?: string;
     batchNo?: string;
     companyName?: string;
     date?: string;
+    protocolDate?: string;
+    reportDate?: string;
+    supersedes?: string;
     verifiedMonograph?: Partial<DissolutionMonographInfo>;
   }
 ): DissolutionAMVDocumentData {
@@ -626,8 +668,34 @@ export function buildFullDissolutionAMVData(
 
   const company = overrides?.companyName || 'WESTCOAST PHARMACEUTICAL WORKS LTD.';
   const protocolNo = overrides?.protocolNo || 'WC/QC/AMV/0316';
+  const reportNo = overrides?.reportNo || (protocolNo.includes('/AMV/') ? protocolNo.replace('/AMV/', '/AMVR/') : `${protocolNo}/R`);
   const batchNo = overrides?.batchNo || 'TB2501';
-  const date = overrides?.date || '05/07/2025';
+
+  // Strict Rule 7: Report Date is populated strictly from final_approval_date
+  // protocol_date and report_date must be distinct variables, never used interchangeably
+  const rawBaseDate = overrides?.reportDate || overrides?.date || '05/07/2025';
+  const parsedBase = parsePharmaDate(rawBaseDate) || new Date(2025, 6, 5);
+
+  const finalApprovalDate = overrides?.reportDate || formatPharmaDate(parsedBase);
+  const reportDate = finalApprovalDate; // Header Report Date ALWAYS equals final approval date!
+
+  // Derive realistic staggered audit-trail dates
+  const d3 = new Date(parsedBase);
+  d3.setDate(d3.getDate() - 3);
+  const reportPrepDate = formatPharmaDate(d3);
+
+  const d7 = new Date(parsedBase);
+  d7.setDate(d7.getDate() - 7);
+  const executionDate = formatPharmaDate(d7);
+
+  const d18 = new Date(parsedBase);
+  d18.setDate(d18.getDate() - 18);
+  const protocolApprovalDate = overrides?.protocolDate || formatPharmaDate(d18);
+  const protocolDate = protocolApprovalDate; // Separate distinct variable for protocol header!
+
+  const d21 = new Date(parsedBase);
+  d21.setDate(d21.getDate() - 21);
+  const protocolPrepDate = formatPharmaDate(d21);
 
   const { strengthNum, unit } = parseProductStrength(mono.productName || productName);
   const nominalArea = computeNominalDissolutionPeakArea(mono.productName || productName, mono.wavelengthNum || 240);
@@ -773,8 +841,10 @@ export function buildFullDissolutionAMVData(
 
   // 8. Specificity & Forced Degradation Data (ICH Q2(R2) & Document 1 Raw Chromatograms)
   const degProfile = getProductDegradantProfile(mono.productName);
-  const activeRt = mono.retentionTimeMin || (mono.productName.toLowerCase().includes('tibolone') ? 5.60 : Number((mono.wavelengthNum ? mono.wavelengthNum / 45 : 5.0).toFixed(2)));
+  const activeRt = mono.retentionTimeMin || Number((mono.wavelengthNum ? mono.wavelengthNum / 45 : 5.0).toFixed(2));
   const degRt = mono.degradantRtMin || degProfile.approxRt || Number((activeRt * 0.65).toFixed(2));
+  const degRrt = Number((degRt / activeRt).toFixed(2));
+  const stressIntroParagraph = `Stress testing was conducted across five regulatory stress conditions. In all stress samples, an extra peak is consistently observed at RT ~${degRt.toFixed(2)} min (identified as ${degProfile.name}, RRT ~${degRrt.toFixed(2)}). Baseline resolution (Rs > 2.0) and photodiode array (PDA) spectral peak purity were evaluated.`;
 
   const specificitySolutionRows: DissolutionSpecificitySolutionRow[] = [
     {
@@ -1137,38 +1207,42 @@ export function buildFullDissolutionAMVData(
     documentTitle: 'ANALYTICAL METHOD VERIFICATION PROTOCOL / REPORT FOR DISSOLUTION BY HPLC',
     subTitle: '(For DISSOLUTION Method)',
     protocolNo,
-    protocolDate: date,
+    protocolDate,
+    reportNo,
+    reportDate,
     productName: mono.productName,
     labelClaim: `${strengthNum} ${unit}`,
     testParameter: mono.testParameter,
     reference: mono.reference,
     batchNoUsed: batchNo,
-    supersedes: 'WC/QC/AMV/047 (Validation Batch TIT-2691)',
+    supersedes: overrides?.supersedes || (drugKeyName.toLowerCase().includes('tibolone')
+      ? 'WC/QC/AMV/047 (Validation Batch TIT-2691)'
+      : `WC/QC/AMV/047 (Validation Batch WC-${drugKeyName.substring(0, 3).toUpperCase()}-2301)`),
 
     signOffs: {
       preparedBy: {
         designation: 'Chemist, Quality Control',
         name: 'Abhishek Solanki',
         signature: 'Signed',
-        date,
+        date: reportPrepDate,
       },
       checkedBy: {
         designation: 'Executive, Quality Control',
         name: 'Rinku Patel',
         signature: 'Signed',
-        date,
+        date: reportPrepDate,
       },
       reviewedBy: {
         designation: 'Manager, Quality Assurance',
         name: 'Akshay Patel',
         signature: 'Signed',
-        date,
+        date: reportPrepDate,
       },
       authorisedBy: {
         designation: 'General Manager, Quality (Head QA/QC)',
         name: 'Mukesh Patel',
         signature: 'Signed',
-        date,
+        date: finalApprovalDate,
       },
     },
 
@@ -1242,12 +1316,16 @@ export function buildFullDissolutionAMVData(
     specificity: {
       solutionRows: specificitySolutionRows,
       stressRows: specificityStressRows,
+      degradantName: degProfile.name,
+      degradantRt: degRt,
+      degradantRrt: degRrt,
+      stressIntroParagraph,
       acceptanceTextProtocol:
         'No interfering peak shall be observed in Blank and Placebo preparations at the retention window of the active drug peak. Any degradation product observed under forced degradation stress conditions must be baseline resolved from the active drug peak with a resolution (Rs) of NLT 2.0. The active peak must pass peak purity testing (Purity Angle < Purity Threshold / Purity Index > 0.999).',
       conclusionReport:
         `Complies. No interference was observed from blank diluent or placebo matrix at the retention window of ${drugKeyName} (~${activeRt.toFixed(2)} min). Across all five stress degradation conditions (Acid, Base, Oxidation, Thermal, Photolytic), the degradation impurity peak consistently eluting at RT ~${degRt.toFixed(2)} min is cleanly baseline resolved from the main analyte peak (Rs ≥ 4.08, criteria: NLT 2.0). Diode array peak purity analysis confirmed that the ${drugKeyName} peak is spectrally pure (Purity Angle < Purity Threshold) without co-eluting degradants, demonstrating method specificity and stability-indicating capacity.`,
       degradationAssessment:
-        `Regulatory & Scientific Assessment of the ~${degRt.toFixed(2)} min Peak: In all five forced degradation stress samples (Acid 0.1N HCl, Base 0.1N NaOH, Peroxide 3% H₂O₂, Thermal 105 °C, and Photolytic UV/Vis), an additional peak is consistently observed at retention time ~${degRt.toFixed(2)} min (RRT ~${(degRt / activeRt).toFixed(2)}). In chemical stability studies of ${drugKeyName}, this represents the primary degradant (${degProfile.name}). Chromatographic resolution between this degradation impurity (${degRt.toFixed(2)} min) and the parent ${drugKeyName} peak (${activeRt.toFixed(2)} min) is greater than 4.0 in all conditions (Rs = 4.08 to 4.16), easily satisfying the regulatory criterion of Rs ≥ 2.0. Furthermore, photodiode array (PDA) spectral peak purity analysis confirms complete homogeneity of the main ${drugKeyName} peak with no co-eluting degradants. The dissolution test procedure is therefore fully validated as stability-indicating and specific for its intended use.`,
+        `Regulatory & Scientific Assessment of the ~${degRt.toFixed(2)} min Peak: In all five forced degradation stress samples (Acid 0.1N HCl, Base 0.1N NaOH, Peroxide 3% H₂O₂, Thermal 105 °C, and Photolytic UV/Vis), an additional peak is consistently observed at retention time ~${degRt.toFixed(2)} min (RRT ~${degRrt.toFixed(2)}). In chemical stability studies of ${drugKeyName}, this represents the primary degradant (${degProfile.name}). Chromatographic resolution between this degradation impurity (${degRt.toFixed(2)} min) and the parent ${drugKeyName} peak (${activeRt.toFixed(2)} min) is greater than 4.0 in all conditions (Rs = 4.08 to 4.16), easily satisfying the regulatory criterion of Rs ≥ 2.0. Furthermore, photodiode array (PDA) spectral peak purity analysis confirms complete homogeneity of the main ${drugKeyName} peak with no co-eluting degradants. The dissolution test procedure is therefore fully validated as stability-indicating and specific for its intended use.`,
     },
 
     linearity: {
@@ -1321,11 +1399,11 @@ export function buildFullDissolutionAMVData(
     }. All validation parameters—System Suitability, Specificity & Selectivity (including Forced Degradation with spectral peak purity), Linearity, Range, Method Precision (Repeatability), Intermediate Precision, Accuracy (Recovery), Robustness, and Solution Stability—meet all predefined acceptance criteria. The method is formally verified for routine batch release testing.`,
 
     completionRecord: [
-      { particulars: 'Protocol Preparation', detailsProtocol: 'Prepared by Chemist QC', detailsReport: 'Prepared by Chemist QC', signatureDateProtocol: `Signed / ${date}`, signatureDateReport: `Signed / ${date}` },
-      { particulars: 'Protocol Approval', detailsProtocol: 'Approved by Head QA/QC', detailsReport: 'Approved by Head QA/QC', signatureDateProtocol: `Signed / ${date}`, signatureDateReport: `Signed / ${date}` },
-      { particulars: 'Verification Execution', detailsProtocol: 'To be executed as per protocol', detailsReport: 'Executed by Analytical Team', signatureDateProtocol: '—', signatureDateReport: `Signed / ${date}` },
-      { particulars: 'Report Preparation', detailsProtocol: 'To be compiled with all chromatograms', detailsReport: 'Compiled with all chromatographic chromatograms', signatureDateProtocol: '—', signatureDateReport: `Signed / ${date}` },
-      { particulars: 'Final Report Approval', detailsProtocol: 'To be authorised upon completion', detailsReport: 'Authorised by Head QA/QC', signatureDateProtocol: '—', signatureDateReport: `Signed / ${date}` },
+      { particulars: 'Protocol Preparation', detailsProtocol: 'Prepared by Chemist QC', detailsReport: 'Prepared by Chemist QC', signatureDateProtocol: `Signed / ${protocolPrepDate}`, signatureDateReport: `Signed / ${protocolPrepDate}` },
+      { particulars: 'Protocol Approval', detailsProtocol: 'Approved by Head QA/QC', detailsReport: 'Approved by Head QA/QC', signatureDateProtocol: `Signed / ${protocolApprovalDate}`, signatureDateReport: `Signed / ${protocolApprovalDate}` },
+      { particulars: 'Verification Execution', detailsProtocol: 'To be executed as per protocol', detailsReport: 'Executed by Analytical Team', signatureDateProtocol: '—', signatureDateReport: `Signed / ${executionDate}` },
+      { particulars: 'Report Preparation', detailsProtocol: 'To be compiled with all chromatograms', detailsReport: 'Compiled with all chromatographic chromatograms', signatureDateProtocol: '—', signatureDateReport: `Signed / ${reportPrepDate}` },
+      { particulars: 'Final Report Approval', detailsProtocol: 'To be authorised upon completion', detailsReport: 'Authorised by Head QA/QC', signatureDateProtocol: '—', signatureDateReport: `Signed / ${finalApprovalDate}` },
     ],
 
     abbreviations: [
@@ -1344,13 +1422,15 @@ export function buildFullDissolutionAMVData(
     revisionHistory: [
       {
         version: '00',
-        effectiveDate: '14/04/2024',
-        reason: `Initial Analytical Method Verification Protocol & interim study report for Dissolution of ${mono.productName} by HPLC issued under Document No. WC/QC/AMV/047 against validation batch ${drugKeyName.toLowerCase().includes('tibolone') ? 'TIT-2691' : `WC-${drugKeyName.substring(0, 3).toUpperCase()}-2301`}.`,
+        effectiveDate: protocolApprovalDate,
+        docNumber: protocolNo,
+        reason: `Initial Analytical Method Verification Protocol issued as ${protocolNo} against validation batch ${drugKeyName.toLowerCase().includes('tibolone') ? 'TIT-2691' : `WC-${drugKeyName.substring(0, 3).toUpperCase()}-2301`}.`,
       },
       {
         version: '01',
-        effectiveDate: date,
-        reason: `Comprehensive document revision and method verification formalization issued as ${protocolNo} against commercial validation batch ${batchNo} (supersedes interim report WC/QC/AMV/047 on batch ${drugKeyName.toLowerCase().includes('tibolone') ? 'TIT-2691' : `WC-${drugKeyName.substring(0, 3).toUpperCase()}-2301`}). Incorporates complete Specificity & Forced Degradation evaluation with spectral peak purity, deliberate Robustness parameter variations (flow rate ±0.1 mL/min, column temperature ±3 °C, mobile phase composition ±2 %), extended 48-hour Solution Stability data at room temperature and 2–8 °C, and resolved chromatographic recovery datasets ensuring full ICH Q2(R2) compliance.`,
+        effectiveDate: finalApprovalDate,
+        docNumber: reportNo,
+        reason: `Executed Analytical Method Verification Report formalization issued as ${reportNo} against commercial validation batch ${batchNo} (supersedes interim protocol WC/QC/AMV/047 on batch ${drugKeyName.toLowerCase().includes('tibolone') ? 'TIT-2691' : `WC-${drugKeyName.substring(0, 3).toUpperCase()}-2301`}). Validates core analytical parameters (Retention Time ~${activeRt.toFixed(2)} min, detection wavelength ${mono.wavelength}, column ${mono.column}, mobile phase ${mono.mobilePhase}) with complete Specificity forced degradation, deliberate Robustness variations (flow rate ±0.1 mL/min, column temperature ±3 °C, mobile phase composition ±2 %), extended 48-hour Solution Stability, and recovery datasets ensuring full ICH Q2(R2) compliance.`,
       },
     ],
   };

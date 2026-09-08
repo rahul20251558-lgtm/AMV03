@@ -10,6 +10,7 @@ import {
   Activity,
   Layers,
   FileCheck,
+  Calendar,
   RefreshCw,
 } from 'lucide-react';
 import { ComplianceGateResult, AuditCheckItem } from '../services/complianceAuditGate';
@@ -20,6 +21,7 @@ interface ComplianceAuditModalProps {
   auditResult: ComplianceGateResult | null;
   onReAudit?: () => void;
   onProceedExport?: () => void;
+  onOpenMajorChangeModal?: () => void;
   exportType?: 'protocol' | 'report' | 'both';
 }
 
@@ -29,11 +31,12 @@ export const ComplianceAuditModal: React.FC<ComplianceAuditModalProps> = ({
   auditResult,
   onReAudit,
   onProceedExport,
+  onOpenMajorChangeModal,
   exportType,
 }) => {
   if (!isOpen || !auditResult) return null;
 
-  const { passed, passedCount, warningCount, criticalCount, blockers, warnings, checks, activeDrugIdentified } = auditResult;
+  const { passed, passedCount, totalChecks, warningCount, criticalCount, blockers, warnings, checks, activeDrugIdentified } = auditResult;
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
@@ -47,6 +50,8 @@ export const ComplianceAuditModal: React.FC<ComplianceAuditModalProps> = ({
         return <FileSpreadsheet className="w-4 h-4 text-purple-600" />;
       case 'Traceability & Control':
         return <FileCheck className="w-4 h-4 text-amber-600" />;
+      case 'Audit Trail & Chronology':
+        return <Calendar className="w-4 h-4 text-violet-600" />;
       default:
         return <ShieldCheck className="w-4 h-4 text-zinc-600" />;
     }
@@ -73,7 +78,7 @@ export const ComplianceAuditModal: React.FC<ComplianceAuditModalProps> = ({
                 <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
                   passed ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                 }`}>
-                  {passed ? '10/10 Passed' : `${criticalCount} Critical Blocker${criticalCount > 1 ? 's' : ''}`}
+                  {passed ? `${passedCount}/${totalChecks} Passed` : `${criticalCount} Critical Blocker${criticalCount > 1 ? 's' : ''}`}
                 </span>
               </div>
               <p className="text-xs text-zinc-600 mt-0.5">
@@ -121,10 +126,10 @@ export const ComplianceAuditModal: React.FC<ComplianceAuditModalProps> = ({
             </div>
           )}
 
-          {/* 10-Point Checklist */}
+          {/* Automated Verification Checklist */}
           <div>
             <h4 className="text-xs font-bold text-zinc-700 uppercase tracking-wider mb-2.5">
-              10-Point Automated Verification Checklist
+              Automated Regulatory & Method Verification Checklist ({checks.length} Criteria)
             </h4>
             <div className="divide-y divide-zinc-100 border border-zinc-200 rounded-lg overflow-hidden bg-white">
               {checks.map((check) => (
@@ -163,6 +168,21 @@ export const ComplianceAuditModal: React.FC<ComplianceAuditModalProps> = ({
                       <p className="text-zinc-500 font-mono text-[11px] bg-zinc-50 p-1.5 rounded border border-zinc-200 mt-1.5 break-all">
                         {check.details}
                       </p>
+                    )}
+                    {check.id === 'audit-13-major-parameter-justification' && check.status === 'failed' && onOpenMajorChangeModal && (
+                      <div className="mt-2 pt-1.5">
+                        <button
+                          type="button"
+                          id="audit-modal-resolve-rule10-btn"
+                          onClick={() => {
+                            onClose();
+                            onOpenMajorChangeModal();
+                          }}
+                          className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-[11px] font-semibold flex items-center space-x-1 shadow-xs transition-colors"
+                        >
+                          <span>Enter Mandatory Reason for Change (Rule 10)</span>
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>

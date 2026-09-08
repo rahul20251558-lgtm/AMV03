@@ -1347,12 +1347,16 @@ export function buildFullRSAMVData(
     },
   ];
 
+  const reportNumber = docNo.includes('/AMV/') ? docNo.replace('/AMV/', '/AMVR/') : `${docNo}/R`;
+
   return {
     companyName,
     documentTitle: `ANALYTICAL METHOD VALIDATION PROTOCOL / REPORT FOR ORGANIC IMPURITY (RELATED SUBSTANCES) BY ${seed.technique}`,
     subTitle: `(${seed.technique === 'GC' ? 'Organic Impurity by Gas Chromatography' : 'Related Substances by HPLC'})`,
     protocolNo: docNo,
     protocolDate: docDate,
+    reportNo: reportNumber,
+    reportDate: '17/07/2024',
     productName: seed.productName,
     labelClaim: `${strengthNum} ${unit}`,
     testParameter: seed.testParameter,
@@ -1598,7 +1602,8 @@ export function buildFullRSAMVData(
       {
         version: '00',
         effectiveDate: docDate,
-        reason: `New document — Analytical Method Validation Protocol / Report for Organic Impurities in ${seed.productName}`,
+        docNumber: reportNumber,
+        reason: `Analytical Method Validation study report issued as ${reportNumber} for Organic Impurities in ${seed.productName} by ${seed.technique}. Validates chromatographic system parameters (Stationary phase ${seed.column}, mobile phase/carrier gas ${seed.carrierGasOrMobilePhase}, detector ${seed.detectorTempOrWavelength}, flow rate ${seed.injectionTempOrFlowRate}) with complete system suitability, LOQ, LOD, linearity, precision, and accuracy under ICH Q2(R2).`,
       },
     ],
   };

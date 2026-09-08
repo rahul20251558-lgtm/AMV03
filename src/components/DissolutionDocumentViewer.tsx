@@ -423,13 +423,13 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                     <td className="w-1/3 bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">
                       {isProtocol ? 'Protocol No.' : 'Report No.'}
                     </td>
-                    <td className="p-2 font-medium">{data.protocolNo}</td>
+                    <td className="p-2 font-medium">{isProtocol ? data.protocolNo : (data.reportNo || data.protocolNo.replace('/AMV/', '/AMVR/'))}</td>
                   </tr>
                   <tr className="border-b border-zinc-200">
                     <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">
                       {isProtocol ? 'Protocol Date' : 'Report Date'}
                     </td>
-                    <td className="p-2">{data.protocolDate}</td>
+                    <td className="p-2 font-medium">{isProtocol ? data.protocolDate : data.reportDate}</td>
                   </tr>
                   <tr className="border-b border-zinc-200">
                     <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">Product Name</td>
@@ -1001,7 +1001,8 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                 7.2 Forced Degradation & Stress Testing (Stability-Indicating Evaluation)
               </h4>
               <p className="text-zinc-600 text-xs mb-2">
-                Stress testing was conducted across five regulatory conditions. In all stress samples, an extra peak is consistently observed at RT ~3.65 min (labeled Impurity / Degradant, RRT ~0.65). Baseline resolution (Rs &gt; 2.0) and photodiode array (PDA) spectral peak purity were evaluated.
+                {data.specificity?.stressIntroParagraph ||
+                  `Stress testing was conducted across five regulatory conditions. In all stress samples, an extra peak is consistently observed at RT ~${data.specificity?.stressRows?.[0]?.degradantRtMin || '3.12'} min (identified as ${data.specificity?.degradantName || 'primary degradation entity'}). Baseline resolution (Rs > 2.0) and photodiode array (PDA) spectral peak purity were evaluated.`}
               </p>
 
               <div className="overflow-x-auto mb-4">
@@ -1052,9 +1053,8 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                 </table>
               </div>
 
-              {/* Assessment note regarding the 3.65 min peak */}
-              <div className="p-2.5 bg-blue-50/70 border border-blue-200 rounded-lg text-xs mb-3 text-blue-900">
-                <strong>Scientific & Regulatory Assessment of the ~3.65 min Peak: </strong>
+              {/* Scientific & Regulatory Assessment Callout */}
+              <div className="p-2.5 bg-blue-50/70 border border-blue-200 rounded-lg text-xs mb-3 text-blue-900 leading-relaxed">
                 <span>{data.specificity?.degradationAssessment}</span>
               </div>
 

@@ -201,6 +201,11 @@ export async function generateAndDownloadRSAMVDocx(
   // Section items array
   const docElements: (Paragraph | Table)[] = [];
 
+  // Single document number source of truth for exact character-by-character consistency
+  const singleDocNumber = isProtocol
+    ? data.protocolNo
+    : (data.reportNo || (data.protocolNo.includes('/AMV/') ? data.protocolNo.replace('/AMV/', '/AMVR/') : `${data.protocolNo}/R`));
+
   // ================= PAGE 1 =================
   // Company Header
   docElements.push(
@@ -252,11 +257,11 @@ export async function generateAndDownloadRSAMVDocx(
   const metaRows: TableRow[] = [
     createRow([
       createDataCell(isProtocol ? 'Protocol No.' : 'Report No.', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
-      createDataCell(data.protocolNo, AlignmentType.LEFT, true, undefined, 7106),
+      createDataCell(singleDocNumber, AlignmentType.LEFT, true, undefined, 7106),
     ]),
     createRow([
       createDataCell(isProtocol ? 'Protocol Date' : 'Report Date', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
-      createDataCell(data.protocolDate, AlignmentType.LEFT, false, undefined, 7106),
+      createDataCell(isProtocol ? data.protocolDate : (data.reportDate || '17/07/2024'), AlignmentType.LEFT, false, undefined, 7106),
     ]),
     createRow([
       createDataCell('Product Name', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
@@ -867,7 +872,7 @@ export async function generateAndDownloadRSAMVDocx(
         spacing: { after: 100 },
         children: [
           new TextRun({
-            text: `${data.companyName} | ${isProtocol ? 'AMV Protocol' : 'AMV Report'} (${data.productName}) — Doc No: ${data.protocolNo}`,
+            text: `${data.companyName} | ${isProtocol ? 'AMV Protocol' : 'AMV Report'} (${data.productName}) — Doc No: ${singleDocNumber}`,
             size: 16,
             font: FONT_FAMILY,
             color: '6B7280',
@@ -932,6 +937,6 @@ export async function generateAndDownloadRSAMVDocx(
   });
 
   const blob = await Packer.toBlob(doc);
-  const fileName = `${data.protocolNo.replace(/[^a-zA-Z0-9_-]/g, '_')}_${isProtocol ? 'RS_Protocol' : 'RS_Report'}.docx`;
+  const fileName = `${singleDocNumber.replace(/[^a-zA-Z0-9_-]/g, '_')}_${isProtocol ? 'RS_Protocol' : 'RS_Report'}.docx`;
   saveAs(blob, fileName);
 }

@@ -198,6 +198,11 @@ export async function generateAndDownloadDissolutionDocx(
 
   const docElements: (Paragraph | Table)[] = [];
 
+  // Single document number source of truth for exact character-by-character consistency
+  const singleDocNumber = isProtocol
+    ? data.protocolNo
+    : (data.reportNo || (data.protocolNo.includes('/AMV/') ? data.protocolNo.replace('/AMV/', '/AMVR/') : `${data.protocolNo}/R`));
+
   // ================= TITLE BLOCK =================
   docElements.push(
     new Paragraph({
@@ -248,11 +253,11 @@ export async function generateAndDownloadDissolutionDocx(
   const metaRows: TableRow[] = [
     createRow([
       createDataCell(isProtocol ? 'Protocol No.' : 'Report No.', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
-      createDataCell(data.protocolNo, AlignmentType.LEFT, true, undefined, 7106),
+      createDataCell(singleDocNumber, AlignmentType.LEFT, true, undefined, 7106),
     ]),
     createRow([
       createDataCell(isProtocol ? 'Protocol Date' : 'Report Date', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
-      createDataCell(data.protocolDate, AlignmentType.LEFT, false, undefined, 7106),
+      createDataCell(isProtocol ? data.protocolDate : data.reportDate, AlignmentType.LEFT, false, undefined, 7106),
     ]),
     createRow([
       createDataCell('Product Name', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
@@ -579,11 +584,14 @@ export async function generateAndDownloadDissolutionDocx(
 
     // 7.2 Forced Degradation Table
     docElements.push(createSubSectionHeader('7.2 Forced Degradation & Stress Testing (Stability-Indicating Evaluation)'));
-    docElements.push(
-      createBodyText(
-        'Stress testing was conducted across five regulatory stress conditions. In all stress samples, an extra peak is consistently observed at RT ~3.65 min (labeled Impurity / Degradant, RRT ~0.65). Baseline resolution (Rs > 2.0) and photodiode array (PDA) spectral peak purity were evaluated.'
-      )
-    );
+    const degRtStr = data.specificity.stressRows?.[0]?.degradantRtMin || (data.specificity.degradantRt ? data.specificity.degradantRt.toFixed(2) : '3.12');
+    const degNameStr = data.specificity.degradantName || 'primary degradation entity';
+    const activeRtStr = data.specificity.stressRows?.[0]?.activeRtMin || '4.80';
+    const rrtStr = (Number(degRtStr) / Number(activeRtStr)).toFixed(2);
+    const stressIntro = data.specificity.stressIntroParagraph ||
+      `Stress testing was conducted across five regulatory stress conditions. In all stress samples, an extra peak is consistently observed at RT ~${degRtStr} min (identified as ${degNameStr}, RRT ~${rrtStr}). Baseline resolution (Rs > 2.0) and photodiode array (PDA) spectral peak purity were evaluated.`;
+
+    docElements.push(createBodyText(stressIntro));
 
     const specStressColWidths = [2106, 1200, 1200, 1350, 1350, 1350, 1350];
     const specStressRows: TableRow[] = [
@@ -610,11 +618,7 @@ export async function generateAndDownloadDissolutionDocx(
     ];
     docElements.push(createDocxTable(specStressColWidths, specStressRows));
 
-    docElements.push(
-      createBodyText(
-        `Scientific & Regulatory Assessment of the ~3.65 min Peak: ${data.specificity.degradationAssessment}`
-      )
-    );
+    docElements.push(createBodyText(data.specificity.degradationAssessment));
     docElements.push(
       createConclusionBlock(
         'Conclusion',
@@ -1090,7 +1094,7 @@ export async function generateAndDownloadDissolutionDocx(
                 alignment: AlignmentType.RIGHT,
                 children: [
                   new TextRun({
-                    text: `${data.companyName} | ${data.protocolNo} (${isProtocol ? 'Protocol' : 'Report'})`,
+                    text: `${data.companyName} | ${singleDocNumber} (${isProtocol ? 'Protocol' : 'Report'})`,
                     size: 16,
                     color: '6B7280',
                     font: FONT_FAMILY,
@@ -1141,7 +1145,7 @@ export async function generateAndDownloadDissolutionDocx(
   });
 
   const blob = await Packer.toBlob(doc);
-  const cleanDocNo = data.protocolNo.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const cleanDocNo = singleDocNumber.replace(/[^a-zA-Z0-9_-]/g, '_');
   const cleanProduct = data.productName.replace(/[^a-zA-Z0-9_-]/g, '_');
   const filename = `${cleanDocNo}_${cleanProduct}_Dissolution_${isProtocol ? 'Protocol' : 'Report'}.docx`;
   saveAs(blob, filename);

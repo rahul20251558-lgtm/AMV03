@@ -1218,10 +1218,18 @@ export function buildFullAMVDataFromMonograph(
     },
   ];
 
+  const protocolNumber = codes.documentNo;
+  const reportNumber = codes.documentNo.includes('/AMV/')
+    ? codes.documentNo.replace('/AMV/', '/AMVR/')
+    : `${codes.documentNo}/R`;
+
   const doc: AMVDocumentData = {
     companyName: existingCodes?.companyName || 'WESTCOAST PHARMACEUTICAL WORKS LTD.',
     companyAddress: existingCodes?.companyAddress || 'GOTA, Ahmedabad, Gujarat, India',
     documentNo: codes.documentNo,
+    reportNo: reportNumber,
+    protocolDate: '01-Apr-2026',
+    reportDate: codes.approvedDate || '20-Apr-2026',
     productName: productName,
     activeSubstance: mono.activeSubstance,
     labelClaim: mono.labelClaim,
@@ -1401,12 +1409,14 @@ export function buildFullAMVDataFromMonograph(
       {
         version: '00',
         effectiveDate: '01-Apr-2026',
-        reason: `Analytical Method Validation Protocol for ${productName} by HPLC (Approved: 31-Mar-2026)`,
+        docNumber: protocolNumber,
+        reason: `Analytical Method Validation Protocol issued as ${protocolNumber} for ${productName} by HPLC (Approved: 31-Mar-2026)`,
       },
       {
         version: '01',
         effectiveDate: codes.effectiveDate || '21-Apr-2026',
-        reason: `Executed Analytical Method Validation Report for ${productName} by HPLC (Approved: 20-Apr-2026)`,
+        docNumber: reportNumber,
+        reason: `Executed Analytical Method Validation Report issued as ${reportNumber} for ${productName} by HPLC (Approved: 20-Apr-2026). Validates chromatographic parameters (Retention Time ~${mono.chromatographicConditions.approxRetentionTime}, detection wavelength ${mono.chromatographicConditions.detectionWavelength}, column ${mono.chromatographicConditions.column}, mobile phase ${mono.chromatographicConditions.mobilePhase}, column temperature ${mono.chromatographicConditions.columnTemperature}) with full system suitability, linearity, precision, and accuracy under ICH Q2(R2).`,
       },
     ],
   };

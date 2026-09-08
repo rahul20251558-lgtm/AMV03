@@ -26,6 +26,15 @@ import { AMVDocumentViewer } from './components/AMVDocumentViewer';
 import { RSAMVDocumentViewer } from './components/RSAMVDocumentViewer';
 import { DissolutionDocumentViewer } from './components/DissolutionDocumentViewer';
 import { ComplianceAuditModal } from './components/ComplianceAuditModal';
+import { MajorChangePromptModal } from './components/MajorChangePromptModal';
+import {
+  extractCoreMethodParameters,
+  compareCoreMethodParameters,
+  getBaselineLookupKey,
+  DEFAULT_METHOD_BASELINES,
+  validateRevisionReasonForMajorChanges,
+  MethodDiffItem,
+} from './services/methodVersionHistory';
 
 export function App() {
   // Method Type: Default to 'dissolution' as requested by the user, with RS and Assay readily available
@@ -218,6 +227,24 @@ export function App() {
     }
   };
 
+  // Automated diff check to prompt user for Reason for Change if major parameters altered (Rule 10)
+  const checkAndPromptMajorChanges = (
+    data: any,
+    method: 'dissolution' | 'related_substances' | 'assay',
+    pName: string
+  ) => {
+    const currentParams = extractCoreMethodParameters(data, method);
+    const baselineKey = getBaselineLookupKey(pName, method);
+    const baselineParams = DEFAULT_METHOD_BASELINES[baselineKey];
+    const diffs = compareCoreMethodParameters(currentParams, baselineParams);
+    const revs = data.revisionHistory || [];
+    const latestReason = revs.length > 0 ? revs[revs.length - 1].reason || '' : '';
+    const val = validateRevisionReasonForMajorChanges(latestReason, diffs);
+    if (diffs.length > 0 && !val.isValid) {
+      setIsMajorChangeModalOpen(true);
+    }
+  };
+
   // Generate AMV Data for current product (Dissolution, RS, or Assay)
   const handleGenerate = async () => {
     setIsLoading(true);
@@ -241,6 +268,7 @@ export function App() {
             setDissolutionData(json.data);
             setDocumentNo(json.data.protocolNo);
             setBatchNo(json.data.batchNoUsed);
+            checkAndPromptMajorChanges(json.data, 'dissolution', productName);
             setIsLoading(false);
             return;
           }
@@ -258,6 +286,7 @@ export function App() {
       setDissolutionData(localDiss);
       setDocumentNo(localDiss.protocolNo);
       setBatchNo(localDiss.batchNoUsed);
+      checkAndPromptMajorChanges(localDiss, 'dissolution', productName);
       setIsLoading(false);
       return;
     }
@@ -281,6 +310,7 @@ export function App() {
             setRsData(json.data);
             setDocumentNo(json.data.protocolNo);
             setBatchNo(json.data.batchNoUsed);
+            checkAndPromptMajorChanges(json.data, 'related_substances', productName);
             setIsLoading(false);
             return;
           }
@@ -298,6 +328,7 @@ export function App() {
       setRsData(localRS);
       setDocumentNo(localRS.protocolNo);
       setBatchNo(localRS.batchNoUsed);
+      checkAndPromptMajorChanges(localRS, 'related_substances', productName);
       setIsLoading(false);
       return;
     }
@@ -322,6 +353,7 @@ export function App() {
           setAssayData(recalculated);
           setDocumentNo(recalculated.documentNo);
           setBatchNo(recalculated.batchNoUsed);
+          checkAndPromptMajorChanges(recalculated, 'assay', productName);
           setIsLoading(false);
           return;
         }
@@ -339,6 +371,7 @@ export function App() {
     setAssayData(localData);
     setDocumentNo(localData.documentNo);
     setBatchNo(localData.batchNoUsed);
+    checkAndPromptMajorChanges(localData, 'assay', productName);
     setIsLoading(false);
   };
 
@@ -350,6 +383,80 @@ export function App() {
   };
 
   const [auditNonce, setAuditNonce] = useState(0);
+  const [isMajorChangeModalOpen, setIsMajorChangeModalOpen] = useState(false);
+
+  // Compute live parameter diffs vs monograph baseline (Rule 10)
+  const activeMethodDiffs = useMemo(() => {
+    const data = getCurrentDocData();
+    const currentParams = extractCoreMethodParameters(data, validationMethod);
+    const baselineKey = getBaselineLookupKey(productName, validationMethod);
+    const baselineParams = DEFAULT_METHOD_BASELINES[baselineKey];
+    return compareCoreMethodParameters(currentParams, baselineParams);
+  }, [dissolutionData, rsData, assayData, validationMethod, productName]);
+
+  // Current reason in revision history
+  const activeRevisionReason = useMemo(() => {
+    const data = getCurrentDocData();
+    const revs = (data as any).revisionHistory || [];
+    return revs.length > 0 ? revs[revs.length - 1].reason || '' : '';
+  }, [dissolutionData, rsData, assayData, validationMethod]);
+
+  const isMajorChangeJustificationNeeded = useMemo(() => {
+    if (activeMethodDiffs.length === 0) return false;
+    const val = validateRevisionReasonForMajorChanges(activeRevisionReason, activeMethodDiffs);
+    return !val.isValid;
+  }, [activeMethodDiffs, activeRevisionReason]);
+
+  // Update Revision History reason for Rule 10 compliance
+  const handleApplyRevisionReason = (newReason: string) => {
+    if (validationMethod === 'dissolution') {
+      setDissolutionData((prev) => {
+        const revs = [...prev.revisionHistory];
+        if (revs.length > 0) {
+          revs[revs.length - 1] = { ...revs[revs.length - 1], reason: newReason };
+        } else {
+          revs.push({
+            version: '01',
+            effectiveDate: prev.reportDate || '21-Apr-2026',
+            reason: newReason,
+            docNumber: prev.reportNo || prev.protocolNo,
+          });
+        }
+        return { ...prev, revisionHistory: revs };
+      });
+    } else if (validationMethod === 'related_substances') {
+      setRsData((prev) => {
+        const revs = [...prev.revisionHistory];
+        if (revs.length > 0) {
+          revs[revs.length - 1] = { ...revs[revs.length - 1], reason: newReason };
+        } else {
+          revs.push({
+            version: '01',
+            effectiveDate: prev.reportDate || '17/07/2024',
+            reason: newReason,
+            docNumber: prev.reportNo || prev.protocolNo,
+          });
+        }
+        return { ...prev, revisionHistory: revs };
+      });
+    } else {
+      setAssayData((prev) => {
+        const revs = [...prev.revisionHistory];
+        if (revs.length > 0) {
+          revs[revs.length - 1] = { ...revs[revs.length - 1], reason: newReason };
+        } else {
+          revs.push({
+            version: '01',
+            effectiveDate: prev.effectiveDate || '21-Apr-2026',
+            reason: newReason,
+            docNumber: prev.reportNo || prev.documentNo,
+          });
+        }
+        return { ...prev, revisionHistory: revs };
+      });
+    }
+    setAuditNonce((n) => n + 1);
+  };
 
   // Live computed compliance audit result
   const auditResult = useMemo(() => {
@@ -363,6 +470,15 @@ export function App() {
 
   // Run Pre-Output Compliance & Contamination Audit Gate before export
   const verifyComplianceGate = (targetExport: 'protocol' | 'report' | 'both'): boolean => {
+    // If major parameter shifts exist and justification is lacking, open Major Change Modal
+    if (activeMethodDiffs.length > 0) {
+      const val = validateRevisionReasonForMajorChanges(activeRevisionReason, activeMethodDiffs);
+      if (!val.isValid) {
+        setIsMajorChangeModalOpen(true);
+        return false;
+      }
+    }
+
     if (!auditResult.passed) {
       setPendingExport(targetExport);
       setIsAuditModalOpen(true);
@@ -486,6 +602,31 @@ export function App() {
           theme={theme}
         />
 
+        {/* Rule 10 Major Parameter Shift Notification Banner */}
+        {isMajorChangeJustificationNeeded && (
+          <div className="mb-4 p-3.5 bg-amber-50 border border-amber-300 rounded-xl shadow-xs flex items-center justify-between animate-in fade-in">
+            <div className="flex items-center space-x-3">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse flex-shrink-0" />
+              <div className="text-xs">
+                <span className="font-bold text-amber-900">
+                  Major Method Parameter Changes Detected ({activeMethodDiffs.length})
+                </span>
+                <span className="text-amber-700 ml-2">
+                  ICH Q2(R2) &amp; ALCOA+ Data Integrity require an explicit, non-generic parameter explanation in Revision History.
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              id="prompt-major-change-banner-btn"
+              onClick={() => setIsMajorChangeModalOpen(true)}
+              className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer flex-shrink-0"
+            >
+              Enter Reason for Change (Rule 10)
+            </button>
+          </div>
+        )}
+
         {/* Live Document Viewer & Exporter: Dissolution vs AMV (RS Format) vs Assay Format */}
         {validationMethod === 'dissolution' ? (
           <DissolutionDocumentViewer
@@ -545,7 +686,19 @@ export function App() {
         auditResult={auditResult}
         onReAudit={handleReAudit}
         onProceedExport={pendingExport ? handleProceedExportFromModal : undefined}
+        onOpenMajorChangeModal={() => setIsMajorChangeModalOpen(true)}
         exportType={pendingExport || undefined}
+      />
+
+      {/* Mandatory Major Method Parameter Change Explanation Modal (Rule 10) */}
+      <MajorChangePromptModal
+        isOpen={isMajorChangeModalOpen}
+        onClose={() => setIsMajorChangeModalOpen(false)}
+        diffs={activeMethodDiffs}
+        currentReason={activeRevisionReason}
+        onApplyReason={handleApplyRevisionReason}
+        productName={productName}
+        documentNo={documentNo}
       />
     </div>
   );

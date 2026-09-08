@@ -216,14 +216,16 @@ export const RSAMVDocumentViewer: React.FC<RSAMVDocumentViewerProps> = ({
                   {isProtocol ? 'Protocol No.' : 'Report No.'}
                 </td>
                 <td className="w-2/3 border border-zinc-300 px-3 py-1.5 font-mono font-bold text-zinc-900">
-                  {data.protocolNo}
+                  {isProtocol ? data.protocolNo : (data.reportNo || data.protocolNo.replace('/AMV/', '/AMVR/'))}
                 </td>
               </tr>
               <tr>
                 <td className="bg-zinc-50 font-bold border border-zinc-300 px-3 py-1.5 text-zinc-700">
                   {isProtocol ? 'Protocol Date' : 'Report Date'}
                 </td>
-                <td className="border border-zinc-300 px-3 py-1.5 text-zinc-800">{data.protocolDate}</td>
+                <td className="border border-zinc-300 px-3 py-1.5 text-zinc-800">
+                  {isProtocol ? data.protocolDate : (data.reportDate || '17/07/2024')}
+                </td>
               </tr>
               <tr>
                 <td className="bg-zinc-50 font-bold border border-zinc-300 px-3 py-1.5 text-zinc-700">Product Name</td>
