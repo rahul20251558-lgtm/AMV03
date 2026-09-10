@@ -366,26 +366,38 @@ export const RSAMVDocumentViewer: React.FC<RSAMVDocumentViewerProps> = ({
           <h3 className="text-xs font-bold text-zinc-800 mb-1">4.1 Chromatographic Conditions</h3>
           <table className="w-full text-xs border-collapse border border-zinc-300">
             <tbody>
-              {Object.entries(data.methodSummary.chromatographicConditions).map(([key, val]) => (
-                <tr key={key}>
-                  <td className="w-1/3 bg-zinc-50 font-semibold border border-zinc-300 px-3 py-1 capitalize text-zinc-700">
-                    {key.replace(/([A-Z])/g, ' $1')}
+              {[
+                { label: 'Instrument / Detector', value: data.methodSummary.chromatographicConditions.instrumentDetector || 'HPLC System with UV/PDA Detector' },
+                { label: 'Column (Stationary Phase)', value: data.methodSummary.chromatographicConditions.column },
+                { label: 'Mobile Phase', value: data.methodSummary.chromatographicConditions.mobilePhase || data.methodSummary.chromatographicConditions.carrierGasOrMobilePhase || 'Phosphate Buffer : Acetonitrile' },
+                { label: 'Flow Rate', value: data.methodSummary.chromatographicConditions.flowRate || data.methodSummary.chromatographicConditions.injectionTempOrFlowRate || '1.0 mL/min' },
+                { label: 'Detection Wavelength', value: data.methodSummary.chromatographicConditions.wavelength || data.methodSummary.chromatographicConditions.detectorTempOrWavelength || '210 nm' },
+                { label: 'Column Temperature', value: data.methodSummary.chromatographicConditions.columnTemperature || '30 °C' },
+                { label: 'Injection Volume', value: data.methodSummary.chromatographicConditions.injectionVolume },
+                { label: 'Total Run Time', value: data.methodSummary.chromatographicConditions.totalRunTime },
+                { label: 'Diluent', value: data.methodSummary.chromatographicConditions.diluent },
+                { label: 'Standard / Internal Standard', value: data.methodSummary.chromatographicConditions.internalStandard },
+                { label: 'Relative Retention', value: data.methodSummary.chromatographicConditions.relativeRetention },
+              ].map((item, idx) => (
+                <tr key={idx}>
+                  <td className="w-1/3 bg-zinc-50 font-semibold border border-zinc-300 px-3 py-1 text-zinc-700">
+                    {item.label}
                   </td>
-                  <td className="border border-zinc-300 px-3 py-1 text-zinc-800">{val}</td>
+                  <td className="border border-zinc-300 px-3 py-1 text-zinc-800">{item.value}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
 
-        {/* 4.2 Temperature / Mobile Phase Programme */}
+        {/* 4.2 Mobile Phase / Gradient Programme */}
         <div className="mb-3">
-          <h3 className="text-xs font-bold text-zinc-800 mb-1">4.2 Temperature / Mobile Phase Programme</h3>
+          <h3 className="text-xs font-bold text-zinc-800 mb-1">4.2 Mobile Phase / Gradient Programme</h3>
           <table className="w-full text-xs border-collapse border border-zinc-300">
             <thead>
               <tr className={tableHeaderClass}>
                 <th className="p-1.5 border border-zinc-300 text-center">Time (minutes)</th>
-                <th className="p-1.5 border border-zinc-300 text-center">Temperature (°C) / Mobile Phase</th>
+                <th className="p-1.5 border border-zinc-300 text-center">Mobile Phase Composition / Condition</th>
                 <th className="p-1.5 border border-zinc-300 text-left">Comment</th>
               </tr>
             </thead>

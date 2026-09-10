@@ -28,6 +28,7 @@ import {
   getProductDegradantProfile,
   identifyActiveDrug,
 } from './complianceAuditGate';
+import { filterUsedAbbreviations } from './abbreviationFilter';
 import {
   parseProductStrength,
   computeNominalPeakArea,
@@ -1038,7 +1039,7 @@ export function buildFullDissolutionAMVData(
   const randStab = createSeededRandom(`${mono.productName.toLowerCase()}_stability`);
   const initStdArea = typeof nominalArea === 'number' ? nominalArea : 42744;
   const initSmpArea = Math.round(initStdArea * 0.998);
-  const initialDissolved = 98.6;
+  const initialDissolved = 98.60;
 
   const calcDiff = (curr: number, init: number): string => {
     const diff = (Math.abs(curr - init) / init) * 100;
@@ -1047,7 +1048,7 @@ export function buildFullDissolutionAMVData(
 
   const calcDissolved = (smp: number, std: number): string => {
     const val = initialDissolved * (smp / std) / (initSmpArea / initStdArea);
-    return `${val.toFixed(1)} %`;
+    return `${val.toFixed(2)} %`;
   };
 
   // Room temperature (20–25 °C)
@@ -1067,7 +1068,7 @@ export function buildFullDissolutionAMVData(
       standardDiffPercent: '0.00 %',
       sampleArea: initSmpArea,
       sampleDiffPercent: '0.00 %',
-      dissolvedPercent: `${initialDissolved.toFixed(1)} %`,
+      dissolvedPercent: `${initialDissolved.toFixed(2)} %`,
       remark: 'Initial reference (Complies)',
     },
     {
@@ -1116,7 +1117,7 @@ export function buildFullDissolutionAMVData(
       standardDiffPercent: '0.00 %',
       sampleArea: initSmpArea,
       sampleDiffPercent: '0.00 %',
-      dissolvedPercent: `${initialDissolved.toFixed(1)} %`,
+      dissolvedPercent: `${initialDissolved.toFixed(2)} %`,
       remark: 'Initial reference (Complies)',
     },
     {
@@ -1184,7 +1185,7 @@ export function buildFullDissolutionAMVData(
       calculatedMg: workedCalcMg,
       formulaSubstitution: `% Dissolved = (${sampleAreaVal.toLocaleString()} / ${meanStdAreaVal.toLocaleString()}) × (${cWorkingNominal} / 1000) × (${vMedNum} × ${df}) × (100 / ${strengthNum})`,
       resultStatement: `% Dissolved = ${workedCalcPercent.toFixed(2)} % of declared label claim (${workedCalcMg.toFixed(2)} mg/unit)`,
-      complianceStatement: `Stage S1 Acceptance limit: Each individual unit NLT Q + 5 % (i.e. NLT ${(parseInt(mono.qLimit?.match(/\d+/)?.[0] || '80', 10) + 5).toFixed(1)} %). The calculated result complies with acceptance criteria.`,
+      complianceStatement: `Stage S1 Acceptance limit: Each individual unit NLT Q + 5 % (i.e. NLT ${(parseInt(mono.qLimit?.match(/\d+/)?.[0] || '80', 10) + 5).toFixed(2)} %). The calculated result complies with acceptance criteria.`,
     },
   };
 
@@ -1195,10 +1196,10 @@ export function buildFullDissolutionAMVData(
   const specificationLimits: DissolutionSpecificationLimits = {
     qValue: qNum,
     timeMinutes: timeNum,
-    s1Criteria: `Stage S1 (6 units): Each of 6 units is not less than Q + 5 % (i.e. NLT ${(qNum + 5).toFixed(1)} % of label claim).`,
-    s2Criteria: `Stage S2 (12 units total: S1 + 6 units): Average of 12 units (S1 + S2) is not less than Q (NLT ${qNum.toFixed(1)} %), and no individual unit is less than Q - 15 % (no unit < ${(qNum - 15).toFixed(1)} %).`,
-    s3Criteria: `Stage S3 (24 units total: S1 + S2 + 12 units): Average of 24 units (S1 + S2 + S3) is not less than Q (NLT ${qNum.toFixed(1)} %), not more than 2 units are less than Q - 15 % (< ${(qNum - 15).toFixed(1)} %), and no individual unit is less than Q - 25 % (no unit < ${(qNum - 25).toFixed(1)} %).`,
-    monographStatement: `${mono.reference} Acceptance Criteria: Not less than ${qNum} % (Q) of the declared label claim (${strengthNum} ${unit}) is dissolved in ${timeNum} minutes.`,
+    s1Criteria: `Stage S1 (6 units): Each of 6 units is not less than Q + 5 % (i.e. NLT ${(qNum + 5).toFixed(2)} % of label claim).`,
+    s2Criteria: `Stage S2 (12 units total: S1 + 6 units): Average of 12 units (S1 + S2) is not less than Q (NLT ${qNum.toFixed(2)} %), and no individual unit is less than Q - 15 % (no unit < ${(qNum - 15).toFixed(2)} %).`,
+    s3Criteria: `Stage S3 (24 units total: S1 + S2 + 12 units): Average of 24 units (S1 + S2 + S3) is not less than Q (NLT ${qNum.toFixed(2)} %), not more than 2 units are less than Q - 15 % (< ${(qNum - 15).toFixed(2)} %), and no individual unit is less than Q - 25 % (no unit < ${(qNum - 25).toFixed(2)} %).`,
+    monographStatement: `${mono.reference} Acceptance Criteria: Not less than ${qNum.toFixed(2)} % (Q) of the declared label claim (${strengthNum} ${unit}) is dissolved in ${timeNum} minutes.`,
   };
 
   // 4.6 Reagents and Reference Standards Table
@@ -1585,7 +1586,7 @@ export function buildFullDissolutionAMVData(
     },
   ];
 
-  return {
+  const doc: DissolutionAMVDocumentData = {
     companyName: company,
     documentTitle: 'ANALYTICAL METHOD VERIFICATION PROTOCOL / REPORT FOR DISSOLUTION BY HPLC',
     subTitle: '(For DISSOLUTION Method)',
@@ -1811,7 +1812,7 @@ export function buildFullDissolutionAMVData(
     ],
 
     abbreviations: [
-      { abbreviation: 'AMV', expansion: 'Analytical Method Verification' },
+      { abbreviation: 'AMVer', expansion: 'Analytical Method Verification' },
       { abbreviation: 'HPLC', expansion: 'High Performance Liquid Chromatography' },
       { abbreviation: 'LA', expansion: 'Label Amount / Claim' },
       { abbreviation: 'ICH', expansion: 'International Council for Harmonisation' },
@@ -1844,4 +1845,10 @@ export function buildFullDissolutionAMVData(
     ],
     includeForcedDegradation,
   };
+
+  // Rule 6: Filter abbreviations dynamically to only include terms present in the document
+  const docText = JSON.stringify({ ...doc, abbreviations: [] });
+  doc.abbreviations = filterUsedAbbreviations(doc.abbreviations || [], docText, true);
+
+  return doc;
 }

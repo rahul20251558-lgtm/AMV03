@@ -279,7 +279,7 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
             <div className={`relative border-2 border-dashed rounded-lg p-3 text-center transition-colors ${coaUploaded ? 'border-green-400 bg-green-50' : 'border-zinc-300 hover:border-blue-400 hover:bg-blue-50/50'}`}>
               <input 
                 type="file" 
-                accept=".pdf,.docx" 
+                accept=".pdf,image/*" 
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 onChange={(e) => {
                   if (e.target.files?.[0] && onCoaUpload) {
@@ -308,7 +308,7 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
             <div className={`relative border-2 border-dashed rounded-lg p-3 text-center transition-colors ${fpsUploaded ? 'border-green-400 bg-green-50' : 'border-zinc-300 hover:border-blue-400 hover:bg-blue-50/50'}`}>
               <input 
                 type="file" 
-                accept=".pdf,.docx" 
+                accept=".pdf,image/*" 
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 onChange={(e) => {
                   if (e.target.files?.[0] && onFpsUpload) {

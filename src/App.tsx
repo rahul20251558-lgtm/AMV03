@@ -24,6 +24,7 @@ import { runPreOutputAuditGate, ComplianceGateResult } from './services/complian
 import { extractSSOTBlock } from './services/selfAuditEngine';
 import { Header } from './components/Header';
 import { AMVInputForm } from './components/AMVInputForm';
+import { FPSExtractorModal, FPSOverrides } from './components/FPSExtractorModal';
 import { AMVDocumentViewer } from './components/AMVDocumentViewer';
 import { RSAMVDocumentViewer } from './components/RSAMVDocumentViewer';
 import { DissolutionDocumentViewer } from './components/DissolutionDocumentViewer';
@@ -60,11 +61,18 @@ export function App() {
   // COA and FPS Upload states
   const [coaUploaded, setCoaUploaded] = useState(false);
   const [fpsUploaded, setFpsUploaded] = useState(false);
+  const [fpsFileData, setFpsFileData] = useState<{ base64: string; mimeType: string } | null>(null);
+  const [isFpsModalOpen, setIsFpsModalOpen] = useState(false);
+  const [fpsOverrides, setFpsOverrides] = useState<FPSOverrides | null>(null);
 
   // Pre-Output Compliance & Contamination Audit Gate State
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [isSSOTModalOpen, setIsSSOTModalOpen] = useState(false);
+  const [auditNonce, setAuditNonce] = useState(0);
   const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
+  const [isMajorChangeModalOpen, setIsMajorChangeModalOpen] = useState(false);
+  const [isMajorChangeJustificationNeeded, setIsMajorChangeJustificationNeeded] = useState(false);
+
   const [pendingExport, setPendingExport] = useState<'protocol' | 'report' | 'both' | null>(null);
 
   // Initialize authentic Dissolution document state
@@ -196,6 +204,87 @@ export function App() {
     setDocumentNo(cleanDocNo);
     setBatchNo(codes.validationBatchNo);
     setStandardLot(codes.standardLotNo);
+
+    // Instant real-time regeneration on product change (0 ms lag)
+    if (validationMethod === 'dissolution') {
+      const localDiss = buildFullDissolutionAMVData(newProduct, {
+        verifiedMonograph: fpsOverrides ? { ...fpsOverrides, medium: fpsOverrides.diluent, paddleSpeed: '', qLimit: '', apparatus: '', samplingTime: '' } : undefined,
+        protocolNo: cleanDocNo,
+        batchNo: codes.validationBatchNo,
+        companyName,
+      });
+      setDissolutionData(localDiss);
+      checkAndPromptMajorChanges(localDiss, 'dissolution', newProduct);
+    } else if (validationMethod === 'related_substances') {
+      const localRS = buildFullRSAMVData(newProduct, {
+        verifiedMonograph: fpsOverrides ? fpsOverrides : undefined,
+        protocolNo: cleanDocNo,
+        batchNo: codes.validationBatchNo,
+        companyName,
+      });
+      setRsData(localRS);
+      checkAndPromptMajorChanges(localRS, 'related_substances', newProduct);
+    } else {
+      const localData = generateAMVDataForProduct(newProduct, {
+        documentNo: cleanDocNo,
+        validationBatchNo: codes.validationBatchNo,
+        standardLotNo: codes.standardLotNo,
+        companyName,
+      }, fpsOverrides);
+      const recalculated = recalculateAMVData(localData);
+      setAssayData(recalculated);
+      checkAndPromptMajorChanges(recalculated, 'assay', newProduct);
+    }
+  };
+
+  const handleConfirmFpsOverrides = (overrides: FPSOverrides, detectedProductName?: string) => {
+    setFpsOverrides(overrides);
+    setFpsUploaded(true);
+    setIsFpsModalOpen(false);
+
+    const activeProduct = (detectedProductName && detectedProductName.trim().length > 0)
+      ? detectedProductName.trim()
+      : productName;
+
+    if (detectedProductName && detectedProductName.trim().length > 0) {
+      setProductName(activeProduct);
+    }
+
+    if (validationMethod === 'dissolution') {
+      const localDiss = buildFullDissolutionAMVData(activeProduct, {
+        verifiedMonograph: overrides ? { ...overrides, medium: overrides.diluent, paddleSpeed: '', qLimit: '', apparatus: '', samplingTime: '' } : undefined,
+        protocolNo: documentNo,
+        batchNo,
+        companyName,
+      });
+      setDissolutionData(localDiss);
+      setDocumentNo(localDiss.protocolNo);
+      setBatchNo(localDiss.batchNoUsed);
+      checkAndPromptMajorChanges(localDiss, 'dissolution', activeProduct);
+    } else if (validationMethod === 'related_substances') {
+      const localRS = buildFullRSAMVData(activeProduct, {
+        verifiedMonograph: overrides ? overrides : undefined,
+        protocolNo: documentNo,
+        batchNo,
+        companyName,
+      });
+      setRsData(localRS);
+      setDocumentNo(localRS.protocolNo);
+      setBatchNo(localRS.batchNoUsed);
+      checkAndPromptMajorChanges(localRS, 'related_substances', activeProduct);
+    } else {
+      const localData = generateAMVDataForProduct(activeProduct, {
+        documentNo,
+        validationBatchNo: batchNo,
+        standardLotNo: standardLot,
+        companyName,
+      }, overrides);
+      const recalculated = recalculateAMVData(localData);
+      setAssayData(recalculated);
+      setDocumentNo(recalculated.documentNo);
+      setBatchNo(recalculated.batchNoUsed || batchNo);
+      checkAndPromptMajorChanges(recalculated, 'assay', activeProduct);
+    }
   };
 
   // Roll new dynamic identifiers
@@ -253,172 +342,65 @@ export function App() {
     const val = validateRevisionReasonForMajorChanges(latestReason, diffs);
     if (diffs.length > 0 && !val.isValid) {
       setIsMajorChangeModalOpen(true);
+      setIsMajorChangeJustificationNeeded(true);
+    } else {
+      setIsMajorChangeJustificationNeeded(false);
     }
   };
 
-  // Generate AMV Data for current product (Dissolution, RS, or Assay)
-  const handleGenerate = async () => {
+  // Generate AMV Data for current product (Dissolution, RS, or Assay) - 100% Instant & Offline
+  const handleGenerate = () => {
     setIsLoading(true);
 
-    if (validationMethod === 'dissolution') {
-      try {
-        const response = await fetch('/api/generate-dissolution-amv', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            productName,
-            protocolNo: documentNo,
-            batchNo,
-            companyName,
-          }),
-        });
-
-        if (response.ok) {
-          const json = await response.json();
-          if (json.data) {
-            setDissolutionData(json.data);
-            setDocumentNo(json.data.protocolNo);
-            setBatchNo(json.data.batchNoUsed);
-            checkAndPromptMajorChanges(json.data, 'dissolution', productName);
-            setIsLoading(false);
-            return;
-          }
-        }
-      } catch (err) {
-        console.warn('Backend API unavailable, using Dissolution compendium synthesis engine:', err);
-      }
-
-      // Built-in Dissolution Synthesis Engine
-      const localDiss = buildFullDissolutionAMVData(productName, {
-        protocolNo: documentNo,
-        batchNo,
-        companyName,
-      });
-      setDissolutionData(localDiss);
-      setDocumentNo(localDiss.protocolNo);
-      setBatchNo(localDiss.batchNoUsed);
-      checkAndPromptMajorChanges(localDiss, 'dissolution', productName);
-      setIsLoading(false);
-      return;
-    }
-
-    if (validationMethod === 'related_substances') {
-      try {
-        const response = await fetch('/api/generate-rs-amv', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            productName,
-            protocolNo: documentNo,
-            batchNo,
-            companyName,
-          }),
-        });
-
-        if (response.ok) {
-          const json = await response.json();
-          if (json.data) {
-            setRsData(json.data);
-            setDocumentNo(json.data.protocolNo);
-            setBatchNo(json.data.batchNoUsed);
-            checkAndPromptMajorChanges(json.data, 'related_substances', productName);
-            setIsLoading(false);
-            return;
-          }
-        }
-      } catch (err) {
-        console.warn('Backend API unavailable, using RS compendium synthesis engine:', err);
-      }
-
-      // Built-in RS Synthesis Engine (supports compendial & any "other product")
-      const localRS = buildFullRSAMVData(productName, {
-        protocolNo: documentNo,
-        batchNo,
-        companyName,
-      });
-      setRsData(localRS);
-      setDocumentNo(localRS.protocolNo);
-      setBatchNo(localRS.batchNoUsed);
-      checkAndPromptMajorChanges(localRS, 'related_substances', productName);
-      setIsLoading(false);
-      return;
-    }
-
-    // Assay generation branch
     try {
-      const response = await fetch('/api/generate-amv', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          productName,
-          documentNo,
+      if (validationMethod === 'dissolution') {
+        const localDiss = buildFullDissolutionAMVData(productName, {
+          verifiedMonograph: fpsOverrides ? { ...fpsOverrides, medium: fpsOverrides.diluent, paddleSpeed: '', qLimit: '', apparatus: '', samplingTime: '' } : undefined,
+          protocolNo: documentNo,
           batchNo,
           companyName,
-        }),
-      });
-
-      if (response.ok) {
-        const json = await response.json();
-        if (json.data) {
-          const recalculated = recalculateAMVData(json.data);
-          setAssayData(recalculated);
-          setDocumentNo(recalculated.documentNo);
-          setBatchNo(recalculated.batchNoUsed);
-          checkAndPromptMajorChanges(recalculated, 'assay', productName);
-          setIsLoading(false);
-          return;
-        }
+        });
+        setDissolutionData(localDiss);
+        setDocumentNo(localDiss.protocolNo);
+        setBatchNo(localDiss.batchNoUsed);
+        checkAndPromptMajorChanges(localDiss, 'dissolution', productName);
+        return;
       }
+
+      if (validationMethod === 'related_substances') {
+        const localRS = buildFullRSAMVData(productName, {
+          verifiedMonograph: fpsOverrides ? fpsOverrides : undefined,
+          protocolNo: documentNo,
+          batchNo,
+          companyName,
+        });
+        setRsData(localRS);
+        setDocumentNo(localRS.protocolNo);
+        setBatchNo(localRS.batchNoUsed);
+        checkAndPromptMajorChanges(localRS, 'related_substances', productName);
+        return;
+      }
+
+      // Assay generation branch
+      const localData = generateAMVDataForProduct(productName, {
+        documentNo,
+        validationBatchNo: batchNo,
+        standardLotNo: standardLot,
+        companyName,
+      }, fpsOverrides);
+      
+      const recalculated = recalculateAMVData(localData);
+      setAssayData(recalculated);
+      setDocumentNo(recalculated.documentNo);
+      setBatchNo(recalculated.batchNoUsed || batchNo);
+      checkAndPromptMajorChanges(recalculated, 'assay', productName);
     } catch (err) {
-      console.warn('Backend API unavailable, using compendium database:', err);
+      console.error('Generation failed:', err);
+    } finally {
+      setIsLoading(false);
     }
-
-    const localData = generateAMVDataForProduct(productName, {
-      documentNo,
-      validationBatchNo: batchNo,
-      standardLotNo: standardLot,
-      companyName,
-    });
-    setAssayData(localData);
-    setDocumentNo(localData.documentNo);
-    setBatchNo(localData.batchNoUsed);
-    checkAndPromptMajorChanges(localData, 'assay', productName);
-    setIsLoading(false);
   };
 
-  // Helper to get active document data
-  const getCurrentDocData = () => {
-    if (validationMethod === 'dissolution') return dissolutionData;
-    if (validationMethod === 'related_substances') return rsData;
-    return assayData;
-  };
-
-  const [auditNonce, setAuditNonce] = useState(0);
-  const [isMajorChangeModalOpen, setIsMajorChangeModalOpen] = useState(false);
-
-  // Compute live parameter diffs vs monograph baseline
-  const activeMethodDiffs = useMemo(() => {
-    const data = getCurrentDocData();
-    const currentParams = extractCoreMethodParameters(data, validationMethod);
-    const baselineKey = getBaselineLookupKey(productName, validationMethod);
-    const baselineParams = DEFAULT_METHOD_BASELINES[baselineKey];
-    return compareCoreMethodParameters(currentParams, baselineParams);
-  }, [dissolutionData, rsData, assayData, validationMethod, productName]);
-
-  // Current reason in revision history
-  const activeRevisionReason = useMemo(() => {
-    const data = getCurrentDocData();
-    const revs = (data as any).revisionHistory || [];
-    return revs.length > 0 ? revs[revs.length - 1].reason || '' : '';
-  }, [dissolutionData, rsData, assayData, validationMethod]);
-
-  const isMajorChangeJustificationNeeded = useMemo(() => {
-    if (activeMethodDiffs.length === 0) return false;
-    const val = validateRevisionReasonForMajorChanges(activeRevisionReason, activeMethodDiffs);
-    return !val.isValid;
-  }, [activeMethodDiffs, activeRevisionReason]);
-
-  // Update Revision History reason for change control compliance
   const handleApplyRevisionReason = (newReason: string) => {
     if (validationMethod === 'dissolution') {
       setDissolutionData((prev) => {
@@ -468,6 +450,34 @@ export function App() {
     }
     setAuditNonce((n) => n + 1);
   };
+
+  
+
+
+  
+
+
+
+  const getCurrentDocData = () => {
+    if (validationMethod === 'dissolution') return dissolutionData;
+    if (validationMethod === 'related_substances') return rsData;
+    return assayData;
+  };
+
+  const activeMethodDiffs = useMemo(() => {
+    const data = getCurrentDocData();
+    const currentParams = extractCoreMethodParameters(data, validationMethod);
+    const baselineKey = getBaselineLookupKey(productName, validationMethod);
+    const baselineParams = DEFAULT_METHOD_BASELINES[baselineKey];
+    if (!baselineParams) return [];
+    return compareCoreMethodParameters(currentParams, baselineParams);
+  }, [dissolutionData, rsData, assayData, validationMethod, productName]);
+
+  const activeRevisionReason = useMemo(() => {
+    const data = getCurrentDocData();
+    const revs = data.revisionHistory || [];
+    return revs.length > 0 ? revs[revs.length - 1].reason || '' : '';
+  }, [dissolutionData, rsData, assayData, validationMethod]);
 
   // Live computed compliance audit result
   const auditResult = useMemo(() => {
@@ -625,19 +635,21 @@ export function App() {
             console.log('Simulating COA data extraction from:', file.name);
             // Simulated parse delay
             setIsLoading(true);
-            setTimeout(() => {
-              setCoaUploaded(true);
-              setIsLoading(false);
-            }, 800);
+            setCoaUploaded(true);
+            setIsLoading(false);
           }}
           fpsUploaded={fpsUploaded}
           onFpsUpload={(file) => {
-            console.log('Simulating FPS limits extraction from:', file.name);
-            setIsLoading(true);
-            setTimeout(() => {
-              setFpsUploaded(true);
-              setIsLoading(false);
-            }, 800);
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              const result = e.target?.result as string;
+              const match = result.match(/^data:(.*?);base64,(.*)$/);
+              if (match) {
+                setFpsFileData({ mimeType: match[1], base64: match[2] });
+                setIsFpsModalOpen(true);
+              }
+            };
+            reader.readAsDataURL(file);
           }}
         />
 
@@ -748,6 +760,15 @@ export function App() {
         isOpen={isSSOTModalOpen}
         onClose={() => setIsSSOTModalOpen(false)}
         ssot={currentSSOT}
+      />
+
+      {/* Finished Product Specification (FPS) & MOA Modal */}
+      <FPSExtractorModal
+        isOpen={isFpsModalOpen}
+        onClose={() => setIsFpsModalOpen(false)}
+        fileData={fpsFileData}
+        onConfirm={handleConfirmFpsOverrides}
+        validationMethod={validationMethod}
       />
 
       {/* Master System Prompt & User Input Template Modal (§10) */}

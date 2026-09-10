@@ -1,4 +1,5 @@
 import { AMVDocumentData, SystemSuitabilityData, LinearityData, AccuracyData, PrecisionData, RobustnessData, SolutionStabilityData } from '../types';
+import { filterUsedAbbreviations } from './abbreviationFilter';
 
 export function mean(arr: number[]): number {
   if (!arr || arr.length === 0) return 0;
@@ -93,6 +94,15 @@ export function recalculateAMVData(doc: AMVDocumentData): AMVDocumentData {
     yInterceptBiasPercent: Number(bias.toFixed(2)),
   };
 
+  // Rule 4: % of 100% Response calculated relative to this report's 100% level mean area (100% row = 100.00%)
+  for (const lvl of updated.linearity.levels) {
+    if (lvl.levelPercent === 100) {
+      lvl.percentOf100Response = 100.0;
+    } else {
+      lvl.percentOf100Response = Number(((lvl.meanArea / nominal100Area) * 100).toFixed(2));
+    }
+  }
+
   // 3. Accuracy / Recovery - Strictly recompute percentRecovery from amountRecovered and amountAdded
   for (const r of updated.accuracy.rows) {
     if (r.amountAdded > 0 && r.amountRecovered > 0) {
@@ -132,7 +142,7 @@ export function recalculateAMVData(doc: AMVDocumentData): AMVDocumentData {
     updated.precision.rows[0].statisticalEvaluation = `Mean = ${formatNum(updated.precision.cumulativeMean, 2)} %`;
     updated.precision.rows[1].statisticalEvaluation = `SD = ${formatNum(updated.precision.cumulativeSd, 3)}`;
     updated.precision.rows[2].statisticalEvaluation = `%RSD = ${formatNum(updated.precision.cumulativeRsd, 2)} %`;
-    updated.precision.rows[3].statisticalEvaluation = `Diff = ${formatNum(updated.precision.diffBetweenMeans, 1)} %`;
+    updated.precision.rows[3].statisticalEvaluation = `Diff = ${formatNum(updated.precision.diffBetweenMeans, 2)} %`;
     updated.precision.rows[4].statisticalEvaluation = `Analyst 1 SD = ${formatNum(updated.precision.analyst1Sd, 3)}`;
     updated.precision.rows[5].statisticalEvaluation = `Analyst 2 SD = ${formatNum(updated.precision.analyst2Sd, 3)}`;
   }
@@ -263,6 +273,11 @@ export function recalculateAMVData(doc: AMVDocumentData): AMVDocumentData {
       )} % (24 h) — Complies`,
     },
   ];
+
+  // Rule 6: Filter abbreviations so only terms actually appearing in the document text are listed
+  const docText = JSON.stringify({ ...updated, abbreviations: [] });
+  const isVerif = (updated.reference || '').includes('1226') || (updated.documentNo || '').includes('VER');
+  updated.abbreviations = filterUsedAbbreviations(updated.abbreviations || [], docText, isVerif);
 
   return updated;
 }

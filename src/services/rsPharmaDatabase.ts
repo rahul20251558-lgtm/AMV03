@@ -14,6 +14,7 @@ import {
   RSIntermediatePrecisionRow,
   RSAccuracyRecoveryRow,
 } from '../types';
+import { filterUsedAbbreviations } from './abbreviationFilter';
 import {
   parseProductStrength,
   computeNominalPeakArea,
@@ -28,6 +29,7 @@ import {
 
 export interface RSMonographSeed {
   productName: string;
+  activeSubstance?: string;
   labelClaim: string;
   testParameter: string;
   reference: string;
@@ -78,63 +80,57 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
   valproate: {
     productName: 'Sodium Valproate Oral Solution BP 200 mg / 5 mL',
     labelClaim: 'Each 5 mL contains Sodium Valproate BP 200 mg',
-    testParameter: 'Organic Impurity (Related Substances) by Gas Chromatography with Flame Ionisation Detection',
-    reference: 'BP Monograph — Sodium Valproate Oral Solution (current edition); BP Appendix III B (Gas Chromatography); ICH Q2(R2)',
-    technique: 'GC',
-    detector: 'Gas chromatograph with flame ionisation detector (FID)',
-    column: 'Fused silica capillary column, 30 m × 0.53 mm, bonded with a 0.5 µm layer of macrogol 20,000 2-nitroterephthalate (DB-FFAP or equivalent)',
-    carrierGasOrMobilePhase: 'Helium at 8 mL per minute',
-    injectionTempOrFlowRate: '220 °C',
-    detectorTempOrWavelength: 'FID at 220 °C',
-    injectionVolume: '1 µL',
-    splitRatio: '1 : 10',
-    ovenProgrammeOrGradient:
-      'Multi-ramp temperature programme: 80 °C (hold 5 min) to 150 °C at 7.0 °C/min, to 190 °C at 3.0 °C/min (hold 1.7 min), to 250 °C at 12.0 °C/min (hold 10 min); total run time 45 min',
-    totalRunTime: '45 minutes',
-    diluent: 'Dichloromethane',
-    internalStandard: 'Octanoic acid, 0.005 % w/v in dichloromethane',
-    relativeRetention: 'With reference to valproic acid (retention time about 15.1 min): impurity K about 0.97; octanoic acid about 1.12',
-    nominalPpm: 300,
-    activeRtMin: 15.12,
+    testParameter: 'Related Substances (Organic Impurities) by HPLC with UV Detection',
+    reference: 'BP Monograph — Sodium Valproate Oral Solution (current edition); BP Appendix III D (HPLC); ICH Q2(R2); USP <1226>',
+    technique: 'HPLC',
+    detector: 'High Performance Liquid Chromatograph with UV/Vis Detector',
+    column: 'Octadecylsilyl silica gel for chromatography (C18), 250 mm × 4.6 mm, 5 µm (USP L1)',
+    carrierGasOrMobilePhase: '0.05 M Monopotassium Phosphate Buffer pH 3.0 : Acetonitrile (55 : 45 v/v)',
+    injectionTempOrFlowRate: '1.0 mL per minute',
+    detectorTempOrWavelength: 'UV at 210 nm',
+    injectionVolume: '20 µL',
+    splitRatio: 'N/A',
+    ovenProgrammeOrGradient: 'Isocratic for 30 minutes; column temperature 30 °C',
+    totalRunTime: '30 minutes',
+    diluent: 'Mobile Phase',
+    internalStandard: 'N/A (External Reference Standard method)',
+    relativeRetention: 'With reference to Valproic Acid (retention time about 8.5 min): Impurity K about 0.85; Impurity B about 1.25',
+    nominalPpm: 400,
+    activeRtMin: 8.52,
     impurityName: 'Impurity K (2-(1-methylethyl)pentanoic acid)',
-    impurityRtMin: 14.65,
-    internalStandardRtMin: 16.94,
-    nominalArea: 482500,
+    impurityRtMin: 7.24,
+    internalStandardRtMin: undefined,
+    nominalArea: 512400,
     ovenProgramme: [
-      { timeRange: '0 — 5', temperature: '80', comment: 'Isothermal (5 min)' },
-      { timeRange: '5 — 15', temperature: '80 → 150', comment: 'Linear ramp at 7.0 °C/min' },
-      { timeRange: '15 — 28.3', temperature: '150 → 190', comment: 'Linear ramp at 3.0 °C/min' },
-      { timeRange: '28.3 — 30', temperature: '190', comment: 'Isothermal (1.7 min)' },
-      { timeRange: '30 — 35', temperature: '190 → 250', comment: 'Linear ramp at 12.0 °C/min' },
-      { timeRange: '35 — 45', temperature: '250', comment: 'Isothermal (10 min)' },
+      { timeRange: '0 — 30', temperature: '30 °C (Isocratic)', comment: 'Phosphate Buffer pH 3.0 : Acetonitrile (55:45 v/v)' },
     ],
     solutionPreparation: {
-      internalStandard: 'Prepare a 0.005 % w/v solution of octanoic acid in dichloromethane.',
+      internalStandard: 'N/A (External standard method).',
       testSolution:
-        'Shake a quantity of the oral solution containing 0.5 g of Sodium Valproate with 80 mL of water and acidify with 1 mL of 2 M sulfuric acid. Add 10 mL internal standard solution. Extract with three 20 mL portions of dichloromethane, dry over anhydrous sodium sulfate and filter.',
+        'Transfer a quantity of oral solution containing 100 mg Sodium Valproate into a 100 mL volumetric flask, dissolve and dilute to volume with diluent. Filter through 0.45 µm PTFE filter.',
       referenceSolution:
-        'Dilute 1 volume of test solution to 100 volumes with internal standard solution. Dilute 1 volume of the resulting solution to 10 volumes with internal standard solution.',
+        'Dilute 1.0 mL of test solution to 100.0 mL with diluent. Further dilute 1.0 mL of this solution to 10.0 mL with diluent (0.1 % level).',
       systemSuitabilitySolution:
-        'Prepare a 5 % w/v solution of valproic acid for system suitability EPCRS in dichloromethane.',
-      blank: 'Dichloromethane.',
+        'Prepare a solution containing Sodium Valproate RS (1.0 mg/mL) and Impurity K RS (2.0 µg/mL) in diluent.',
+      blank: 'Diluent (Mobile Phase).',
       placeboSolution:
-        'Take a quantity of placebo equivalent to test solution and process identically.',
+        'Take a quantity of placebo matrix equivalent to test solution and process identically.',
       handlingNote:
-        'Keep solutions closed; dichloromethane is volatile. Filter extracts through GF/A glass microfibre.',
+        'Prepare solutions fresh on day of use; protect from direct light.',
     },
     monographLimits: [
-      { criterion: 'Ratio of peak area of Impurity K to internal standard', limit: 'Not greater than 2R (0.2 %)' },
-      { criterion: 'Ratio of any secondary peak to internal standard', limit: 'Not greater than R (0.1 %)' },
-      { criterion: 'Ratio of sum of secondary peaks to internal standard', limit: 'Not greater than 4R (0.4 %)' },
-      { criterion: 'Disregard limit', limit: '0.05 % (0.5R)' },
+      { criterion: 'Impurity K (2-(1-methylethyl)pentanoic acid)', limit: 'NMT 0.20 %' },
+      { criterion: 'Any other individual secondary impurity', limit: 'NMT 0.10 %' },
+      { criterion: 'Total impurities', limit: 'NMT 0.40 %' },
+      { criterion: 'Disregard limit', limit: '0.05 %' },
     ],
     requirements: [
-      { name: 'Sodium Valproate BP Working Standard', grade: 'Characterised WS — potency on anhydrous basis', make: 'In-house / USP', batchNo: 'WS/VAL/2403' },
-      { name: 'Valproic Acid for System Suitability EPCRS', grade: 'EP Chemical Reference Standard', make: 'EDQM', batchNo: 'EPCRS-721' },
-      { name: 'Octanoic Acid (internal standard)', grade: 'AR / GC grade', make: 'Sigma-Aldrich', batchNo: 'SLCC8412' },
-      { name: 'Dichloromethane', grade: 'HPLC / GC grade', make: 'Merck', batchNo: 'DCM-9281' },
-      { name: 'Sulfuric Acid (2 M)', grade: 'AR grade', make: 'Rankem', batchNo: 'SA-4410' },
-      { name: 'Helium (carrier gas)', grade: '99.999 % purity', make: 'BOC / Linde', batchNo: 'HE-9999' },
+      { name: 'Sodium Valproate BP Working Standard (Potency: 99.78 % as-is)', grade: 'Characterised WS — potency on as-is basis', make: 'In-house / USP', batchNo: 'WS/VAL/2403' },
+      { name: 'Impurity K Reference Standard', grade: 'EP Chemical Reference Standard', make: 'EDQM', batchNo: 'EPCRS-721' },
+      { name: 'Potassium Dihydrogen Phosphate', grade: 'AR Grade', make: 'Merck', batchNo: 'PDP-4410' },
+      { name: 'Acetonitrile', grade: 'HPLC Grade', make: 'Merck', batchNo: 'ACN-9281' },
+      { name: 'Orthophosphoric Acid (0.1 M)', grade: 'AR Grade', make: 'Rankem', batchNo: 'OPA-2024' },
+      { name: 'Milli-Q Water', grade: 'Conductivity < 0.055 µS/cm', make: 'Millipore', batchNo: 'MQ-9999' },
     ],
   },
   paracetamol: {
@@ -1067,7 +1063,7 @@ export function getRSMonograph(productName: string): RSMonographSeed {
   const rand = createSeededRandom(productName.toLowerCase());
   const { strengthNum, unit } = parseProductStrength(productName);
 
-  const isGC = norm.includes('oral solution') || norm.includes('volatile') || norm.includes('oil');
+  const isGC = false;
   const cleanDrug = productName
     .replace(/tablets?|capsules?|solution|injection|cream|gel|bp|usp|\d+\s*(?:mg|ml|g|mcg)/gi, '')
     .trim() || 'Active Pharmaceutical Ingredient';
@@ -1085,40 +1081,36 @@ export function getRSMonograph(productName: string): RSMonographSeed {
   return {
     productName,
     labelClaim: `Each unit contains ${cleanDrug} ${strengthNum} ${unit}`,
-    testParameter: isGC
-      ? 'Organic Impurity (Related Substances) by Gas Chromatography with Flame Ionisation Detection'
-      : 'Related Substances (Organic Impurities) by HPLC with UV/Vis Detection',
-    reference: `BP / USP Monograph — ${productName}; ICH Q2(R2)`,
-    technique: isGC ? 'GC' : 'HPLC',
-    detector: isGC ? 'Gas chromatograph with FID' : 'High Performance Liquid Chromatograph with UV Detector',
-    column: isGC
-      ? 'Fused silica capillary column, 30 m × 0.53 mm, DB-FFAP or equivalent'
-      : 'USP L1 C18 stationary phase (250 mm × 4.6 mm, 5 µm)',
-    carrierGasOrMobilePhase: isGC ? 'Helium at 8 mL per minute' : '0.02 M Phosphate Buffer pH 3.2 : Acetonitrile (70:30 v/v)',
-    injectionTempOrFlowRate: isGC ? '220 °C' : '1.0 mL per minute',
-    detectorTempOrWavelength: isGC ? 'FID at 220 °C' : `UV at ${chosenWavelength} nm`,
-    injectionVolume: isGC ? '1 µL' : '10 µL',
-    splitRatio: isGC ? '1 : 10' : 'N/A',
-    ovenProgrammeOrGradient: isGC ? 'Oven programme 80 °C to 240 °C' : 'Isocratic for 30 minutes at 30 °C',
+    testParameter: 'Related Substances (Organic Impurities) by HPLC with UV/Vis Detection',
+    reference: `BP / USP Monograph — ${productName}; ICH Q2(R2); USP <1226>`,
+    technique: 'HPLC',
+    detector: 'High Performance Liquid Chromatograph with UV Detector',
+    column: 'USP L1 C18 stationary phase (250 mm × 4.6 mm, 5 µm)',
+    carrierGasOrMobilePhase: '0.02 M Phosphate Buffer pH 3.2 : Acetonitrile (70:30 v/v)',
+    injectionTempOrFlowRate: '1.0 mL per minute',
+    detectorTempOrWavelength: `UV at ${chosenWavelength} nm`,
+    injectionVolume: '10 µL',
+    splitRatio: 'N/A',
+    ovenProgrammeOrGradient: 'Isocratic for 30 minutes at 30 °C',
     totalRunTime: '30 minutes',
-    diluent: isGC ? 'Dichloromethane' : 'Mobile Phase',
-    internalStandard: isGC ? 'Octanoic acid, 0.005 % w/v' : 'N/A (External Standard)',
+    diluent: 'Mobile Phase',
+    internalStandard: 'N/A (External Standard)',
     relativeRetention: `With reference to ${cleanDrug} (RT ~ ${activeRt} min): ${impurityName} about ${(impurityRt / activeRt).toFixed(2)}`,
     nominalPpm,
     activeRtMin: activeRt,
     impurityName,
     impurityRtMin: impurityRt,
-    internalStandardRtMin: isGC ? Number((activeRt * 1.15).toFixed(2)) : undefined,
+    internalStandardRtMin: undefined,
     nominalArea,
     ovenProgramme: [
       { timeRange: '0 — 30', temperature: '30 °C (Isocratic)', comment: 'Monograph validated condition' },
     ],
     solutionPreparation: {
-      internalStandard: isGC ? 'Prepare 0.005 % w/v octanoic acid.' : 'N/A',
+      internalStandard: 'N/A',
       testSolution: `Weigh sample equivalent to ${nominalPpm} ppm active substance, dissolve in diluent, sonicate 15 min, filter.`,
       referenceSolution: `Dilute 1.0 mL test solution to 100.0 mL with diluent. Further dilute 1.0 mL to 10.0 mL (0.1 % level).`,
       systemSuitabilitySolution: `Standard solution containing ${cleanDrug} Reference Standard and ${impurityName}.`,
-      blank: isGC ? 'Dichloromethane.' : 'Mobile Phase.',
+      blank: 'Mobile Phase.',
       placeboSolution: 'Placebo matrix processed under identical conditions.',
       handlingNote: 'Prepare solutions fresh on day of use; protect from direct light.',
     },
@@ -1152,7 +1144,7 @@ export function buildFullRSAMVData(
   }
 
   
-  const extracted = extractDynamicLabelClaim(productName, seed.testParameter, seed.activeSubstance, seed.labelClaim);
+  const extracted = extractDynamicLabelClaim(productName, seed.testParameter, seed.activeSubstance || seed.productName.split(' ')[0], seed.labelClaim);
   let dynamicLabelClaim = extracted.labelClaim;
   let dynamicActiveSubstance = extracted.activeSubstance;
 
@@ -1359,7 +1351,7 @@ export function buildFullRSAMVData(
 
   const reportNumber = docNo.includes('/AMV/') ? docNo.replace('/AMV/', '/AMVR/') : `${docNo}/R`;
 
-  return {
+  const doc: RSAMVDocumentData = {
     companyName,
     documentTitle: `ANALYTICAL METHOD VALIDATION PROTOCOL / REPORT FOR ORGANIC IMPURITY (RELATED SUBSTANCES) BY ${seed.technique}`,
     subTitle: `(${seed.technique === 'GC' ? 'Organic Impurity by Gas Chromatography' : 'Related Substances by HPLC'})`,
@@ -1595,16 +1587,16 @@ export function buildFullRSAMVData(
     abbreviations: [
       { abbreviation: 'AMV', expansion: 'Analytical Method Validation' },
       { abbreviation: 'RS', expansion: 'Related Substances' },
-      { abbreviation: 'GC', expansion: 'Gas Chromatography' },
       { abbreviation: 'HPLC', expansion: 'High Performance Liquid Chromatography' },
+      { abbreviation: 'UV', expansion: 'Ultraviolet Detector' },
       { abbreviation: 'LA', expansion: 'Label Amount / Claim' },
       { abbreviation: 'LOD', expansion: 'Limit of Detection' },
       { abbreviation: 'LOQ', expansion: 'Limit of Quantification' },
-      { abbreviation: 'FID', expansion: 'Flame Ionization Detector' },
       { abbreviation: 'RSD', expansion: 'Relative Standard Deviation' },
       { abbreviation: 'SD', expansion: 'Standard Deviation' },
       { abbreviation: 'S/N', expansion: 'Signal-to-Noise Ratio' },
       { abbreviation: 'BP', expansion: 'British Pharmacopoeia' },
+      { abbreviation: 'USP', expansion: 'United States Pharmacopeia' },
       { abbreviation: 'ICH', expansion: 'International Council for Harmonisation' },
     ],
 
@@ -1613,8 +1605,15 @@ export function buildFullRSAMVData(
         version: '00',
         effectiveDate: docDate,
         docNumber: reportNumber,
-        reason: `Analytical Method Validation study report issued as ${reportNumber} for Organic Impurities in ${seed.productName} by ${seed.technique}. Validates chromatographic system parameters (Stationary phase ${seed.column}, mobile phase/carrier gas ${seed.carrierGasOrMobilePhase}, detector ${seed.detectorTempOrWavelength}, flow rate ${seed.injectionTempOrFlowRate}) with complete system suitability, LOQ, LOD, linearity, precision, and accuracy under ICH Q2(R2).`,
+        reason: `Analytical Method Validation study report issued as ${reportNumber} for Organic Impurities in ${seed.productName} by ${seed.technique}. Validates chromatographic system parameters (Stationary phase ${seed.column}, mobile phase ${seed.carrierGasOrMobilePhase}, detector ${seed.detectorTempOrWavelength}, flow rate ${seed.injectionTempOrFlowRate}) with complete system suitability, LOQ, LOD, linearity, precision, and accuracy under ICH Q2(R2).`,
       },
     ],
   };
+
+  // Rule 6: Filter abbreviations so only terms actually appearing in the document text are listed
+  const docText = JSON.stringify({ ...doc, abbreviations: [] });
+  const isVerif = (doc.referenceDetails.reference || '').includes('1226') || (doc.referenceDetails.typeOfStudy || '').toLowerCase().includes('verification');
+  doc.abbreviations = filterUsedAbbreviations(doc.abbreviations || [], docText, isVerif);
+
+  return doc;
 }

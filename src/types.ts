@@ -273,16 +273,21 @@ export interface RSApprovalTable {
 export interface RSChromatographicConditions {
   instrumentDetector: string;
   column: string;
-  carrierGasOrMobilePhase: string;
-  injectionTempOrFlowRate: string;
-  detectorTempOrWavelength: string;
+  mobilePhase?: string;
+  flowRate?: string;
+  wavelength?: string;
+  columnTemperature?: string;
   injectionVolume: string;
-  splitRatio: string;
-  ovenProgrammeOrGradient: string;
   totalRunTime: string;
   diluent: string;
   internalStandard: string;
   relativeRetention: string;
+  // Legacy / optional fields for backward compatibility
+  carrierGasOrMobilePhase?: string;
+  injectionTempOrFlowRate?: string;
+  detectorTempOrWavelength?: string;
+  splitRatio?: string;
+  ovenProgrammeOrGradient?: string;
 }
 
 export interface RSOvenProgrammeRow {

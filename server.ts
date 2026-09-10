@@ -16,7 +16,8 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Lazy-initialize Gemini AI client
 let aiClient: GoogleGenAI | null = null;
@@ -62,14 +63,14 @@ let aiCircuitBreakerUntil = 0;
 
 // AMV Synthesis API: Generates accurate compendial HPLC validation data
 app.post('/api/generate-amv', async (req, res) => {
-  const { productName, documentNo, batchNo, companyName } = req.body;
+  const { productName, documentNo, batchNo, companyName, fpsFileData } = req.body;
 
   if (!productName || typeof productName !== 'string') {
     return res.status(400).json({ error: 'Product name is required' });
   }
 
   // Check cache first for rapid response
-  const cacheKey = `${productName.trim().toLowerCase()}_${documentNo || ''}_${batchNo || ''}_${companyName || ''}`;
+  const cacheKey = `${productName.trim().toLowerCase()}_${documentNo || ''}_${batchNo || ''}_${companyName || ''}` + (fpsFileData ? '_fps' : '');
   if (monographCache.has(cacheKey)) {
     return res.json({ data: monographCache.get(cacheKey), source: 'cache' });
   }
@@ -90,7 +91,7 @@ app.post('/api/generate-amv', async (req, res) => {
   }
 
   try {
-    const prompt = `You are a Principal Pharmaceutical Quality Control Scientist and Pharmacopeial Compendia Expert.
+    let prompt = `You are a Principal Pharmaceutical Quality Control Scientist and Pharmacopeial Compendia Expert.
 Retrieve and verify against the official United States Pharmacopeia (USP-NF), British Pharmacopoeia (BP), European Pharmacopoeia (Ph. Eur.), and international compendial databases the authentic HPLC Assay method for: "${productName}".
 
 Candidate baseline data:
@@ -143,14 +144,26 @@ Return ONLY a valid JSON object matching this structure:
 
     let timer: NodeJS.Timeout | null = null;
     const timeoutPromise = new Promise<string | null>((resolve) => {
-      timer = setTimeout(() => resolve(null), 12000);
+      timer = setTimeout(() => resolve(null), 4000);
     });
 
     const callAI = async (): Promise<string | null> => {
       try {
+        const contentsParts = [];
+        if (fpsFileData && fpsFileData.base64 && fpsFileData.mimeType) {
+          contentsParts.push({
+            inlineData: {
+              data: fpsFileData.base64,
+              mimeType: fpsFileData.mimeType
+            }
+          });
+          prompt = `[CRITICAL INSTRUCTION: A Finished Product Specification (FPS) document has been uploaded. You MUST extract the analytical method parameters (Mobile phase, column, wavelength, temperature, flow rate, injection volume, diluent, standard/sample preparation, etc.) exactly from this uploaded document and use them strictly, overriding any compendial or internal knowledge.]\n\n` + prompt;
+        }
+        contentsParts.push({ text: prompt });
+
         const response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: prompt,
+          model: 'gemini-3.6-flash',
+          contents: contentsParts,
           config: {
             responseMimeType: 'application/json',
           },
@@ -260,13 +273,13 @@ Return ONLY a valid JSON object matching this structure:
 
 // Related Substances (RS AMC) Synthesis API: Full 16-section protocol & report
 app.post('/api/generate-rs-amv', async (req, res) => {
-  const { productName, protocolNo, batchNo, companyName } = req.body;
+  const { productName, protocolNo, batchNo, companyName, fpsFileData } = req.body;
 
   if (!productName || typeof productName !== 'string') {
     return res.status(400).json({ error: 'Product name is required' });
   }
 
-  const cacheKey = `rs_${productName.trim().toLowerCase()}_${protocolNo || ''}_${batchNo || ''}`;
+  const cacheKey = `rs_${productName.trim().toLowerCase()}_${protocolNo || ''}_${batchNo || ''}` + (fpsFileData ? '_fps' : '');
   if (monographCache.has(cacheKey)) {
     return res.json({ data: monographCache.get(cacheKey), source: 'cache' });
   }
@@ -286,7 +299,7 @@ app.post('/api/generate-rs-amv', async (req, res) => {
 
   try {
     const candidateChrom = fallbackData.methodSummary.chromatographicConditions;
-    const prompt = `You are a Principal Pharmaceutical Quality Control Scientist and Impurity Profiling Expert.
+    let prompt = `You are a Principal Pharmaceutical Quality Control Scientist and Impurity Profiling Expert.
 Retrieve and verify against the official United States Pharmacopeia (USP-NF), British Pharmacopoeia (BP), European Pharmacopoeia (Ph. Eur.), and ICH Q3A/Q3B guidelines the authentic Related Substances (Organic Impurities) HPLC/GC method for: "${productName}".
 
 Candidate baseline data:
@@ -325,14 +338,26 @@ Return ONLY a valid JSON object matching this structure:
 
     let timer: NodeJS.Timeout | null = null;
     const timeoutPromise = new Promise<string | null>((resolve) => {
-      timer = setTimeout(() => resolve(null), 12000);
+      timer = setTimeout(() => resolve(null), 4000);
     });
 
     const callAI = async (): Promise<string | null> => {
       try {
+        const contentsParts = [];
+        if (fpsFileData && fpsFileData.base64 && fpsFileData.mimeType) {
+          contentsParts.push({
+            inlineData: {
+              data: fpsFileData.base64,
+              mimeType: fpsFileData.mimeType
+            }
+          });
+          prompt = `[CRITICAL INSTRUCTION: A Finished Product Specification (FPS) document has been uploaded. You MUST extract the analytical method parameters (Mobile phase, column, wavelength, temperature, flow rate, injection volume, diluent, standard/sample preparation, etc.) exactly from this uploaded document and use them strictly, overriding any compendial or internal knowledge.]\n\n` + prompt;
+        }
+        contentsParts.push({ text: prompt });
+
         const response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: prompt,
+          model: 'gemini-3.6-flash',
+          contents: contentsParts,
           config: {
             responseMimeType: 'application/json',
           },
@@ -387,13 +412,13 @@ Return ONLY a valid JSON object matching this structure:
 
 // Dissolution Method Verification Synthesis API: Protocol & Report
 app.post('/api/generate-dissolution-amv', async (req, res) => {
-  const { productName, protocolNo, batchNo, companyName, date } = req.body;
+  const { productName, protocolNo, batchNo, companyName, date, fpsFileData } = req.body;
 
   if (!productName || typeof productName !== 'string') {
     return res.status(400).json({ error: 'Product name is required' });
   }
 
-  const cacheKey = `diss_${productName.trim().toLowerCase()}_${protocolNo || ''}_${batchNo || ''}`;
+  const cacheKey = `diss_${productName.trim().toLowerCase()}_${protocolNo || ''}_${batchNo || ''}` + (fpsFileData ? '_fps' : '');
   if (monographCache.has(cacheKey)) {
     const cached = monographCache.get(cacheKey);
     const prodFirst = productName.trim().toLowerCase().split(' ')[0];
@@ -429,7 +454,7 @@ app.post('/api/generate-dissolution-amv', async (req, res) => {
   try {
     const candidateChrom = fallbackData.methodSummary.chromatographicConditions;
     const candidateDiss = fallbackData.methodSummary.dissolutionConditions;
-    const prompt = `You are a Principal Pharmaceutical Quality Control Scientist and Dissolution Testing Expert.
+    let prompt = `You are a Principal Pharmaceutical Quality Control Scientist and Dissolution Testing Expert.
 Retrieve and verify against the official United States Pharmacopeia (USP <711> & individual monographs), British Pharmacopoeia (BP Appendix XII B1), European Pharmacopoeia (Ph. Eur. 2.9.3), and US FDA Dissolution Database the authentic Dissolution test method for: "${productName}".
 
 Candidate baseline data:
@@ -472,14 +497,26 @@ Return ONLY a valid JSON object matching this structure:
 
     let timer: NodeJS.Timeout | null = null;
     const timeoutPromise = new Promise<string | null>((resolve) => {
-      timer = setTimeout(() => resolve(null), 12000);
+      timer = setTimeout(() => resolve(null), 4000);
     });
 
     const callAI = async (): Promise<string | null> => {
       try {
+        const contentsParts = [];
+        if (fpsFileData && fpsFileData.base64 && fpsFileData.mimeType) {
+          contentsParts.push({
+            inlineData: {
+              data: fpsFileData.base64,
+              mimeType: fpsFileData.mimeType
+            }
+          });
+          prompt = `[CRITICAL INSTRUCTION: A Finished Product Specification (FPS) document has been uploaded. You MUST extract the analytical method parameters (Mobile phase, column, wavelength, temperature, flow rate, injection volume, diluent, standard/sample preparation, etc.) exactly from this uploaded document and use them strictly, overriding any compendial or internal knowledge.]\n\n` + prompt;
+        }
+        contentsParts.push({ text: prompt });
+
         const response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: prompt,
+          model: 'gemini-3.6-flash',
+          contents: contentsParts,
           config: {
             responseMimeType: 'application/json',
           },
@@ -547,6 +584,75 @@ Return ONLY a valid JSON object matching this structure:
     timestamp: new Date().toISOString(),
     verifiedSource: fallbackData.reference,
   });
+});
+
+// Instant Document Parameter Extraction API (PDF & Image OCR via Gemini 3.6 Flash)
+app.post('/api/extract-fps', async (req, res) => {
+  const { fileData } = req.body;
+  if (!fileData || !fileData.base64) {
+    return res.status(400).json({ error: 'No file data provided', overrides: {} });
+  }
+
+  const ai = getAIClient();
+  if (!ai || Date.now() < aiCircuitBreakerUntil) {
+    return res.json({ overrides: {}, source: 'offline_compendium' });
+  }
+
+  try {
+    const contents: any[] = [
+      {
+        inlineData: {
+          data: fileData.base64,
+          mimeType: fileData.mimeType || 'application/pdf',
+        },
+      },
+      {
+        text: `You are an expert pharmaceutical analytical chemist. Extract the chromatographic HPLC conditions and specifications from this attached Finished Product Specification (FPS) / Method of Analysis (MOA) document.
+Return ONLY a valid JSON object matching this structure:
+{
+  "productName": "product name with strength if found (e.g. Vildagliptin Tablets 100 mg)",
+  "activeSubstance": "active pharmaceutical ingredient name",
+  "column": "column stationary phase and dimensions (e.g. C18, 250 mm x 4.6 mm, 5 µm)",
+  "mobilePhase": "exact mobile phase buffer and organic ratio",
+  "flowRate": "flow rate with unit (e.g. 1.0 mL/min)",
+  "wavelength": "detection wavelength (e.g. 210 nm)",
+  "injectionVolume": "injection volume (e.g. 10 µL)",
+  "columnTemperature": "column temperature (e.g. 30 °C)",
+  "runTime": "run time (e.g. 12.0 min)",
+  "diluent": "diluent composition",
+  "workingConcentration": "working standard concentration"
+}`,
+      },
+    ];
+
+    let timer: NodeJS.Timeout | null = null;
+    const timeoutPromise = new Promise<string | null>((resolve) => {
+      timer = setTimeout(() => resolve(null), 4500);
+    });
+
+    const aiCall = async () => {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.6-flash',
+        contents,
+        config: {
+          responseMimeType: 'application/json',
+        },
+      });
+      return response?.text || null;
+    };
+
+    const text = await Promise.race([aiCall().finally(() => timer && clearTimeout(timer)), timeoutPromise]);
+    if (text) {
+      const parsed = extractJSONFromText(text);
+      if (parsed) {
+        return res.json({ overrides: parsed, success: true });
+      }
+    }
+  } catch (err: any) {
+    console.error('FPS Extraction error:', err?.message || err);
+  }
+
+  return res.json({ overrides: {}, success: false });
 });
 
 // Vite Middleware & Static Serving

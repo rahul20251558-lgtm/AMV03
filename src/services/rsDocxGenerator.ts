@@ -390,28 +390,27 @@ export async function generateAndDownloadRSAMVDocx(
   const c = data.methodSummary.chromatographicConditions;
   const condColWidths = [3300, 6606];
   const condRows: TableRow[] = [
-    createRow([createDataCell('Instrument / Detector', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.instrumentDetector, AlignmentType.LEFT, false, undefined, 6606)]),
-    createRow([createDataCell('Column', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.column, AlignmentType.LEFT, false, undefined, 6606)]),
-    createRow([createDataCell('Carrier Gas / Mobile Phase', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.carrierGasOrMobilePhase, AlignmentType.LEFT, false, undefined, 6606)]),
-    createRow([createDataCell('Injection Temp / Flow Rate', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.injectionTempOrFlowRate, AlignmentType.LEFT, false, undefined, 6606)]),
-    createRow([createDataCell('Detector Temp / Wavelength', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.detectorTempOrWavelength, AlignmentType.LEFT, false, undefined, 6606)]),
+    createRow([createDataCell('Instrument / Detector', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.instrumentDetector || 'HPLC System with UV/PDA Detector', AlignmentType.LEFT, false, undefined, 6606)]),
+    createRow([createDataCell('Column (Stationary Phase)', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.column, AlignmentType.LEFT, false, undefined, 6606)]),
+    createRow([createDataCell('Mobile Phase', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.mobilePhase || c.carrierGasOrMobilePhase || 'Phosphate Buffer : Acetonitrile', AlignmentType.LEFT, false, undefined, 6606)]),
+    createRow([createDataCell('Flow Rate', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.flowRate || c.injectionTempOrFlowRate || '1.0 mL/min', AlignmentType.LEFT, false, undefined, 6606)]),
+    createRow([createDataCell('Detection Wavelength', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.wavelength || c.detectorTempOrWavelength || '210 nm', AlignmentType.LEFT, false, undefined, 6606)]),
+    createRow([createDataCell('Column Temperature', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.columnTemperature || '30 °C', AlignmentType.LEFT, false, undefined, 6606)]),
     createRow([createDataCell('Injection Volume', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.injectionVolume, AlignmentType.LEFT, false, undefined, 6606)]),
-    createRow([createDataCell('Split Ratio', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.splitRatio, AlignmentType.LEFT, false, undefined, 6606)]),
-    createRow([createDataCell('Oven Programme / Gradient', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.ovenProgrammeOrGradient, AlignmentType.LEFT, false, undefined, 6606)]),
     createRow([createDataCell('Total Run Time', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.totalRunTime, AlignmentType.LEFT, false, undefined, 6606)]),
     createRow([createDataCell('Diluent', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.diluent, AlignmentType.LEFT, false, undefined, 6606)]),
-    createRow([createDataCell('Internal Standard', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.internalStandard, AlignmentType.LEFT, false, undefined, 6606)]),
+    createRow([createDataCell('Standard / Internal Standard', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.internalStandard, AlignmentType.LEFT, false, undefined, 6606)]),
     createRow([createDataCell('Relative Retention', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.relativeRetention, AlignmentType.LEFT, false, undefined, 6606)]),
   ];
   docElements.push(createDocxTable(condColWidths, condRows));
 
-  // 4.2 Oven Temperature / Gradient Programme Table
-  docElements.push(createSubSectionHeader('4.2 Temperature / Mobile Phase Programme', 100, 40));
+  // 4.2 Mobile Phase / Gradient Programme Table
+  docElements.push(createSubSectionHeader('4.2 Mobile Phase / Gradient Programme', 100, 40));
   const ovenColWidths = [2500, 3500, 3906];
   const ovenRows: TableRow[] = [
     createRow([
       createHeaderCell('Time (minutes)', 2500),
-      createHeaderCell('Temperature (°C) / Mobile Phase', 3500),
+      createHeaderCell('Mobile Phase Composition / Condition', 3500),
       createHeaderCell('Comment', 3906),
     ], true),
     ...data.methodSummary.ovenProgramme.map((row, i) =>
