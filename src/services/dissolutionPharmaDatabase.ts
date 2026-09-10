@@ -15,6 +15,14 @@ import {
   DissolutionRobustnessData,
   DissolutionSolutionStabilityRow,
   DissolutionSolutionStabilityData,
+  DissolutionCalculationFormula,
+  DissolutionSpecificationLimits,
+  DissolutionReagentItem,
+  DissolutionEquipmentItem,
+  DissolutionFilterSuitabilityData,
+  DissolutionFilterSuitabilityRow,
+  DissolutionReviewChecklistItem,
+  DissolutionAnnexureItem,
 } from '../types';
 import {
   getProductDegradantProfile,
@@ -640,11 +648,13 @@ export function parsePharmaDate(dateStr: string | undefined | null): Date | null
   return isNaN(parsed.getTime()) ? null : parsed;
 }
 
+const PHARMA_MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 export function formatPharmaDate(d: Date): string {
   const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const month = PHARMA_MONTH_NAMES[d.getMonth()];
   const year = d.getFullYear();
-  return `${day}/${month}/${year}`;
+  return `${day}-${month}-${year}`;
 }
 
 export function buildFullDissolutionAMVData(
@@ -659,6 +669,7 @@ export function buildFullDissolutionAMVData(
     reportDate?: string;
     supersedes?: string;
     verifiedMonograph?: Partial<DissolutionMonographInfo>;
+    includeForcedDegradation?: boolean;
   }
 ): DissolutionAMVDocumentData {
   let mono = getDissolutionMonograph(productName);
@@ -666,17 +677,18 @@ export function buildFullDissolutionAMVData(
     mono = { ...mono, ...overrides.verifiedMonograph };
   }
 
+  const includeForcedDegradation = overrides?.includeForcedDegradation === true;
   const company = overrides?.companyName || 'WESTCOAST PHARMACEUTICAL WORKS LTD.';
   const protocolNo = overrides?.protocolNo || 'WC/QC/AMV/0316';
   const reportNo = overrides?.reportNo || (protocolNo.includes('/AMV/') ? protocolNo.replace('/AMV/', '/AMVR/') : `${protocolNo}/R`);
   const batchNo = overrides?.batchNo || 'TB2501';
 
-  // Strict Rule 7: Report Date is populated strictly from final_approval_date
+  // Report Date is populated strictly from final_approval_date in DD-MMM-YYYY format
   // protocol_date and report_date must be distinct variables, never used interchangeably
-  const rawBaseDate = overrides?.reportDate || overrides?.date || '05/07/2025';
+  const rawBaseDate = overrides?.reportDate || overrides?.date || '05-Jul-2025';
   const parsedBase = parsePharmaDate(rawBaseDate) || new Date(2025, 6, 5);
 
-  const finalApprovalDate = overrides?.reportDate || formatPharmaDate(parsedBase);
+  const finalApprovalDate = formatPharmaDate(parsedBase);
   const reportDate = finalApprovalDate; // Header Report Date ALWAYS equals final approval date!
 
   // Derive realistic staggered audit-trail dates
@@ -690,7 +702,8 @@ export function buildFullDissolutionAMVData(
 
   const d18 = new Date(parsedBase);
   d18.setDate(d18.getDate() - 18);
-  const protocolApprovalDate = overrides?.protocolDate || formatPharmaDate(d18);
+  const parsedProtocol = overrides?.protocolDate ? (parsePharmaDate(overrides.protocolDate) || d18) : d18;
+  const protocolApprovalDate = formatPharmaDate(parsedProtocol);
   const protocolDate = protocolApprovalDate; // Separate distinct variable for protocol header!
 
   const d21 = new Date(parsedBase);
@@ -753,17 +766,26 @@ export function buildFullDissolutionAMVData(
     },
   ];
 
+  const activeRt = mono.retentionTimeMin || Number((mono.wavelengthNum ? mono.wavelengthNum / 45 : 5.0).toFixed(2));
+
   // 2. Mathematically Sound System Suitability (6 preparations as per USP/BP standard & authentic QC report)
-  const ssMath = generateSystemSuitabilityInjections(mono.productName, nominalArea, 50.0, 6);
+  const ssMath = generateSystemSuitabilityInjections(mono.productName, nominalArea, 50.0, 6, activeRt, 4850, 1.12);
   const ssInjections: DissolutionSystemSuitabilityRow[] = ssMath.injections.map((inj) => ({
     srNo: inj.srNo,
     weightMg: inj.weightMg,
+    retentionTime: inj.retentionTime,
     peakArea: inj.peakArea,
+    tailingFactor: inj.tailingFactor,
+    theoreticalPlates: inj.theoreticalPlates,
     remark: inj.remark,
   }));
 
-  // 3. Linearity (50% to 150%) with true regression
-  const nominalPpm = strengthNum >= 100 ? 100 : strengthNum >= 10 ? 50 : 25;
+  // 3. Working Concentration & Linearity (50% to 150%) scaled strictly to Rule 10 C_working
+  const vMedMatch = (mono.medium || '').match(/(\d+(?:\.\d+)?)\s*mL/i);
+  const vMedNum = vMedMatch ? parseFloat(vMedMatch[1]) : 900;
+  const df = 1.0;
+  const cWorkingNominal = Number(((strengthNum * 1000 / vMedNum) * df).toFixed(2));
+  const nominalPpm = cWorkingNominal;
   const linMath = generateLinearityData(mono.productName, nominalPpm, nominalArea, [50, 75, 100, 125, 150]);
   const linearityLevels: DissolutionLinearityLevelRow[] = linMath.levels.map((lvl) => ({
     levelName: lvl.levelName,
@@ -841,7 +863,6 @@ export function buildFullDissolutionAMVData(
 
   // 8. Specificity & Forced Degradation Data (ICH Q2(R2) & Document 1 Raw Chromatograms)
   const degProfile = getProductDegradantProfile(mono.productName);
-  const activeRt = mono.retentionTimeMin || Number((mono.wavelengthNum ? mono.wavelengthNum / 45 : 5.0).toFixed(2));
   const degRt = mono.degradantRtMin || degProfile.approxRt || Number((activeRt * 0.65).toFixed(2));
   const degRrt = Number((degRt / activeRt).toFixed(2));
   const stressIntroParagraph = `Stress testing was conducted across five regulatory stress conditions. In all stress samples, an extra peak is consistently observed at RT ~${degRt.toFixed(2)} min (identified as ${degProfile.name}, RRT ~${degRrt.toFixed(2)}). Baseline resolution (Rs > 2.0) and photodiode array (PDA) spectral peak purity were evaluated.`;
@@ -879,9 +900,9 @@ export function buildFullDissolutionAMVData(
       stressParameters: '0.1 N HCl at 60 °C for 2 hours; neutralized with 0.1 N NaOH',
       activeRtMin: (activeRt + 0.002).toFixed(3),
       degradantRtMin: degRt.toFixed(3),
-      activePeakArea: Math.round(nominalArea * 0.943),
-      degradantPeakArea: Math.round(nominalArea * 0.057),
-      degradationPercent: '5.70',
+      activePeakArea: Math.round(nominalArea * 0.924),
+      degradantPeakArea: Math.round(nominalArea * 0.076),
+      degradationPercent: '7.60',
       resolution: '4.12',
       peakPurity: 'Purity Flag: Passed (Purity Angle 0.142 < Threshold 0.380)',
       interference: 'Nil — Baseline resolved (Rs > 2.0)',
@@ -891,9 +912,9 @@ export function buildFullDissolutionAMVData(
       stressParameters: '0.1 N NaOH at 60 °C for 2 hours; neutralized with 0.1 N HCl',
       activeRtMin: (activeRt - 0.002).toFixed(3),
       degradantRtMin: (degRt + 0.002).toFixed(3),
-      activePeakArea: Math.round(nominalArea * 0.935),
-      degradantPeakArea: Math.round(nominalArea * 0.065),
-      degradationPercent: '6.50',
+      activePeakArea: Math.round(nominalArea * 0.911),
+      degradantPeakArea: Math.round(nominalArea * 0.089),
+      degradationPercent: '8.90',
       resolution: '4.08',
       peakPurity: 'Purity Flag: Passed (Purity Angle 0.155 < Threshold 0.375)',
       interference: 'Nil — Baseline resolved (Rs > 2.0)',
@@ -903,9 +924,9 @@ export function buildFullDissolutionAMVData(
       stressParameters: '3 % H₂O₂ at room temperature for 24 hours',
       activeRtMin: (activeRt + 0.004).toFixed(3),
       degradantRtMin: (degRt + 0.004).toFixed(3),
-      activePeakArea: Math.round(nominalArea * 0.961),
-      degradantPeakArea: Math.round(nominalArea * 0.039),
-      degradationPercent: '3.90',
+      activePeakArea: Math.round(nominalArea * 0.915),
+      degradantPeakArea: Math.round(nominalArea * 0.085),
+      degradationPercent: '8.50',
       resolution: '4.15',
       peakPurity: 'Purity Flag: Passed (Purity Angle 0.138 < Threshold 0.382)',
       interference: 'Nil — Baseline resolved (Rs > 2.0)',
@@ -915,9 +936,9 @@ export function buildFullDissolutionAMVData(
       stressParameters: 'Solid powder exposed to 105 °C for 24 hours in dry oven',
       activeRtMin: (activeRt + 0.001).toFixed(3),
       degradantRtMin: (degRt + 0.001).toFixed(3),
-      activePeakArea: Math.round(nominalArea * 0.971),
-      degradantPeakArea: Math.round(nominalArea * 0.029),
-      degradationPercent: '2.90',
+      activePeakArea: Math.round(nominalArea * 0.932),
+      degradantPeakArea: Math.round(nominalArea * 0.068),
+      degradationPercent: '6.80',
       resolution: '4.14',
       peakPurity: 'Purity Flag: Passed (Purity Angle 0.129 < Threshold 0.385)',
       interference: 'Nil — Baseline resolved (Rs > 2.0)',
@@ -927,9 +948,9 @@ export function buildFullDissolutionAMVData(
       stressParameters: 'Exposed to 1.2 million lux·hours visible light and 200 Wh/m² UV energy (ICH Option 2)',
       activeRtMin: (activeRt + 0.003).toFixed(3),
       degradantRtMin: (degRt + 0.004).toFixed(3),
-      activePeakArea: Math.round(nominalArea * 0.979),
-      degradantPeakArea: Math.round(nominalArea * 0.021),
-      degradationPercent: '2.10',
+      activePeakArea: Math.round(nominalArea * 0.946),
+      degradantPeakArea: Math.round(nominalArea * 0.054),
+      degradationPercent: '5.40',
       resolution: '4.16',
       peakPurity: 'Purity Flag: Passed (Purity Angle 0.122 < Threshold 0.388)',
       interference: 'Nil — Baseline resolved (Rs > 2.0)',
@@ -1135,7 +1156,351 @@ export function buildFullDissolutionAMVData(
     conclusionReport: `Standard and test dissolution sample solutions demonstrated stability for up to 48 hours under both storage conditions. The maximum difference from initial response was ${maxRtDiff.toFixed(2)} % at room temperature (20–25 °C) and ${maxRefDiff.toFixed(2)} % under refrigeration (2–8 °C), well within the NMT 2.0 % limit. Filtered dissolution solutions can be safely held for 48 hours prior to HPLC injection.`,
   };
 
-  // 11. Validation Parameters Summary Table
+  // 11. New Mandated Sections per Master GMP Directives
+  // 4.4 Calculation Formula & Worked Example
+  const meanStdAreaVal = typeof ssMath.meanArea === 'number' ? ssMath.meanArea : 40120;
+  const sampleAreaVal = Math.round(meanStdAreaVal * 0.9942);
+  const workedCalcPercent = Number(((sampleAreaVal / meanStdAreaVal) * (cWorkingNominal / 1000) * (vMedNum * df) * (100 / strengthNum)).toFixed(2));
+  const workedCalcMg = Number(((workedCalcPercent * strengthNum) / 100).toFixed(2));
+
+  const calculationFormula: DissolutionCalculationFormula = {
+    formula: '% Dissolved = (A_smp / A_std) × (C_std / 1000) × (V_medium × DF) × (100 / LC)',
+    description: 'Where: A_smp = Peak area of active analyte in sample solution; A_std = Mean peak area of active analyte in standard solution (n = 6 replicate injections); C_std = Concentration of active standard solution (µg/mL); V_medium = Volume of dissolution medium (mL); DF = Dilution factor of sample aliquot (DF = 1.0 if undiluted); LC = Declared label claim of active ingredient per dosage unit (mg); 1000 = Conversion factor (µg to mg); 100 = Percentage multiplier.',
+    workedExample: {
+      sampleArea: sampleAreaVal,
+      standardArea: meanStdAreaVal,
+      standardConcUgMl: cWorkingNominal,
+      mediumVolumeMl: vMedNum,
+      dilutionFactor: df,
+      labelClaimMg: strengthNum,
+      calculatedPercent: workedCalcPercent,
+      calculatedMg: workedCalcMg,
+      formulaSubstitution: `% Dissolved = (${sampleAreaVal.toLocaleString()} / ${meanStdAreaVal.toLocaleString()}) × (${cWorkingNominal} / 1000) × (${vMedNum} × ${df}) × (100 / ${strengthNum})`,
+      resultStatement: `% Dissolved = ${workedCalcPercent.toFixed(2)} % of declared label claim (${workedCalcMg.toFixed(2)} mg/unit)`,
+      complianceStatement: `Stage S1 Acceptance limit: Each individual unit NLT Q + 5 % (i.e. NLT ${(parseInt(mono.qLimit?.match(/\d+/)?.[0] || '80', 10) + 5).toFixed(1)} %). The calculated result complies with acceptance criteria.`,
+    },
+  };
+
+  // 4.5 Specification Limits (S1, S2, S3 Acceptance Criteria per USP <711> & BP App XII B1)
+  const qNum = parseInt(mono.qLimit?.match(/\d+/)?.[0] || '80', 10);
+  const timeNum = parseInt(mono.samplingTime?.match(/\d+/)?.[0] || '45', 10);
+
+  const specificationLimits: DissolutionSpecificationLimits = {
+    qValue: qNum,
+    timeMinutes: timeNum,
+    s1Criteria: `Stage S1 (6 units): Each of 6 units is not less than Q + 5 % (i.e. NLT ${(qNum + 5).toFixed(1)} % of label claim).`,
+    s2Criteria: `Stage S2 (12 units total: S1 + 6 units): Average of 12 units (S1 + S2) is not less than Q (NLT ${qNum.toFixed(1)} %), and no individual unit is less than Q - 15 % (no unit < ${(qNum - 15).toFixed(1)} %).`,
+    s3Criteria: `Stage S3 (24 units total: S1 + S2 + 12 units): Average of 24 units (S1 + S2 + S3) is not less than Q (NLT ${qNum.toFixed(1)} %), not more than 2 units are less than Q - 15 % (< ${(qNum - 15).toFixed(1)} %), and no individual unit is less than Q - 25 % (no unit < ${(qNum - 25).toFixed(1)} %).`,
+    monographStatement: `${mono.reference} Acceptance Criteria: Not less than ${qNum} % (Q) of the declared label claim (${strengthNum} ${unit}) is dissolved in ${timeNum} minutes.`,
+  };
+
+  // 4.6 Reagents and Reference Standards Table
+  const reagentsAndStandards: DissolutionReagentItem[] = [
+    {
+      name: `${drugKeyName} Working Standard (WS)`,
+      grade: 'In-house Characterised Working Standard',
+      make: 'In-house QC Reference Laboratory',
+      lotNo: `WS/${drugKeyName.substring(0, 3).toUpperCase()}/2025/01`,
+      potency: '99.82 %',
+      basis: 'As-is basis (Loss on Drying: 0.18 % w/w)',
+      expiryDate: '15-Dec-2026',
+    },
+    {
+      name: `${drugKeyName} Official Reference Standard (BPCRS / USP RS)`,
+      grade: 'Official Compendial Chemical Reference Substance',
+      make: 'EDQM / United States Pharmacopeial Convention',
+      lotNo: `CRS-${drugKeyName.substring(0, 3).toUpperCase()}-9812`,
+      potency: '99.90 %',
+      basis: 'Anhydrous basis',
+      expiryDate: '30-Nov-2027',
+    },
+    {
+      name: `${mono.productName} (Validation Batch)`,
+      grade: 'Finished Commercial Oral Solid Dosage Form',
+      make: company,
+      lotNo: batchNo,
+      potency: `100.0 % (Declared: ${strengthNum} ${unit})`,
+      basis: 'Finished solid dosage formulation',
+      expiryDate: '31-May-2028',
+    },
+    {
+      name: `Placebo Formulation Matrix (${mono.productName})`,
+      grade: 'Master Formula Excipient Blend (API-free)',
+      make: company,
+      lotNo: `PL/${drugKeyName.substring(0, 3).toUpperCase()}/2501`,
+      potency: 'N/A (Excipient composite)',
+      basis: 'Finished oral solid dosage matrix',
+      expiryDate: '31-May-2028',
+    },
+    {
+      name: 'Acetonitrile / Methanol',
+      grade: 'HPLC Grade (Purity ≥ 99.9 %)',
+      make: 'Merck Life Science / Honeywell Burdick & Jackson',
+      lotNo: 'ACN-25B02',
+      potency: '99.98 %',
+      basis: 'As-is basis',
+      expiryDate: '28-Feb-2027',
+    },
+    {
+      name: 'Dissolution Medium Buffer Salts / Surfactant',
+      grade: 'Analytical Reagent (AR Grade, Purity ≥ 99.5 %)',
+      make: 'Sigma-Aldrich / Qualigens Chemicals',
+      lotNo: 'MED-25A14',
+      potency: '99.60 %',
+      basis: 'As-is basis',
+      expiryDate: '30-Apr-2027',
+    },
+    {
+      name: 'High-Purity Ultrapure Water',
+      grade: 'Milli-Q Ultrapure Water (Conductivity < 0.055 µS/cm)',
+      make: 'Millipore Direct-Q 3 UV Water Purification System',
+      lotNo: 'MQ-2025-W27',
+      potency: '100.0 % (Resistivity 18.2 MΩ·cm)',
+      basis: 'Freshly generated on date of testing',
+      expiryDate: 'Freshly drawn (24 h valid)',
+    },
+  ];
+
+  // 4.7 Equipment & Calibration Status Table
+  const equipmentList: DissolutionEquipmentItem[] = [
+    {
+      name: 'High Performance Liquid Chromatograph (HPLC System)',
+      idNo: 'HPLC-04',
+      makeModel: 'Shimadzu Prominence-i LC-2030C Plus with PDA Detector',
+      calDoneDate: '10-Jun-2025',
+      calDueDate: '09-Jun-2026',
+      status: 'Calibrated / Valid',
+    },
+    {
+      name: 'Dissolution Test Apparatus (8-Vessel USP 1 & 2)',
+      idNo: 'DISSO-02',
+      makeModel: 'Electrolab TDT-08L (Automatic Manifold & Vessel Temp Probes)',
+      calDoneDate: '15-May-2025',
+      calDueDate: '14-May-2026',
+      status: 'Calibrated / Valid',
+    },
+    {
+      name: 'Micro / Analytical Balance (0.01 mg / 220 g)',
+      idNo: 'BAL-01',
+      makeModel: 'Sartorius Quintix 125D-1S Dual-Range Microbalance',
+      calDoneDate: '02-Jun-2025',
+      calDueDate: '01-Jun-2026',
+      status: 'Calibrated / Valid',
+    },
+    {
+      name: 'Digital Precision pH Meter with Temperature Probe',
+      idNo: 'PH-03',
+      makeModel: 'Metrohm 827 pH Lab with Glass Combination Electrode',
+      calDoneDate: '12-Jun-2025',
+      calDueDate: '11-Jun-2026',
+      status: 'Calibrated / Valid',
+    },
+    {
+      name: 'Ultrasonic Bath / Degassing Sonicator',
+      idNo: 'SONIC-01',
+      makeModel: 'Bandelin Sonorex Digitec DT 1028 CH (35 kHz)',
+      calDoneDate: '20-Apr-2025',
+      calDueDate: '19-Apr-2026',
+      status: 'Qualified / Valid',
+    },
+    {
+      name: 'Calibrated Precision Micropipettes (100–1000 µL & 1–5 mL)',
+      idNo: 'PIP-02',
+      makeModel: 'Eppendorf Research Plus Variable Volume Pipette Set',
+      calDoneDate: '05-May-2025',
+      calDueDate: '04-May-2026',
+      status: 'Calibrated / Valid',
+    },
+    {
+      name: 'Chromatographic Analytical Separation Column',
+      idNo: 'COL-24-08',
+      makeModel: `${mono.column} (Serial No: 728194-11)`,
+      calDoneDate: '10-Jun-2025',
+      calDueDate: '09-Jun-2026',
+      status: 'Performance Verified via SST',
+    },
+  ];
+
+  // 9. Filter Suitability (Filtered vs Centrifuged, % Difference NMT 2.0 %)
+  const filterCentrifugedArea = typeof nominalArea === 'number' ? nominalArea : 40150;
+  const filterRows: DissolutionFilterSuitabilityRow[] = [
+    {
+      discardVolumeMl: '0 mL (Initial Filtrate)',
+      sampleArea: Math.round(filterCentrifugedArea * 0.9825),
+      percentRecovery: 98.25,
+      percentDiff: 1.75,
+      compliance: 'Complies (Diff ≤ 2.0 %)',
+    },
+    {
+      discardVolumeMl: '3 mL (Discarded First 3 mL)',
+      sampleArea: Math.round(filterCentrifugedArea * 0.9985),
+      percentRecovery: 99.85,
+      percentDiff: 0.15,
+      compliance: 'Complies (Diff ≤ 2.0 %)',
+    },
+    {
+      discardVolumeMl: '5 mL (Discarded First 5 mL)',
+      sampleArea: Math.round(filterCentrifugedArea * 0.9994),
+      percentRecovery: 99.94,
+      percentDiff: 0.06,
+      compliance: 'Complies (Diff ≤ 2.0 %)',
+    },
+    {
+      discardVolumeMl: '10 mL (Discarded First 10 mL)',
+      sampleArea: Math.round(filterCentrifugedArea * 0.9998),
+      percentRecovery: 99.98,
+      percentDiff: 0.02,
+      compliance: 'Complies (Diff ≤ 2.0 %)',
+    },
+  ];
+
+  const filterSuitability: DissolutionFilterSuitabilityData = {
+    filterType: '0.45 µm PVDF Syringe Filter (Millex-HV, 25 mm non-sterile membrane)',
+    poreSize: '0.45 µm',
+    manufacturer: 'Merck Millipore',
+    centrifugedArea: filterCentrifugedArea,
+    rows: filterRows,
+    acceptanceCriteria: 'Absolute percentage difference in peak response / recovery between centrifuged dissolution solution and filtered solution must be NMT 2.0 %. Discard volume must be established.',
+    recommendedDiscardVolume: 'Discard the first 3 to 5 mL of filtrate before collecting test sample solution for HPLC injection.',
+    conclusionProtocol: 'Filter suitability will be evaluated by comparing centrifuged dissolution test solution with solutions filtered through 0.45 µm syringe filters with 0, 3, 5, and 10 mL discard volumes. The difference between filtered and centrifuged solutions must be NMT 2.0 %.',
+    conclusionReport: 'Filter suitability study demonstrates that drug adsorption on the 0.45 µm PVDF syringe filter membrane is negligible after discarding the initial 3 mL of filtrate (% difference is 0.15 % at 3 mL discard, well within the acceptance limit of NMT 2.0 %). Discarding the first 3 to 5 mL of filtrate is established and validated for routine dissolution testing.',
+  };
+
+  // 16. Review Checklist (Raw Data, Audit Trail, Deviations, OOS)
+  const reviewChecklist: DissolutionReviewChecklistItem[] = [
+    {
+      srNo: 1,
+      category: 'Raw Data Integrity',
+      reviewItem: 'Verification of primary chromatographic integration reports and weighings',
+      gmpRequirement: 'All reported peak areas, retention times, standard weighings, and dilutions must match primary raw data printouts and balance slips.',
+      complianceStatus: 'Complies / Verified',
+      findings: 'All analytical balance slips, preparation logbooks, and CDS integration sheets verified against reported values; 100 % data concordance confirmed.',
+    },
+    {
+      srNo: 2,
+      category: 'Audit Trail Review',
+      reviewItem: 'Chromatography Data System (CDS) electronic audit trail verification',
+      gmpRequirement: 'Electronic audit trails from sequence acquisition to report generation must be reviewed for manual integration, file deletion, or sequence alteration.',
+      complianceStatus: 'Complies / Verified',
+      findings: 'Audit trails reviewed for all HPLC injection sequences; no unapproved manual integrations, deleted injections, or aborted sequences detected.',
+    },
+    {
+      srNo: 3,
+      category: 'Deviations & Incidents',
+      reviewItem: 'Documentation and evaluation of any analytical or procedural deviations',
+      gmpRequirement: 'Any planned or unplanned deviation occurring during protocol execution must be documented, investigated, and approved by QA.',
+      complianceStatus: 'Nil Deviations Recorded',
+      findings: 'Verification protocol was executed strictly as per approved parameters; zero analytical deviations or procedural changes occurred.',
+    },
+    {
+      srNo: 4,
+      category: 'Out of Specification (OOS)',
+      reviewItem: 'Investigation of any atypical or out-of-specification results',
+      gmpRequirement: 'Any result failing to meet predefined acceptance criteria or monograph limits must trigger a formal OOS/OOT investigation per SOP.',
+      complianceStatus: 'Nil OOS / OOT Observed',
+      findings: 'All individual unit dissolution values (Stage S1) and verification parameters satisfied acceptance limits; no OOS or OOT occurred.',
+    },
+    {
+      srNo: 5,
+      category: 'Instrument Qualification',
+      reviewItem: 'Equipment calibration and operational qualification status',
+      gmpRequirement: 'All instruments (HPLC, Dissolution Apparatus, Balance, pH meter) must be within valid calibration and qualification periods.',
+      complianceStatus: 'Complies / Verified',
+      findings: 'Calibration logbooks verified; all equipment calibrated and operational within valid due dates during the entire verification study.',
+    },
+    {
+      srNo: 6,
+      category: 'Reference Standards',
+      reviewItem: 'Traceability and validity of reference and working standards',
+      gmpRequirement: 'Current Certificates of Analysis must be available; standard potencies and storage conditions verified.',
+      complianceStatus: 'Complies / Verified',
+      findings: 'Working standard (Potency: 99.82 %) and compendial standard (Potency: 99.90 %) within valid shelf-life; storage conditions verified.',
+    },
+    {
+      srNo: 7,
+      category: 'Annexure Verification',
+      reviewItem: 'Completeness of chromatographic annexures and supporting records',
+      gmpRequirement: 'All representative chromatograms, calibration curves, and qualification certificates must be indexed and attached.',
+      complianceStatus: 'Complies / Compiled',
+      findings: 'All raw chromatograms (Annexures I to IX) and COAs (Annexure X) verified, signed, and compiled into the document package.',
+    },
+  ];
+
+  // 20. Annexure Index (Annexures I through X with description of contents)
+  const annexureIndex: DissolutionAnnexureItem[] = [
+    {
+      annexureNo: 'Annexure I',
+      title: 'System Suitability Chromatograms',
+      contents: 'Six replicate standard solution chromatograms (Injections 1 to 6) showing retention times, peak areas, theoretical plates, and tailing factor integration reports.',
+      totalPages: 6,
+      status: 'Attached & Verified',
+    },
+    {
+      annexureNo: 'Annexure II',
+      title: 'Specificity & Interference Chromatograms',
+      contents: 'Chromatograms of Blank Diluent, Dissolution Medium, Placebo Formulation Matrix, and Active Reference Standard; includes photodiode array (PDA) 3D spectral peak purity reports showing Purity Angle < Purity Threshold.',
+      totalPages: 4,
+      status: 'Attached & Verified',
+    },
+    {
+      annexureNo: 'Annexure III',
+      title: 'Linearity & Range Calibration Records',
+      contents: 'Chromatograms for calibration levels 50 %, 75 %, 100 %, 125 %, and 150 % nominal concentration; calibration regression curve, residual plot, and statistical regression tables.',
+      totalPages: 6,
+      status: 'Attached & Verified',
+    },
+    {
+      annexureNo: 'Annexure IV',
+      title: 'Filter Suitability Chromatograms & Recovery Sheets',
+      contents: 'Comparative chromatograms of centrifuged dissolution sample vs solutions filtered through 0.45 µm PVDF syringe filters with 0 mL, 3 mL, 5 mL, and 10 mL discard volumes, and calculation sheets.',
+      totalPages: 4,
+      status: 'Attached & Verified',
+    },
+    {
+      annexureNo: 'Annexure V',
+      title: 'Precision (Repeatability) Chromatograms',
+      contents: 'Six individual dissolution vessel sample chromatograms (Vessels 1 to 6) at declared sampling time, instrument operational log sheets, and percentage dissolved calculation records.',
+      totalPages: 6,
+      status: 'Attached & Verified',
+    },
+    {
+      annexureNo: 'Annexure VI',
+      title: 'Intermediate Precision Chromatograms',
+      contents: 'Twelve dissolution sample chromatograms for comparative analysis: Analyst 1 (Day 1, HPLC-04) and Analyst 2 (Day 2, HPLC-02), with cumulative statistical comparison reports.',
+      totalPages: 12,
+      status: 'Attached & Verified',
+    },
+    {
+      annexureNo: 'Annexure VII',
+      title: 'Accuracy (Recovery) Chromatograms',
+      contents: 'Triplicate recovery chromatograms at 75 %, 100 %, and 125 % nominal concentration levels (9 chromatograms in total) and analytical balance printouts for spiked sample preparations.',
+      totalPages: 9,
+      status: 'Attached & Verified',
+    },
+    {
+      annexureNo: 'Annexure VIII',
+      title: 'Robustness Study Chromatograms',
+      contents: 'Chromatograms acquired under deliberately varied chromatographic conditions: Flow rate (±0.1 mL/min), Column temperature (±3 °C), and Mobile phase organic composition (±2 % v/v).',
+      totalPages: 6,
+      status: 'Attached & Verified',
+    },
+    {
+      annexureNo: 'Annexure IX',
+      title: 'Solution Stability Chromatograms',
+      contents: 'Standard solution and filtered dissolution sample solution chromatograms tested at 0 h, 12 h, 24 h, and 48 h under room temperature (20–25 °C) and refrigerated (2–8 °C) conditions.',
+      totalPages: 8,
+      status: 'Attached & Verified',
+    },
+    {
+      annexureNo: 'Annexure X',
+      title: 'Certificates of Analysis & Equipment Qualification',
+      contents: 'Official Certificate of Analysis (COA) for Active Drug Reference Standard, Working Standard Characterisation Report, Finished Validation Batch COA, and Calibration Certificates for HPLC, Dissolution Apparatus, Balance, and pH Meter.',
+      totalPages: 8,
+      status: 'Attached & Verified',
+    },
+  ];
+
+  // 12. Validation Parameters Summary Table
   const validationParameters: DissolutionValidationParameterCriteria[] = [
     {
       srNo: '5.1',
@@ -1146,10 +1511,14 @@ export function buildFullDissolutionAMVData(
     },
     {
       srNo: '5.2',
-      parameter: 'Specificity & Forced Degradation',
-      acceptanceCriteria: 'No interference from blank diluent or placebo matrix at analyte retention window. Resolution (Rs) between degradation products and active drug peak NLT 2.0. Peak purity of active peak must pass (Purity Angle < Purity Threshold).',
+      parameter: includeForcedDegradation ? 'Specificity & Forced Degradation' : 'Specificity',
+      acceptanceCriteria: includeForcedDegradation
+        ? 'No interference from blank diluent or placebo matrix at analyte retention window. Resolution (Rs) between degradation products and active drug peak NLT 2.0. Peak purity of active peak must pass (Purity Angle < Purity Threshold).'
+        : 'No interfering peak shall be observed in Blank and Placebo preparations at the retention window of the active drug peak (± 0.20 min). Peak purity analysis of the active drug peak shall demonstrate complete spectral homogeneity without co-eluting excipient matrix interference (Purity Angle < Purity Threshold).',
       executionStatusProtocol: 'To be evaluated',
-      executionStatusReport: 'Complies (Rs ≥ 4.08, PDA Peak Purity Confirmed)',
+      executionStatusReport: includeForcedDegradation
+        ? 'Complies (Rs ≥ 4.08, PDA Peak Purity Confirmed)'
+        : 'Complies (PDA Spectral Peak Purity Confirmed)',
     },
     {
       srNo: '5.3',
@@ -1167,34 +1536,41 @@ export function buildFullDissolutionAMVData(
     },
     {
       srNo: '5.5',
+      parameter: 'Filter Suitability',
+      acceptanceCriteria: 'Absolute difference in peak area / recovery between centrifuged and filtered solutions through 0.45 µm membrane must be NMT 2.0 %; discard volume established.',
+      executionStatusProtocol: 'To be evaluated',
+      executionStatusReport: 'Complies (% Diff = 0.15 % for 3 mL discard)',
+    },
+    {
+      srNo: '5.6',
       parameter: 'Precision (Repeatability)',
       acceptanceCriteria: '%RSD of content dissolved for six individual dosage units NMT 2.0 %; mean release ≥ Q.',
       executionStatusProtocol: 'To be evaluated',
       executionStatusReport: `Complies (Mean: ${precMath.analyst1.meanPercent} %, %RSD: ${precMath.analyst1.rsd} %)`,
     },
     {
-      srNo: '5.6',
+      srNo: '5.7',
       parameter: 'Intermediate Precision',
       acceptanceCriteria: '%RSD of dissolved content NMT 2.0 % for each analyst; cumulative %RSD for twelve units NMT 2.0 %.',
       executionStatusProtocol: 'To be evaluated',
       executionStatusReport: `Complies (Analyst 1: ${precMath.analyst1.rsd} %, Analyst 2: ${precMath.analyst2.rsd} %, Cumul: ${precMath.cumulative.rsd} %)`,
     },
     {
-      srNo: '5.7',
+      srNo: '5.8',
       parameter: 'Accuracy (Recovery)',
       acceptanceCriteria: 'Mean recovery across 75 %, 100 % and 125 % levels between 98.0 % and 102.0 %; %RSD ≤ 2.0 %.',
       executionStatusProtocol: 'To be evaluated',
       executionStatusReport: `Complies (Overall Mean: ${accMath.overallMean} %, %RSD: ${accMath.overallRsd} %)`,
     },
     {
-      srNo: '5.8',
+      srNo: '5.9',
       parameter: 'Robustness',
       acceptanceCriteria: 'System suitability criteria (%RSD ≤ 2.0 %, tailing factor ≤ 1.5, theoretical plates ≥ 2000) maintained under varied flow (±0.1 mL/min), column temp (±3 °C), and mobile phase organic composition (±2 % v/v).',
       executionStatusProtocol: 'To be evaluated',
       executionStatusReport: `Complies (%RSD ≤ ${maxRobRsd.toFixed(2)} %, Tailing ${minRobTailing.toFixed(2)}–${maxRobTailing.toFixed(2)}, Plates ≥ ${minRobPlates})`,
     },
     {
-      srNo: '5.9',
+      srNo: '5.10',
       parameter: 'Solution Stability',
       acceptanceCriteria: 'Standard and filtered dissolution sample % difference from initial (0 h) NMT 2.0 % over 48 hours at room temperature (20–25 °C) and refrigerated (2–8 °C).',
       executionStatusProtocol: 'To be evaluated',
@@ -1215,9 +1591,7 @@ export function buildFullDissolutionAMVData(
     testParameter: mono.testParameter,
     reference: mono.reference,
     batchNoUsed: batchNo,
-    supersedes: overrides?.supersedes || (drugKeyName.toLowerCase().includes('tibolone')
-      ? 'WC/QC/AMV/047 (Validation Batch TIT-2691)'
-      : `WC/QC/AMV/047 (Validation Batch WC-${drugKeyName.substring(0, 3).toUpperCase()}-2301)`),
+    supersedes: overrides?.supersedes || `${protocolNo} (Protocol on Batch ${batchNo})`,
 
     signOffs: {
       preparedBy: {
@@ -1256,7 +1630,9 @@ export function buildFullDissolutionAMVData(
       testToBeVerified: mono.testParameter,
       verificationTeam:
         'Analyst 1 — Abhishek Solanki (Chemist, QC); Analyst 2 — Rinku Patel (Executive, QC); under supervision of Akshay Patel (Manager, QC)',
-      experimentalDetails: `System suitability (6 standard preparations), specificity and forced degradation, linearity (50 % to 150 % nominal concentration), range (75 % and 125 %), repeatability across 6 dosage units, intermediate precision across 2 analysts, recovery at 75 %, 100 %, and 125 % in triplicate, deliberate robustness variations, and 48-hour solution stability, evaluated against validation batch ${batchNo}.`,
+      experimentalDetails: includeForcedDegradation
+        ? `System suitability (6 standard preparations), specificity and forced degradation, linearity (50 % to 150 % nominal concentration), range (75 % and 125 %), repeatability across 6 dosage units, intermediate precision across 2 analysts, recovery at 75 %, 100 %, and 125 % in triplicate, deliberate robustness variations, and 48-hour solution stability, evaluated against validation batch ${batchNo}.`
+        : `System suitability (6 standard preparations), specificity (blank and placebo interference), linearity (50 % to 150 % nominal concentration), range (75 % and 125 %), repeatability across 6 dosage units, intermediate precision across 2 analysts, recovery at 75 %, 100 %, and 125 % in triplicate, deliberate robustness variations, and 48-hour solution stability, evaluated against validation batch ${batchNo}.`,
     },
 
     methodSummary: {
@@ -1284,12 +1660,12 @@ export function buildFullDissolutionAMVData(
       },
       solutionPreparation: {
         testSolution: `Place 1 dosage unit in each of the 6 dissolution vessels containing ${mono.medium} maintained at 37 °C ± 0.5 °C. Operate the apparatus at ${mono.paddleSpeed}. At ${mono.samplingTime}, withdraw 10 mL sample from each vessel, filter through 0.45 µm filter, and dilute appropriately with ${mono.diluent} to produce an expected working concentration of active substance.`,
-        standardSolution: `Weigh accurately about 25.0 mg of ${drugKeyName} Reference Standard into a 50 mL volumetric flask, dissolve and dilute with methanol/diluent. Further dilute an aliquot with ${mono.diluent} to achieve a working concentration matching 100 % dissolution release in the vessel.`,
+        standardSolution: `Weigh accurately about 25.0 mg of ${drugKeyName} Reference Standard into a 50 mL volumetric flask, dissolve and dilute with methanol/diluent. Further dilute an aliquot with ${mono.diluent} to achieve a working concentration matching 100 % dissolution release in the vessel (${cWorkingNominal} µg/mL).`,
         blank: `Freshly prepared dissolution medium (${mono.diluent}).`,
         placeboSolution: `Transfer an accurately weighed quantity of placebo powder equivalent to one dosage unit into a vessel containing ${mono.medium}, process under identical dissolution conditions, filter, and inject.`,
-        precisionStandardSolution: `Standard preparation containing active substance at working concentration, prepared in duplicate from distinct standard weighings to confirm relative response factor repeatability.`,
+        precisionStandardSolution: `Standard preparation containing active substance at working concentration (${cWorkingNominal} µg/mL), prepared in duplicate from distinct standard weighings to confirm relative response factor repeatability.`,
         precisionSampleSolution: `Six individual tablet/capsule units tested simultaneously in dissolution apparatus vessels 1 through 6, sampled at ${mono.samplingTime}, filtered and analysed.`,
-        linearitySolutions: `Prepare 5 calibrated solutions spanning 50 %, 75 %, 100 %, 125 %, and 150 % of nominal working concentration by serial dilution of the stock standard with ${mono.diluent}.`,
+        linearitySolutions: `Prepare 5 calibrated solutions spanning 50 %, 75 %, 100 %, 125 %, and 150 % of nominal working concentration (${cWorkingNominal} µg/mL) by serial dilution of the stock standard with ${mono.diluent}.`,
         handlingNote: `Degas the dissolution medium prior to use to prevent bubble formation. Equilibrate vessels at 37 °C ± 0.5 °C. Analyse filtered samples immediately or within established solution stability periods.`,
       },
       monographLimits: {
@@ -1303,29 +1679,36 @@ export function buildFullDissolutionAMVData(
     validationParameters,
 
     systemSuitability: {
+      standardConcUgMl: cWorkingNominal,
       injections: ssInjections,
       stats: {
         meanArea: ssMath.meanArea,
         sdArea: ssMath.sdArea,
         rsdArea: ssMath.rsdArea,
-        conclusionProtocol: 'The system suitability parameters shall be evaluated before commencing the verification test sequence.',
-        conclusionReport: `The system suitability test results meet the acceptance criteria (%RSD of peak area is ${ssMath.rsdArea} %, which is NMT 2.0 %). The chromatographic system demonstrates excellent stability and suitability for dissolution testing.`,
+        meanTailing: ssMath.meanTailing,
+        meanPlates: ssMath.meanPlates,
+        meanRt: ssMath.meanRt,
+        conclusionProtocol: 'The system suitability parameters (%RSD ≤ 2.0 %, theoretical plates ≥ 2000, tailing factor ≤ 1.5) shall be evaluated before commencing the verification test sequence.',
+        conclusionReport: `The system suitability test results meet all acceptance criteria: %RSD of peak area is ${ssMath.rsdArea} % (NMT 2.0 %), mean Theoretical Plates is ${ssMath.meanPlates} (NLT 2000), and mean Tailing Factor is ${ssMath.meanTailing} (NMT 1.5). The chromatographic system demonstrates excellent stability and suitability for dissolution testing.`,
       },
     },
 
     specificity: {
       solutionRows: specificitySolutionRows,
-      stressRows: specificityStressRows,
-      degradantName: degProfile.name,
-      degradantRt: degRt,
-      degradantRrt: degRrt,
-      stressIntroParagraph,
-      acceptanceTextProtocol:
-        'No interfering peak shall be observed in Blank and Placebo preparations at the retention window of the active drug peak. Any degradation product observed under forced degradation stress conditions must be baseline resolved from the active drug peak with a resolution (Rs) of NLT 2.0. The active peak must pass peak purity testing (Purity Angle < Purity Threshold / Purity Index > 0.999).',
-      conclusionReport:
-        `Complies. No interference was observed from blank diluent or placebo matrix at the retention window of ${drugKeyName} (~${activeRt.toFixed(2)} min). Across all five stress degradation conditions (Acid, Base, Oxidation, Thermal, Photolytic), the degradation impurity peak consistently eluting at RT ~${degRt.toFixed(2)} min is cleanly baseline resolved from the main analyte peak (Rs ≥ 4.08, criteria: NLT 2.0). Diode array peak purity analysis confirmed that the ${drugKeyName} peak is spectrally pure (Purity Angle < Purity Threshold) without co-eluting degradants, demonstrating method specificity and stability-indicating capacity.`,
-      degradationAssessment:
-        `Regulatory & Scientific Assessment of the ~${degRt.toFixed(2)} min Peak: In all five forced degradation stress samples (Acid 0.1N HCl, Base 0.1N NaOH, Peroxide 3% H₂O₂, Thermal 105 °C, and Photolytic UV/Vis), an additional peak is consistently observed at retention time ~${degRt.toFixed(2)} min (RRT ~${degRrt.toFixed(2)}). In chemical stability studies of ${drugKeyName}, this represents the primary degradant (${degProfile.name}). Chromatographic resolution between this degradation impurity (${degRt.toFixed(2)} min) and the parent ${drugKeyName} peak (${activeRt.toFixed(2)} min) is greater than 4.0 in all conditions (Rs = 4.08 to 4.16), easily satisfying the regulatory criterion of Rs ≥ 2.0. Furthermore, photodiode array (PDA) spectral peak purity analysis confirms complete homogeneity of the main ${drugKeyName} peak with no co-eluting degradants. The dissolution test procedure is therefore fully validated as stability-indicating and specific for its intended use.`,
+      stressRows: includeForcedDegradation ? specificityStressRows : [],
+      degradantName: includeForcedDegradation ? degProfile.name : undefined,
+      degradantRt: includeForcedDegradation ? degRt : undefined,
+      degradantRrt: includeForcedDegradation ? degRrt : undefined,
+      stressIntroParagraph: includeForcedDegradation ? stressIntroParagraph : '',
+      acceptanceTextProtocol: includeForcedDegradation
+        ? 'No interfering peak shall be observed in Blank and Placebo preparations at the retention window of the active drug peak. Any degradation product observed under forced degradation stress conditions must be baseline resolved from the active drug peak with a resolution (Rs) of NLT 2.0. The active peak must pass peak purity testing (Purity Angle < Purity Threshold / Purity Index > 0.999).'
+        : 'No interfering peak shall be observed in Blank and Placebo preparations at the retention window of the active drug peak (± 0.20 min). Peak purity analysis of the active drug peak shall demonstrate complete spectral homogeneity without co-eluting excipient matrix interference (Purity Angle < Purity Threshold).',
+      conclusionReport: includeForcedDegradation
+        ? `Complies. No interference was observed from blank diluent or placebo matrix at the retention window of ${drugKeyName} (~${activeRt.toFixed(2)} min). Across all five stress degradation conditions (Acid, Base, Oxidation, Thermal, Photolytic), the degradation impurity peak consistently eluting at RT ~${degRt.toFixed(2)} min is cleanly baseline resolved from the main analyte peak (Rs ≥ 4.08, criteria: NLT 2.0). Diode array peak purity analysis confirmed that the ${drugKeyName} peak is spectrally pure (Purity Angle < Purity Threshold) without co-eluting degradants, demonstrating method specificity and stability-indicating capacity.`
+        : `Complies. No interference was observed from blank diluent or placebo matrix at the retention window of ${drugKeyName} (~${activeRt.toFixed(2)} min). Diode array peak purity analysis confirmed that the ${drugKeyName} peak is spectrally pure (Purity Angle < Purity Threshold) without co-eluting excipient matrix components, demonstrating procedure specificity for dissolution testing.`,
+      degradationAssessment: includeForcedDegradation
+        ? `Regulatory & Scientific Assessment of the ~${degRt.toFixed(2)} min Peak: In all five forced degradation stress samples (Acid 0.1N HCl, Base 0.1N NaOH, Peroxide 3% H₂O₂, Thermal 105 °C, and Photolytic UV/Vis), an additional peak is consistently observed at retention time ~${degRt.toFixed(2)} min (RRT ~${degRrt.toFixed(2)}). In chemical stability studies of ${drugKeyName}, this represents the primary degradant (${degProfile.name}). Chromatographic resolution between this degradation impurity (${degRt.toFixed(2)} min) and the parent ${drugKeyName} peak (${activeRt.toFixed(2)} min) is greater than 4.0 in all conditions (Rs = 4.08 to 4.16), easily satisfying the regulatory criterion of Rs ≥ 2.0. Furthermore, photodiode array (PDA) spectral peak purity analysis confirms complete homogeneity of the main ${drugKeyName} peak with no co-eluting degradants. The dissolution test procedure is therefore fully validated as stability-indicating and specific for its intended use.`
+        : '',
     },
 
     linearity: {
@@ -1354,6 +1737,7 @@ export function buildFullDissolutionAMVData(
     },
 
     precision: {
+      nominalConcentrationUgMl: cWorkingNominal,
       rows: precisionRows,
       stats: {
         meanContent: precMath.analyst1.meanPercent,
@@ -1378,6 +1762,7 @@ export function buildFullDissolutionAMVData(
     },
 
     accuracy: {
+      nominalConcentrationUgMl: cWorkingNominal,
       rows: accuracyRows,
       stats: {
         meanRecovery75: accMath.levels[0]?.meanRecovery || 99.8,
@@ -1392,11 +1777,23 @@ export function buildFullDissolutionAMVData(
     robustness: robustnessData,
     solutionStability: solutionStabilityData,
 
+    filterSuitability,
+    calculationFormula,
+    specificationLimits,
+    reagentsAndStandards,
+    equipmentList,
+    reviewChecklist,
+    annexureIndex,
+
     overallConclusionProtocol: `To verify the analytical method for the determination of Dissolution of ${mono.productName} by HPLC, and to demonstrate that the procedure is suitable for its intended purpose and provides specific, linear, accurate, and precise results under standard laboratory operating conditions as per ${mono.reference}.`,
 
-    overallConclusionReport: `The Analytical Method Verification for the Dissolution of ${mono.productName} by HPLC has been successfully performed in accordance with ${
-      mono.reference.includes('ICH Q2(R2)') ? mono.reference : `${mono.reference} and ICH Q2(R2)`
-    }. All validation parameters—System Suitability, Specificity & Selectivity (including Forced Degradation with spectral peak purity), Linearity, Range, Method Precision (Repeatability), Intermediate Precision, Accuracy (Recovery), Robustness, and Solution Stability—meet all predefined acceptance criteria. The method is formally verified for routine batch release testing.`,
+    overallConclusionReport: includeForcedDegradation
+      ? `The Analytical Method Verification for the Dissolution of ${mono.productName} by HPLC has been successfully performed in accordance with ${
+          mono.reference.includes('ICH Q2(R2)') ? mono.reference : `${mono.reference} and ICH Q2(R2)`
+        }. All validation parameters—System Suitability, Specificity & Selectivity (including Forced Degradation with spectral peak purity), Linearity, Range, Filter Suitability, Method Precision (Repeatability), Intermediate Precision, Accuracy (Recovery), Robustness, and Solution Stability—meet all predefined acceptance criteria. The method is formally verified for routine batch release testing.`
+      : `The Analytical Method Verification for the Dissolution of ${mono.productName} by HPLC has been successfully performed in accordance with ${
+          mono.reference.includes('ICH Q2(R2)') ? mono.reference : `${mono.reference} and ICH Q2(R2)`
+        }. All verification parameters—System Suitability, Specificity (Blank & Placebo Non-Interference with spectral peak purity), Linearity, Range, Filter Suitability, Method Precision (Repeatability), Intermediate Precision, Accuracy (Recovery), Robustness, and Solution Stability—meet all predefined acceptance criteria. The method is formally verified for routine batch release testing.`,
 
     completionRecord: [
       { particulars: 'Protocol Preparation', detailsProtocol: 'Prepared by Chemist QC', detailsReport: 'Prepared by Chemist QC', signatureDateProtocol: `Signed / ${protocolPrepDate}`, signatureDateReport: `Signed / ${protocolPrepDate}` },
@@ -1417,6 +1814,9 @@ export function buildFullDissolutionAMVData(
       { abbreviation: 'SD', expansion: 'Standard Deviation' },
       { abbreviation: 'Q', expansion: 'Specified Amount of Dissolved Active Substance' },
       { abbreviation: 'UV', expansion: 'Ultraviolet-Visible Spectroscopy' },
+      { abbreviation: 'PDA', expansion: 'Photodiode Array' },
+      { abbreviation: 'CDS', expansion: 'Chromatography Data System' },
+      { abbreviation: 'PVDF', expansion: 'Polyvinylidene Fluoride' },
     ],
 
     revisionHistory: [
@@ -1424,14 +1824,17 @@ export function buildFullDissolutionAMVData(
         version: '00',
         effectiveDate: protocolApprovalDate,
         docNumber: protocolNo,
-        reason: `Initial Analytical Method Verification Protocol issued as ${protocolNo} against validation batch ${drugKeyName.toLowerCase().includes('tibolone') ? 'TIT-2691' : `WC-${drugKeyName.substring(0, 3).toUpperCase()}-2301`}.`,
+        reason: `Initial Analytical Method Verification Protocol issued as ${protocolNo} against validation batch ${batchNo}.`,
       },
       {
         version: '01',
         effectiveDate: finalApprovalDate,
         docNumber: reportNo,
-        reason: `Executed Analytical Method Verification Report formalization issued as ${reportNo} against commercial validation batch ${batchNo} (supersedes interim protocol WC/QC/AMV/047 on batch ${drugKeyName.toLowerCase().includes('tibolone') ? 'TIT-2691' : `WC-${drugKeyName.substring(0, 3).toUpperCase()}-2301`}). Validates core analytical parameters (Retention Time ~${activeRt.toFixed(2)} min, detection wavelength ${mono.wavelength}, column ${mono.column}, mobile phase ${mono.mobilePhase}) with complete Specificity forced degradation, deliberate Robustness variations (flow rate ±0.1 mL/min, column temperature ±3 °C, mobile phase composition ±2 %), extended 48-hour Solution Stability, and recovery datasets ensuring full ICH Q2(R2) compliance.`,
+        reason: includeForcedDegradation
+          ? `Executed Analytical Method Verification Report formalization issued as ${reportNo} against commercial validation batch ${batchNo} (supersedes initial protocol ${protocolNo} on batch ${batchNo}). Verifies core analytical parameters (Retention Time ~${activeRt.toFixed(2)} min, detection wavelength ${mono.wavelength}, column ${mono.column}, mobile phase ${mono.mobilePhase}) with complete Specificity forced degradation, deliberate Robustness variations (flow rate ±0.1 mL/min, column temperature ±3 °C, mobile phase composition ±2 %), extended 48-hour Solution Stability, and recovery datasets ensuring full ICH Q2(R2) compliance.`
+          : `Executed Analytical Method Verification Report formalization issued as ${reportNo} against commercial validation batch ${batchNo} (supersedes initial protocol ${protocolNo} on batch ${batchNo}). Verifies core analytical parameters (Retention Time ~${activeRt.toFixed(2)} min, detection wavelength ${mono.wavelength}, column ${mono.column}, mobile phase ${mono.mobilePhase}) with complete Specificity (blank and placebo matrix non-interference), deliberate Robustness variations (flow rate ±0.1 mL/min, column temperature ±3 °C, mobile phase composition ±2 %), extended 48-hour Solution Stability, and recovery datasets ensuring full compendial compliance.`,
       },
     ],
+    includeForcedDegradation,
   };
 }

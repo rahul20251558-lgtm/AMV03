@@ -1,6 +1,6 @@
 import React from 'react';
-import { ThemeFormat, DocumentType, ValidationMethodType, FontFamilyType, FontSizePt } from '../types';
-import { FileText, Award, Palette, CheckCircle2, Download, Printer, Sparkles, ShieldCheck } from 'lucide-react';
+import { ThemeFormat, DocumentType, ValidationMethodType, FontFamilyType, FontSizePt, DataMode } from '../types';
+import { FileText, Award, Palette, CheckCircle2, Download, Printer, Sparkles, ShieldCheck, Database, BookOpen } from 'lucide-react';
 import { FontAndSizeControl } from './FontAndSizeControl';
 
 interface HeaderProps {
@@ -10,6 +10,8 @@ interface HeaderProps {
   onDocTypeChange: (docType: DocumentType) => void;
   validationMethod: ValidationMethodType;
   onValidationMethodChange: (method: ValidationMethodType) => void;
+  dataMode: DataMode;
+  onDataModeChange: (mode: DataMode) => void;
   fontFamily: FontFamilyType;
   fontSize: FontSizePt;
   onFontFamilyChange: (font: FontFamilyType) => void;
@@ -17,6 +19,8 @@ interface HeaderProps {
   onDownloadDocx: () => void;
   onPrint: () => void;
   onOpenAuditGate?: () => void;
+  onOpenSSOTModal?: () => void;
+  onOpenPromptModal?: () => void;
   auditPassed?: boolean;
 }
 
@@ -27,6 +31,8 @@ export const Header: React.FC<HeaderProps> = ({
   onDocTypeChange,
   validationMethod,
   onValidationMethodChange,
+  dataMode,
+  onDataModeChange,
   fontFamily,
   fontSize,
   onFontFamilyChange,
@@ -34,6 +40,8 @@ export const Header: React.FC<HeaderProps> = ({
   onDownloadDocx,
   onPrint,
   onOpenAuditGate,
+  onOpenSSOTModal,
+  onOpenPromptModal,
   auditPassed,
 }) => {
   return (
@@ -144,6 +152,36 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             </div>
 
+            {/* DATA_MODE Selector (Default TEMPLATE vs DEMO) */}
+            <div className="inline-flex rounded-lg border border-zinc-200 bg-zinc-100 p-1 text-xs font-medium">
+              <button
+                type="button"
+                title="TEMPLATE Mode (Blank raw data fields marked [ENTER RAW DATA] with Data Pending list)"
+                onClick={() => onDataModeChange('TEMPLATE')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-colors ${
+                  dataMode === 'TEMPLATE'
+                    ? 'bg-emerald-700 text-white shadow-xs font-semibold'
+                    : 'text-zinc-600 hover:text-zinc-900'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${dataMode === 'TEMPLATE' ? 'bg-emerald-200' : 'bg-emerald-500'}`}></span>
+                TEMPLATE (GMP)
+              </button>
+              <button
+                type="button"
+                title="DEMO Mode (Populates verified analytical calculations with mandatory Not-For-GMP-Use watermark)"
+                onClick={() => onDataModeChange('DEMO')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-colors ${
+                  dataMode === 'DEMO'
+                    ? 'bg-amber-600 text-white shadow-xs font-semibold'
+                    : 'text-zinc-600 hover:text-zinc-900'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${dataMode === 'DEMO' ? 'bg-amber-200' : 'bg-amber-500'}`}></span>
+                DEMO Mode
+              </button>
+            </div>
+
             {/* Document Theme Option (Executive Blue vs Simple Format No Color) */}
             <div className="inline-flex rounded-lg border border-zinc-200 bg-zinc-100 p-1 text-xs font-medium">
               <button
@@ -181,6 +219,32 @@ export const Header: React.FC<HeaderProps> = ({
               onFontFamilyChange={onFontFamilyChange}
               onFontSizeChange={onFontSizeChange}
             />
+
+            {/* SSOT Inspector Button */}
+            {onOpenSSOTModal && (
+              <button
+                type="button"
+                onClick={onOpenSSOTModal}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-800 hover:bg-indigo-100 transition-colors shadow-2xs"
+                title="Inspect Single Source of Truth (SSOT) Parameters (§1.2)"
+              >
+                <Database className="w-3.5 h-3.5 text-indigo-600" />
+                <span className="hidden md:inline">SSOT Block</span>
+              </button>
+            )}
+
+            {/* Input Template & Prompt Rules Button */}
+            {onOpenPromptModal && (
+              <button
+                type="button"
+                onClick={onOpenPromptModal}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-purple-200 bg-purple-50 text-purple-800 hover:bg-purple-100 transition-colors shadow-2xs"
+                title="View Master System Prompt Rules & User Input Template (§10)"
+              >
+                <BookOpen className="w-3.5 h-3.5 text-purple-600" />
+                <span className="hidden md:inline">GMP Engine Rules</span>
+              </button>
+            )}
 
             {/* Compliance Gate Status & Audit Modal Launcher */}
             {onOpenAuditGate && (

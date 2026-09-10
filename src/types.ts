@@ -1,4 +1,5 @@
 export type DocumentType = 'protocol' | 'report';
+export type DataMode = 'TEMPLATE' | 'DEMO';
 export type ThemeFormat = 'blue' | 'simple'; // 'blue' is Executive Blue (#1F4E79), 'simple' is Simple Format (No Color)
 export type ValidationMethodType = 'assay' | 'related_substances' | 'dissolution';
 export type FontFamilyType = 'Times New Roman' | 'Arial' | 'Calibri' | 'Segoe UI' | 'Cambria' | 'Georgia';
@@ -322,7 +323,10 @@ export interface RSValidationParameterCriteria {
 export interface RSSystemSuitabilityRow {
   srNo: number;
   weightMg: number | string;
+  retentionTime?: number | string;
   peakArea: number | string;
+  tailingFactor?: number | string;
+  theoreticalPlates?: number | string;
   remark: string;
 }
 
@@ -642,7 +646,10 @@ export interface DissolutionValidationParameterCriteria {
 export interface DissolutionSystemSuitabilityRow {
   srNo: number;
   weightMg: number | string;
+  retentionTime?: number | string;
   peakArea: number | string;
+  tailingFactor?: number | string;
+  theoreticalPlates?: number | string;
   remark: string;
 }
 
@@ -650,6 +657,9 @@ export interface DissolutionSystemSuitabilityStats {
   meanArea: number | string;
   sdArea: number | string;
   rsdArea: number | string;
+  meanTailing?: number | string;
+  meanPlates?: number | string;
+  meanRt?: number | string;
   conclusionProtocol: string;
   conclusionReport: string;
 }
@@ -816,6 +826,89 @@ export interface DissolutionCompletionRecordItem {
   signatureDateReport: string;
 }
 
+export interface DissolutionReagentItem {
+  name: string;
+  grade: string;
+  make: string;
+  lotNo: string;
+  potency: string;
+  basis: string;
+  expiryDate: string;
+}
+
+export interface DissolutionEquipmentItem {
+  name: string;
+  idNo: string;
+  makeModel: string;
+  calDoneDate: string;
+  calDueDate: string;
+  status: string;
+}
+
+export interface DissolutionCalculationFormula {
+  formula: string;
+  description: string;
+  workedExample: {
+    sampleArea: number;
+    standardArea: number;
+    standardConcUgMl: number;
+    mediumVolumeMl: number;
+    dilutionFactor: number;
+    labelClaimMg: number;
+    calculatedPercent: number;
+    calculatedMg: number;
+    formulaSubstitution: string;
+    resultStatement: string;
+    complianceStatement: string;
+  };
+}
+
+export interface DissolutionSpecificationLimits {
+  qValue: number;
+  timeMinutes: number;
+  s1Criteria: string;
+  s2Criteria: string;
+  s3Criteria: string;
+  monographStatement: string;
+}
+
+export interface DissolutionFilterSuitabilityRow {
+  discardVolumeMl: string;
+  sampleArea: number;
+  percentRecovery: number;
+  percentDiff: number;
+  compliance: string;
+}
+
+export interface DissolutionFilterSuitabilityData {
+  filterType: string;
+  poreSize: string;
+  manufacturer: string;
+  centrifugedArea: number;
+  rows: DissolutionFilterSuitabilityRow[];
+  acceptanceCriteria: string;
+  recommendedDiscardVolume: string;
+  conclusionProtocol: string;
+  conclusionReport: string;
+}
+
+export interface DissolutionReviewChecklistItem {
+  srNo: number;
+  category: string;
+  reviewItem: string;
+  gmpRequirement: string;
+  complianceStatus: string;
+  findings: string;
+}
+
+export interface DissolutionAnnexureItem {
+  annexureNo: string;
+  title: string;
+  contents: string;
+  totalPages: number;
+  status: string;
+}
+
 export interface DissolutionAMVDocumentData {
   companyName: string;
   documentTitle: string; // "ANALYTICAL METHOD VERIFICATION PROTOCOL" or "REPORT"
@@ -830,6 +923,7 @@ export interface DissolutionAMVDocumentData {
   reference: string;
   batchNoUsed: string;
   supersedes?: string;
+  includeForcedDegradation?: boolean;
 
   signOffs: RSApprovalTable;
 
@@ -852,9 +946,15 @@ export interface DissolutionAMVDocumentData {
     requirements: DissolutionRequirementItem[];
   };
 
+  calculationFormula?: DissolutionCalculationFormula;
+  specificationLimits?: DissolutionSpecificationLimits;
+  reagentsAndStandards?: DissolutionReagentItem[];
+  equipmentList?: DissolutionEquipmentItem[];
+
   validationParameters: DissolutionValidationParameterCriteria[];
 
   systemSuitability: {
+    standardConcUgMl?: number;
     injections: DissolutionSystemSuitabilityRow[];
     stats: DissolutionSystemSuitabilityStats;
   };
@@ -871,7 +971,10 @@ export interface DissolutionAMVDocumentData {
     stats: DissolutionRangeStats;
   };
 
+  filterSuitability?: DissolutionFilterSuitabilityData;
+
   precision: {
+    nominalConcentrationUgMl?: number;
     rows: DissolutionPrecisionRow[];
     stats: DissolutionPrecisionStats;
   };
@@ -882,6 +985,7 @@ export interface DissolutionAMVDocumentData {
   };
 
   accuracy: {
+    nominalConcentrationUgMl?: number;
     rows: DissolutionAccuracyRow[];
     stats: DissolutionAccuracyStats;
   };
@@ -892,8 +996,31 @@ export interface DissolutionAMVDocumentData {
   overallConclusionProtocol: string;
   overallConclusionReport: string;
 
+  reviewChecklist?: DissolutionReviewChecklistItem[];
   completionRecord: DissolutionCompletionRecordItem[];
   abbreviations: AbbreviationItem[];
   revisionHistory: RevisionHistoryItem[];
+  annexureIndex?: DissolutionAnnexureItem[];
+
+  referenceStandard?: {
+    name: string;
+    lotNo: string;
+    potencyPercent: string;
+    basis: string;
+    expiryDate: string;
+  };
 }
 
+
+export interface RawInjection {
+  srNo: number;
+  sampleName: string;
+  weightMg?: number;        // primary
+  dilutionMl?: number;      // primary
+  peakArea: number;         // primary
+  isPeakArea?: number;      // internal standard area (GC/RS methods ke liye MUST)
+  retentionTimeMin: number;
+  tailingFactor?: number;   // instrument se aaya raw value
+  theoreticalPlates?: number;
+  signalToNoise?: number;
+}

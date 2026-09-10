@@ -96,7 +96,7 @@ export const MajorChangePromptModal: React.FC<MajorChangePromptModalProps> = ({
                   Major Method Parameter Changes Detected
                 </h3>
                 <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-amber-100 text-amber-900 border border-amber-300">
-                  Rule 10 Mandatory
+                  Change Control Mandatory
                 </span>
               </div>
               <p className="text-xs text-zinc-600 mt-0.5">
@@ -198,7 +198,7 @@ export const MajorChangePromptModal: React.FC<MajorChangePromptModalProps> = ({
               <div className="flex-1 space-y-1">
                 <div className="font-semibold text-[11px]">
                   {validation.isValid
-                    ? 'Compliant with Rule 10 & ICH Q2(R2)'
+                    ? 'Compliant with Change Control & ICH Q2(R2)'
                     : 'Explanation Requirements for Major Parameter Shifts:'}
                 </div>
                 {validation.isValid ? (

@@ -8,6 +8,7 @@ import {
   ValidationMethodType,
   FontFamilyType,
   FontSizePt,
+  DataMode,
 } from './types';
 import {
   generateAMVDataForProduct,
@@ -20,6 +21,7 @@ import { generateAndDownloadAMVDocx } from './services/amvDocxGenerator';
 import { generateAndDownloadRSAMVDocx } from './services/rsDocxGenerator';
 import { generateAndDownloadDissolutionDocx } from './services/dissolutionDocxGenerator';
 import { runPreOutputAuditGate, ComplianceGateResult } from './services/complianceAuditGate';
+import { extractSSOTBlock } from './services/selfAuditEngine';
 import { Header } from './components/Header';
 import { AMVInputForm } from './components/AMVInputForm';
 import { AMVDocumentViewer } from './components/AMVDocumentViewer';
@@ -27,6 +29,8 @@ import { RSAMVDocumentViewer } from './components/RSAMVDocumentViewer';
 import { DissolutionDocumentViewer } from './components/DissolutionDocumentViewer';
 import { ComplianceAuditModal } from './components/ComplianceAuditModal';
 import { MajorChangePromptModal } from './components/MajorChangePromptModal';
+import { SSOTModal } from './components/SSOTModal';
+import { MasterPromptModal } from './components/MasterPromptModal';
 import {
   extractCoreMethodParameters,
   compareCoreMethodParameters,
@@ -50,10 +54,17 @@ export function App() {
   const [theme, setTheme] = useState<ThemeFormat>('blue'); // 'blue' (Executive Blue) or 'simple' (Simple Format No Color)
   const [fontFamily, setFontFamily] = useState<FontFamilyType>('Times New Roman'); // Matches authentic monograph
   const [fontSize, setFontSize] = useState<FontSizePt>(12); // Standard 12pt pharma standard
+  const [dataMode, setDataMode] = useState<DataMode>('DEMO'); // 'TEMPLATE' (default blank raw data) or 'DEMO' (verified analytical demonstration with watermark)
   const [isLoading, setIsLoading] = useState(false);
+
+  // COA and FPS Upload states
+  const [coaUploaded, setCoaUploaded] = useState(false);
+  const [fpsUploaded, setFpsUploaded] = useState(false);
 
   // Pre-Output Compliance & Contamination Audit Gate State
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
+  const [isSSOTModalOpen, setIsSSOTModalOpen] = useState(false);
+  const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
   const [pendingExport, setPendingExport] = useState<'protocol' | 'report' | 'both' | null>(null);
 
   // Initialize authentic Dissolution document state
@@ -227,7 +238,7 @@ export function App() {
     }
   };
 
-  // Automated diff check to prompt user for Reason for Change if major parameters altered (Rule 10)
+  // Automated diff check to prompt user for Reason for Change if major parameters altered
   const checkAndPromptMajorChanges = (
     data: any,
     method: 'dissolution' | 'related_substances' | 'assay',
@@ -385,7 +396,7 @@ export function App() {
   const [auditNonce, setAuditNonce] = useState(0);
   const [isMajorChangeModalOpen, setIsMajorChangeModalOpen] = useState(false);
 
-  // Compute live parameter diffs vs monograph baseline (Rule 10)
+  // Compute live parameter diffs vs monograph baseline
   const activeMethodDiffs = useMemo(() => {
     const data = getCurrentDocData();
     const currentParams = extractCoreMethodParameters(data, validationMethod);
@@ -407,7 +418,7 @@ export function App() {
     return !val.isValid;
   }, [activeMethodDiffs, activeRevisionReason]);
 
-  // Update Revision History reason for Rule 10 compliance
+  // Update Revision History reason for change control compliance
   const handleApplyRevisionReason = (newReason: string) => {
     if (validationMethod === 'dissolution') {
       setDissolutionData((prev) => {
@@ -464,6 +475,11 @@ export function App() {
     return runPreOutputAuditGate(data, validationMethod);
   }, [dissolutionData, rsData, assayData, validationMethod, auditNonce]);
 
+  // Single Source of Truth (SSOT) Parameters (§1.2)
+  const currentSSOT = useMemo(() => {
+    return extractSSOTBlock(getCurrentDocData(), validationMethod);
+  }, [dissolutionData, rsData, assayData, validationMethod]);
+
   const handleReAudit = () => {
     setAuditNonce((n) => n + 1);
   };
@@ -491,41 +507,41 @@ export function App() {
   const handleDownloadProtocol = async () => {
     if (!verifyComplianceGate('protocol')) return;
     if (validationMethod === 'dissolution') {
-      await generateAndDownloadDissolutionDocx(dissolutionData, { docType: 'protocol', theme, fontFamily, fontSize });
+      await generateAndDownloadDissolutionDocx(dissolutionData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode });
     } else if (validationMethod === 'related_substances') {
-      await generateAndDownloadRSAMVDocx(rsData, { docType: 'protocol', theme, fontFamily, fontSize });
+      await generateAndDownloadRSAMVDocx(rsData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode });
     } else {
-      await generateAndDownloadAMVDocx(assayData, { docType: 'protocol', theme, fontFamily, fontSize });
+      await generateAndDownloadAMVDocx(assayData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode });
     }
   };
 
   const handleDownloadReport = async () => {
     if (!verifyComplianceGate('report')) return;
     if (validationMethod === 'dissolution') {
-      await generateAndDownloadDissolutionDocx(dissolutionData, { docType: 'report', theme, fontFamily, fontSize });
+      await generateAndDownloadDissolutionDocx(dissolutionData, { docType: 'report', theme, fontFamily, fontSize, dataMode });
     } else if (validationMethod === 'related_substances') {
-      await generateAndDownloadRSAMVDocx(rsData, { docType: 'report', theme, fontFamily, fontSize });
+      await generateAndDownloadRSAMVDocx(rsData, { docType: 'report', theme, fontFamily, fontSize, dataMode });
     } else {
-      await generateAndDownloadAMVDocx(assayData, { docType: 'report', theme, fontFamily, fontSize });
+      await generateAndDownloadAMVDocx(assayData, { docType: 'report', theme, fontFamily, fontSize, dataMode });
     }
   };
 
   const handleDownloadBoth = async () => {
     if (!verifyComplianceGate('both')) return;
     if (validationMethod === 'dissolution') {
-      await generateAndDownloadDissolutionDocx(dissolutionData, { docType: 'protocol', theme, fontFamily, fontSize });
+      await generateAndDownloadDissolutionDocx(dissolutionData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode });
       setTimeout(async () => {
-        await generateAndDownloadDissolutionDocx(dissolutionData, { docType: 'report', theme, fontFamily, fontSize });
+        await generateAndDownloadDissolutionDocx(dissolutionData, { docType: 'report', theme, fontFamily, fontSize, dataMode });
       }, 600);
     } else if (validationMethod === 'related_substances') {
-      await generateAndDownloadRSAMVDocx(rsData, { docType: 'protocol', theme, fontFamily, fontSize });
+      await generateAndDownloadRSAMVDocx(rsData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode });
       setTimeout(async () => {
-        await generateAndDownloadRSAMVDocx(rsData, { docType: 'report', theme, fontFamily, fontSize });
+        await generateAndDownloadRSAMVDocx(rsData, { docType: 'report', theme, fontFamily, fontSize, dataMode });
       }, 600);
     } else {
-      await generateAndDownloadAMVDocx(assayData, { docType: 'protocol', theme, fontFamily, fontSize });
+      await generateAndDownloadAMVDocx(assayData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode });
       setTimeout(async () => {
-        await generateAndDownloadAMVDocx(assayData, { docType: 'report', theme, fontFamily, fontSize });
+        await generateAndDownloadAMVDocx(assayData, { docType: 'report', theme, fontFamily, fontSize, dataMode });
       }, 600);
     }
   };
@@ -568,6 +584,8 @@ export function App() {
         onDocTypeChange={setDocType}
         validationMethod={validationMethod}
         onValidationMethodChange={handleValidationMethodChange}
+        dataMode={dataMode}
+        onDataModeChange={setDataMode}
         fontFamily={fontFamily}
         fontSize={fontSize}
         onFontFamilyChange={setFontFamily}
@@ -577,6 +595,8 @@ export function App() {
         }
         onPrint={() => window.print()}
         onOpenAuditGate={handleOpenAuditGate}
+        onOpenSSOTModal={() => setIsSSOTModalOpen(true)}
+        onOpenPromptModal={() => setIsPromptModalOpen(true)}
         auditPassed={auditResult ? auditResult.passed : true}
       />
 
@@ -600,9 +620,28 @@ export function App() {
           onRefreshCodes={handleRefreshCodes}
           isLoading={isLoading}
           theme={theme}
+          coaUploaded={coaUploaded}
+          onCoaUpload={(file) => {
+            console.log('Simulating COA data extraction from:', file.name);
+            // Simulated parse delay
+            setIsLoading(true);
+            setTimeout(() => {
+              setCoaUploaded(true);
+              setIsLoading(false);
+            }, 800);
+          }}
+          fpsUploaded={fpsUploaded}
+          onFpsUpload={(file) => {
+            console.log('Simulating FPS limits extraction from:', file.name);
+            setIsLoading(true);
+            setTimeout(() => {
+              setFpsUploaded(true);
+              setIsLoading(false);
+            }, 800);
+          }}
         />
 
-        {/* Rule 10 Major Parameter Shift Notification Banner */}
+        {/* Major Parameter Shift Notification Banner */}
         {isMajorChangeJustificationNeeded && (
           <div className="mb-4 p-3.5 bg-amber-50 border border-amber-300 rounded-xl shadow-xs flex items-center justify-between animate-in fade-in">
             <div className="flex items-center space-x-3">
@@ -622,7 +661,7 @@ export function App() {
               onClick={() => setIsMajorChangeModalOpen(true)}
               className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer flex-shrink-0"
             >
-              Enter Reason for Change (Rule 10)
+              Enter Reason for Change
             </button>
           </div>
         )}
@@ -633,6 +672,7 @@ export function App() {
             data={dissolutionData}
             docType={docType}
             theme={theme}
+            dataMode={dataMode}
             fontFamily={fontFamily}
             fontSize={fontSize}
             onFontFamilyChange={setFontFamily}
@@ -649,6 +689,7 @@ export function App() {
             data={rsData}
             docType={docType}
             theme={theme}
+            dataMode={dataMode}
             fontFamily={fontFamily}
             fontSize={fontSize}
             onFontFamilyChange={setFontFamily}
@@ -665,6 +706,7 @@ export function App() {
             data={assayData}
             docType={docType}
             theme={theme}
+            dataMode={dataMode}
             fontFamily={fontFamily}
             fontSize={fontSize}
             onFontFamilyChange={setFontFamily}
@@ -690,7 +732,7 @@ export function App() {
         exportType={pendingExport || undefined}
       />
 
-      {/* Mandatory Major Method Parameter Change Explanation Modal (Rule 10) */}
+      {/* Mandatory Major Method Parameter Change Explanation Modal */}
       <MajorChangePromptModal
         isOpen={isMajorChangeModalOpen}
         onClose={() => setIsMajorChangeModalOpen(false)}
@@ -699,6 +741,24 @@ export function App() {
         onApplyReason={handleApplyRevisionReason}
         productName={productName}
         documentNo={documentNo}
+      />
+
+      {/* Single Source of Truth (SSOT) Parameters Inspector Modal (§1.2) */}
+      <SSOTModal
+        isOpen={isSSOTModalOpen}
+        onClose={() => setIsSSOTModalOpen(false)}
+        ssot={currentSSOT}
+      />
+
+      {/* Master System Prompt & User Input Template Modal (§10) */}
+      <MasterPromptModal
+        isOpen={isPromptModalOpen}
+        onClose={() => setIsPromptModalOpen(false)}
+        onSelectProduct={(method, name) => {
+          setValidationMethod(method);
+          setProductName(name);
+          setIsPromptModalOpen(false);
+        }}
       />
     </div>
   );

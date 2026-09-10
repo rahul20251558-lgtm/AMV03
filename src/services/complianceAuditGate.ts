@@ -400,7 +400,7 @@ export function runPreOutputAuditGate(
   }
 
   // -------------------------------------------------------------
-  // CHECK 2: Degradant Specificity & Characterisation (PILLAR A.3 & Rule 8)
+  // CHECK 2: Degradant Specificity & Characterisation (PILLAR A.3)
   // -------------------------------------------------------------
   const degradantProfile = getProductDegradantProfile(productName);
   if (isDissolution && docData?.specificity) {
@@ -438,7 +438,7 @@ export function runPreOutputAuditGate(
     const hasExpectedKeyword = primaryKeywords.some(
       (kw) => fullSpecNarrative.toLowerCase().includes(kw) || (spec.degradantName && spec.degradantName.toLowerCase().includes(kw))
     );
-    if (!hasExpectedKeyword) {
+    if (!hasExpectedKeyword && docData?.includeForcedDegradation === true) {
       specFailed = true;
       specViolations.push(`Specificity narrative does not reference the authentic degradant chemical entity for ${activeDrug.toUpperCase()} ("${degradantProfile.name}").`);
     }
@@ -463,12 +463,12 @@ export function runPreOutputAuditGate(
     }
 
     if (specFailed) {
-      const msg = `Rule 8 Specificity/Degradation contamination detected: ${specViolations.join('; ')}`;
+      const msg = `Specificity/Degradation contamination detected: ${specViolations.join('; ')}`;
       blockers.push(msg);
       checks.push({
         id: 'audit-02-degradant-specificity',
         category: 'Product Identity',
-        title: 'Specificity & Degradation Section Integrity (Rule 8)',
+        title: 'Specificity & Degradation Section Integrity',
         status: 'failed',
         message: msg,
         details: specViolations.join(' | '),
@@ -477,7 +477,7 @@ export function runPreOutputAuditGate(
       checks.push({
         id: 'audit-02-degradant-specificity',
         category: 'Product Identity',
-        title: 'Specificity & Degradation Section Integrity (Rule 8)',
+        title: 'Specificity & Degradation Section Integrity',
         status: 'passed',
         message: `Degradation pathway matches validated chemical profile "${degradantProfile.name}" at ~${tableDegRt.toFixed(2)} min with zero carry-forward contamination.`,
       });
@@ -486,14 +486,14 @@ export function runPreOutputAuditGate(
     checks.push({
       id: 'audit-02-degradant-specificity',
       category: 'Product Identity',
-      title: 'Specificity & Degradation Section Integrity (Rule 8)',
+      title: 'Specificity & Degradation Section Integrity',
       status: 'passed',
       message: 'Degradant and impurity specifications verified against product master record.',
     });
   }
 
   // -------------------------------------------------------------
-  // CHECK 3: Template-Aware Retention Time Consistency (Rule 11)
+  // CHECK 3: Template-Aware Retention Time Consistency
   // -------------------------------------------------------------
   const configuredRtSections = TEMPLATE_RT_SECTIONS_REGISTRY[validationMethod] || [];
   const extractedSections: Array<{ key: string; title: string; label: string; rt: number }> = [];
@@ -534,7 +534,7 @@ export function runPreOutputAuditGate(
       checks.push({
         id: 'audit-03-rt-consistency',
         category: 'Calculation Engine',
-        title: 'Template-Aware RT Consistency (Rule 11)',
+        title: 'Template-Aware RT Consistency',
         status: 'failed',
         message: msg,
         details: rtMismatches.join(' | '),
@@ -544,7 +544,7 @@ export function runPreOutputAuditGate(
       checks.push({
         id: 'audit-03-rt-consistency',
         category: 'Calculation Engine',
-        title: 'Template-Aware RT Consistency (Rule 11)',
+        title: 'Template-Aware RT Consistency',
         status: 'passed',
         message: `Analyte retention time (${ref.rt.toFixed(2)} min) consistently verified across ${extractedSections.length} template-registered sections: ${sectionNames}.`,
       });
@@ -553,7 +553,7 @@ export function runPreOutputAuditGate(
     checks.push({
       id: 'audit-03-rt-consistency',
       category: 'Calculation Engine',
-      title: 'Template-Aware RT Consistency (Rule 11)',
+      title: 'Template-Aware RT Consistency',
       status: 'passed',
       message: `Analyte retention time (${extractedSections[0].rt.toFixed(2)} min) verified in ${extractedSections[0].label}.`,
     });
@@ -561,7 +561,7 @@ export function runPreOutputAuditGate(
     checks.push({
       id: 'audit-03-rt-consistency',
       category: 'Calculation Engine',
-      title: 'Template-Aware RT Consistency (Rule 11)',
+      title: 'Template-Aware RT Consistency',
       status: 'passed',
       message: 'Retention window alignment verified against template method conditions.',
     });
@@ -743,8 +743,18 @@ export function runPreOutputAuditGate(
     if (colTemp !== null && (colTemp < 15 || colTemp > 70)) {
       schemaIssues.push(`Column temperature (${colTemp} °C) out of normal range 15–70 °C`);
     }
-    if (qLimit !== null && (qLimit < 50 || qLimit > 95)) {
-      schemaIssues.push(`Q-limit (${qLimit} %) out of standard pharmacopoeial range 50–95 %`);
+    if (qLimit !== null) {
+      const limitStr = String(docData?.methodSummary?.monographLimits?.limit || '').toLowerCase();
+      const isAcidStage = limitStr.includes('acid') || limitStr.includes('gastro');
+      if (isAcidStage) {
+        if (qLimit < 5 || qLimit > 95) {
+          schemaIssues.push(`Q-limit (${qLimit} %) out of expected delayed-release range 5–95 %`);
+        }
+      } else {
+        if (qLimit < 50 || qLimit > 95) {
+          schemaIssues.push(`Q-limit (${qLimit} %) out of standard pharmacopoeial range 50–95 %`);
+        }
+      }
     }
 
     if (schemaIssues.length > 0) {
@@ -856,7 +866,7 @@ export function runPreOutputAuditGate(
   }
 
   // -------------------------------------------------------------
-  // CHECK 11: Report Date Field Mapping & Chronological Sanity (Rule 7)
+  // CHECK 11: Report Date Field Mapping & Chronological Sanity
   // -------------------------------------------------------------
   const reportDateStr =
     docData?.reportDate ||
@@ -911,7 +921,7 @@ export function runPreOutputAuditGate(
   let dateCheckFailed = false;
   const dateErrors: string[] = [];
 
-  // Rule 7.1: protocol_date and report_date must be distinct, defined variables
+  // Criteria: protocol_date and report_date must be distinct, defined variables
   if (!protocolDateStr) {
     dateCheckFailed = true;
     dateErrors.push('protocolDate variable is missing or undefined.');
@@ -921,31 +931,31 @@ export function runPreOutputAuditGate(
     dateErrors.push('reportDate variable is missing or undefined.');
   }
 
-  // Rule 7.2: Header Report Date HAMESHA final_approval_date se populate ho
+  // Header Report Date must be populated from final_approval_date
   if (parsedReportDate && parsedFinalAppDate && parsedReportDate.getTime() !== parsedFinalAppDate.getTime()) {
     dateCheckFailed = true;
     dateErrors.push(`Header Report Date ("${reportDateStr}") must be populated from final_approval_date ("${finalAppDateRaw}"), but found mismatch.`);
   }
 
-  // Rule 7.3: Header Report Date kabhi bhi protocol_creation_date ya prepared_date se populate na ho
+  // Header Report Date must not be populated from protocol creation or preparation date
   if (parsedReportDate && parsedPrepDate && parsedExecDate && parsedReportDate.getTime() <= parsedPrepDate.getTime() && parsedPrepDate.getTime() < parsedExecDate.getTime()) {
     dateCheckFailed = true;
     dateErrors.push(`Header Report Date ("${reportDateStr}") is identical to preparation date ("${prepDateRaw}"), indicating improper field mapping.`);
   }
 
-  // Rule 7.4: Sanity check: Report Date cannot be before Verification Execution dates!
+  // Sanity check: Report Date cannot be before Verification Execution dates!
   if (parsedReportDate && parsedExecDate && parsedReportDate.getTime() < parsedExecDate.getTime()) {
     dateCheckFailed = true;
     dateErrors.push(`Sanity Check Failure: Header Report Date ("${reportDateStr}") is earlier than Verification Execution date ("${execDateRaw}"). An executed validation report cannot be completed or approved before its experimental laboratory testing.`);
   }
 
   if (dateCheckFailed) {
-    const msg = `Rule 7 Report Date audit failure: ${dateErrors.join('; ')}`;
+    const msg = `Report Date audit failure: ${dateErrors.join('; ')}`;
     blockers.push(msg);
     checks.push({
       id: 'audit-11-report-date-mapping',
       category: 'Audit Trail & Chronology',
-      title: 'Report Date Field Mapping & Chronological Sanity (Rule 7)',
+      title: 'Report Date Field Mapping & Chronological Sanity',
       status: 'failed',
       message: msg,
       details: dateErrors.join(' | '),
@@ -954,14 +964,14 @@ export function runPreOutputAuditGate(
     checks.push({
       id: 'audit-11-report-date-mapping',
       category: 'Audit Trail & Chronology',
-      title: 'Report Date Field Mapping & Chronological Sanity (Rule 7)',
+      title: 'Report Date Field Mapping & Chronological Sanity',
       status: 'passed',
       message: `Header Report Date ("${reportDateStr}") correctly matches final approval date ("${finalAppDateRaw || reportDateStr}") and chronologically succeeds experimental execution ("${execDateRaw || 'Executed'}").`,
     });
   }
 
   // -------------------------------------------------------------
-  // CHECK 12: Document Number Exact String Consistency (Rule 9)
+  // CHECK 12: Document Number Exact String Consistency
   // -------------------------------------------------------------
   const headerReportNo = String(docData?.reportNo || docData?.documentNo || '').trim();
   const revisionRows = docData?.revisionHistory || [];
@@ -1017,13 +1027,12 @@ export function runPreOutputAuditGate(
   }
 
   if (docNumberWarning) {
-    // Per Rule 9: "Agar mismatch mile (jaise extra letter/typo), generation ko flag karo, block mat karo lekin warning zaroor do."
     const warningMsg = `Document Number string inconsistency: ${docNumberIssues.join('; ')}`;
     warnings.push(warningMsg);
     checks.push({
       id: 'audit-12-document-number-consistency',
       category: 'Traceability & Control',
-      title: 'Document Number Exact String Consistency (Rule 9)',
+      title: 'Document Number Exact String Consistency',
       status: 'warning',
       message: warningMsg,
       details: docNumberIssues.join(' | '),
@@ -1032,14 +1041,14 @@ export function runPreOutputAuditGate(
     checks.push({
       id: 'audit-12-document-number-consistency',
       category: 'Traceability & Control',
-      title: 'Document Number Exact String Consistency (Rule 9)',
+      title: 'Document Number Exact String Consistency',
       status: 'passed',
       message: `Exact string consistency confirmed: Report No. ("${headerReportNo}") matches across header, footer, and revision history references.`,
     });
   }
 
   // -------------------------------------------------------------
-  // CHECK 13: Major Method Parameter Changes & Justification (Rule 10)
+  // CHECK 13: Major Method Parameter Changes & Justification
   // -------------------------------------------------------------
   const currentParams = extractCoreMethodParameters(docData, validationMethod);
   const baselineKey = getBaselineLookupKey(productName, validationMethod);
@@ -1060,7 +1069,7 @@ export function runPreOutputAuditGate(
       checks.push({
         id: 'audit-13-major-parameter-justification',
         category: 'Traceability & Control',
-        title: 'Major Parameter Change Revision Explanation (Rule 10)',
+        title: 'Major Parameter Change Revision Explanation',
         status: 'failed',
         message: msg,
         details: `Altered Parameters: ${diffSummary} | Issues: ${valResult.issues.join(' | ')}`,
@@ -1070,7 +1079,7 @@ export function runPreOutputAuditGate(
       checks.push({
         id: 'audit-13-major-parameter-justification',
         category: 'Traceability & Control',
-        title: 'Major Parameter Change Revision Explanation (Rule 10)',
+        title: 'Major Parameter Change Revision Explanation',
         status: 'passed',
         message: `Major parameter modification(s) (${diffSummary}) are accompanied by an explicit, non-generic technical justification in Revision History.`,
       });
@@ -1079,7 +1088,7 @@ export function runPreOutputAuditGate(
     checks.push({
       id: 'audit-13-major-parameter-justification',
       category: 'Traceability & Control',
-      title: 'Major Parameter Change Revision Explanation (Rule 10)',
+      title: 'Major Parameter Change Revision Explanation',
       status: 'passed',
       message: 'Core analytical parameters (Retention Time, Wavelength, Column, Mobile Phase) align with monograph baseline without unrecorded major shifts.',
     });

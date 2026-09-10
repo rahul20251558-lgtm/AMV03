@@ -1151,7 +1151,7 @@ export function buildFullRSAMVData(
   }
 
   const docNo = options?.protocolNo || 'WC/QC/AMV/0285';
-  const docDate = options?.protocolDate || '09/07/2024';
+  const docDate = options?.protocolDate || '09-Jul-2024';
   const batchNo = options?.batchNo || `WC-${productName.substring(0, 3).toUpperCase()}-2401`;
   const rawCompanyName = options?.companyName || 'WESTCOAST PHARMACEUTICAL WORKS LTD.';
   const companyName = rawCompanyName.replace(/\.+$/, '');
@@ -1167,11 +1167,14 @@ export function buildFullRSAMVData(
   const nominalArea = seed.nominalArea || computeNominalPeakArea(productName, 245);
 
   // 1. System Suitability Injections
-  const ssMath = generateSystemSuitabilityInjections(seed.productName, nominalArea, 50.0, 5);
+  const ssMath = generateSystemSuitabilityInjections(seed.productName, nominalArea, 50.0, 5, seed.activeRtMin, 4850, 1.12);
   const ssInjections: RSSystemSuitabilityRow[] = ssMath.injections.map((inj) => ({
     srNo: inj.srNo,
     weightMg: inj.weightMg,
+    retentionTime: inj.retentionTime,
     peakArea: inj.peakArea,
+    tailingFactor: inj.tailingFactor,
+    theoreticalPlates: inj.theoreticalPlates,
     remark: `Standard reference injection complies with system criteria`,
   }));
 
@@ -1356,7 +1359,7 @@ export function buildFullRSAMVData(
     protocolNo: docNo,
     protocolDate: docDate,
     reportNo: reportNumber,
-    reportDate: '17/07/2024',
+    reportDate: '17-Jul-2024',
     productName: seed.productName,
     labelClaim: `${strengthNum} ${unit}`,
     testParameter: seed.testParameter,
@@ -1368,33 +1371,33 @@ export function buildFullRSAMVData(
         designation: 'Chemist, Quality Control',
         name: 'Riya Patel',
         signature: 'Signed',
-        date: '16/07/2024',
-        dateProtocol: '09/07/2024',
-        dateReport: '16/07/2024',
+        date: '16-Jul-2024',
+        dateProtocol: '09-Jul-2024',
+        dateReport: '16-Jul-2024',
       },
       checkedBy: {
         designation: 'Executive, Quality Control',
         name: 'Jeel Patel',
         signature: 'Signed',
-        date: '16/07/2024',
-        dateProtocol: '09/07/2024',
-        dateReport: '16/07/2024',
+        date: '16-Jul-2024',
+        dateProtocol: '09-Jul-2024',
+        dateReport: '16-Jul-2024',
       },
       reviewedBy: {
         designation: 'Manager, Quality Assurance',
         name: 'Anil Parmar',
         signature: 'Signed',
-        date: '17/07/2024',
-        dateProtocol: '10/07/2024',
-        dateReport: '17/07/2024',
+        date: '17-Jul-2024',
+        dateProtocol: '10-Jul-2024',
+        dateReport: '17-Jul-2024',
       },
       authorisedBy: {
         designation: 'General Manager, Quality (Head QA/QC)',
         name: 'Suresh Shah',
         signature: 'Signed',
-        date: '17/07/2024',
-        dateProtocol: '10/07/2024',
-        dateReport: '17/07/2024',
+        date: '17-Jul-2024',
+        dateProtocol: '10-Jul-2024',
+        dateReport: '17-Jul-2024',
       },
     },
 
@@ -1548,35 +1551,35 @@ export function buildFullRSAMVData(
       {
         particulars: 'Protocol Preparation',
         details: 'Prepared by Chemist QC',
-        signatureDate: 'Signed / 09/07/2024',
+        signatureDate: 'Signed / 09-Jul-2024',
         detailsProtocol: 'Prepared by Chemist QC',
-        signatureDateProtocol: 'Signed / 09/07/2024',
+        signatureDateProtocol: 'Signed / 09-Jul-2024',
       },
       {
         particulars: 'Protocol Approval',
         details: 'Approved by Head QA/QC',
-        signatureDate: 'Signed / 10/07/2024',
+        signatureDate: 'Signed / 10-Jul-2024',
         detailsProtocol: 'Approved by Head QA/QC',
-        signatureDateProtocol: 'Signed / 10/07/2024',
+        signatureDateProtocol: 'Signed / 10-Jul-2024',
       },
       {
         particulars: 'Verification Execution',
-        details: 'Executed by Analytical Team (11/07/2024 – 15/07/2024)',
-        signatureDate: 'Signed / 15/07/2024',
+        details: 'Executed by Analytical Team (11-Jul-2024 – 15-Jul-2024)',
+        signatureDate: 'Signed / 15-Jul-2024',
         detailsProtocol: 'To be executed as per approved protocol',
         signatureDateProtocol: '—',
       },
       {
         particulars: 'Report Preparation',
         details: 'Compiled with all chromatographic data and integration reports',
-        signatureDate: 'Signed / 16/07/2024',
+        signatureDate: 'Signed / 16-Jul-2024',
         detailsProtocol: 'To be compiled with chromatograms upon execution',
         signatureDateProtocol: '—',
       },
       {
         particulars: 'Final Report Approval',
         details: 'Authorised by Head QA/QC',
-        signatureDate: 'Signed / 17/07/2024',
+        signatureDate: 'Signed / 17-Jul-2024',
         detailsProtocol: 'To be authorised upon completion',
         signatureDateProtocol: '—',
       },

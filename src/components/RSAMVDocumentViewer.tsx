@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RSAMVDocumentData, DocumentType, ThemeFormat, FontFamilyType, FontSizePt } from '../types';
+import { RSAMVDocumentData, DocumentType, ThemeFormat, FontFamilyType, FontSizePt, DataMode } from '../types';
 import { Download, Printer, Edit3, Layers, CheckCircle2, FileSpreadsheet } from 'lucide-react';
 import { FontAndSizeControl } from './FontAndSizeControl';
 
@@ -7,6 +7,7 @@ interface RSAMVDocumentViewerProps {
   data: RSAMVDocumentData;
   docType: DocumentType;
   theme: ThemeFormat;
+  dataMode?: DataMode;
   fontFamily?: FontFamilyType;
   fontSize?: FontSizePt;
   onFontFamilyChange?: (font: FontFamilyType) => void;
@@ -23,6 +24,7 @@ export const RSAMVDocumentViewer: React.FC<RSAMVDocumentViewerProps> = ({
   data,
   docType,
   theme,
+  dataMode = 'DEMO',
   fontFamily = 'Times New Roman',
   fontSize = 12,
   onFontFamilyChange,
@@ -37,6 +39,7 @@ export const RSAMVDocumentViewer: React.FC<RSAMVDocumentViewerProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const isProtocol = docType === 'protocol';
   const isBlue = theme === 'blue';
+  const currentMode: DataMode = dataMode === 'TEMPLATE' ? 'TEMPLATE' : 'DEMO';
 
   const fontStyle: React.CSSProperties = {
     fontFamily:
@@ -69,8 +72,13 @@ export const RSAMVDocumentViewer: React.FC<RSAMVDocumentViewerProps> = ({
   );
 
   const runningFooter = (pageNum: number) => (
-    <div className="text-center pt-3 mt-5 border-t border-zinc-200 text-[11px] text-zinc-400 font-sans">
-      Page {pageNum} of 8
+    <div className="pt-3 mt-5 border-t border-zinc-200 text-[11px] text-zinc-400 font-sans space-y-1">
+      {dataMode === 'DEMO' && (
+        <div className="text-center font-bold text-[11px] text-amber-700 tracking-wider uppercase">
+          DEMO / FORMAT-DEMONSTRATION ONLY — NOT FOR GMP USE
+        </div>
+      )}
+      <div className="text-center">Page {pageNum} of 8</div>
     </div>
   );
 
@@ -203,6 +211,11 @@ export const RSAMVDocumentViewer: React.FC<RSAMVDocumentViewerProps> = ({
           <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mt-1">
             {data.subTitle}
           </h3>
+          {dataMode === 'DEMO' && (
+            <div className="inline-block mt-2 px-3 py-1 bg-amber-100 border border-amber-300 rounded text-amber-900 font-bold text-xs tracking-wider uppercase">
+              DEMO / FORMAT-DEMONSTRATION ONLY — NOT FOR GMP USE
+            </div>
+          )}
         </div>
 
         <div className={`w-full h-1 my-3 ${isBlue ? 'bg-[#1F4E79]' : 'bg-zinc-800'}`}></div>
@@ -224,7 +237,7 @@ export const RSAMVDocumentViewer: React.FC<RSAMVDocumentViewerProps> = ({
                   {isProtocol ? 'Protocol Date' : 'Report Date'}
                 </td>
                 <td className="border border-zinc-300 px-3 py-1.5 text-zinc-800">
-                  {isProtocol ? data.protocolDate : (data.reportDate || '17/07/2024')}
+                  {isProtocol ? data.protocolDate : (data.reportDate || '17-Jul-2024')}
                 </td>
               </tr>
               <tr>
@@ -271,22 +284,22 @@ export const RSAMVDocumentViewer: React.FC<RSAMVDocumentViewerProps> = ({
                 <td className="p-2 border border-zinc-300 text-xs align-top space-y-1">
                   <div><span className="font-bold">Designation:</span> {data.signOffs.preparedBy.designation}</div>
                   <div><span className="font-bold">Name:</span> {data.signOffs.preparedBy.name}</div>
-                  <div><span className="font-bold">Sign/Date:</span> {isProtocol ? `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.dateProtocol || '09/07/2024'}` : `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.dateReport || data.signOffs.preparedBy.date}`}</div>
+                  <div><span className="font-bold">Sign/Date:</span> {isProtocol ? `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.dateProtocol || '09-Jul-2024'}` : `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.dateReport || data.signOffs.preparedBy.date}`}</div>
                 </td>
                 <td className="p-2 border border-zinc-300 text-xs align-top space-y-1">
                   <div><span className="font-bold">Designation:</span> {data.signOffs.checkedBy.designation}</div>
                   <div><span className="font-bold">Name:</span> {data.signOffs.checkedBy.name}</div>
-                  <div><span className="font-bold">Sign/Date:</span> {isProtocol ? `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.dateProtocol || '09/07/2024'}` : `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.dateReport || data.signOffs.checkedBy.date}`}</div>
+                  <div><span className="font-bold">Sign/Date:</span> {isProtocol ? `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.dateProtocol || '09-Jul-2024'}` : `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.dateReport || data.signOffs.checkedBy.date}`}</div>
                 </td>
                 <td className="p-2 border border-zinc-300 text-xs align-top space-y-1">
                   <div><span className="font-bold">Designation:</span> {data.signOffs.reviewedBy.designation}</div>
                   <div><span className="font-bold">Name:</span> {data.signOffs.reviewedBy.name}</div>
-                  <div><span className="font-bold">Sign/Date:</span> {isProtocol ? `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.dateProtocol || '10/07/2024'}` : `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.dateReport || data.signOffs.reviewedBy.date}`}</div>
+                  <div><span className="font-bold">Sign/Date:</span> {isProtocol ? `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.dateProtocol || '10-Jul-2024'}` : `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.dateReport || data.signOffs.reviewedBy.date}`}</div>
                 </td>
                 <td className="p-2 border border-zinc-300 text-xs align-top space-y-1">
                   <div><span className="font-bold">Designation:</span> {data.signOffs.authorisedBy.designation}</div>
                   <div><span className="font-bold">Name:</span> {data.signOffs.authorisedBy.name}</div>
-                  <div><span className="font-bold">Sign/Date:</span> {isProtocol ? `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.dateProtocol || '10/07/2024'}` : `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.dateReport || data.signOffs.authorisedBy.date}`}</div>
+                  <div><span className="font-bold">Sign/Date:</span> {isProtocol ? `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.dateProtocol || '10-Jul-2024'}` : `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.dateReport || data.signOffs.authorisedBy.date}`}</div>
                 </td>
               </tr>
             </tbody>
@@ -496,9 +509,11 @@ export const RSAMVDocumentViewer: React.FC<RSAMVDocumentViewerProps> = ({
           <table className="w-full text-xs border-collapse border border-zinc-300 mb-2">
             <thead>
               <tr className={tableHeaderClass}>
-                <th className="p-1.5 border border-zinc-300 text-center w-16">Sr. No.</th>
+                <th className="p-1.5 border border-zinc-300 text-center w-14">Sr. No.</th>
                 <th className="p-1.5 border border-zinc-300 text-center">Working Standard Weight (mg)</th>
                 <th className="p-1.5 border border-zinc-300 text-right">Peak Area</th>
+                <th className="p-1.5 border border-zinc-300 text-center">Tailing Factor</th>
+                <th className="p-1.5 border border-zinc-300 text-center">Theoretical Plates</th>
                 <th className="p-1.5 border border-zinc-300 text-left">Remark</th>
               </tr>
             </thead>
@@ -509,6 +524,12 @@ export const RSAMVDocumentViewer: React.FC<RSAMVDocumentViewerProps> = ({
                   <td className="p-1.5 border border-zinc-300 text-center font-mono">{isProtocol ? '' : inj.weightMg}</td>
                   <td className="p-1.5 border border-zinc-300 text-right font-mono font-semibold">
                     {isProtocol ? '' : inj.peakArea.toLocaleString()}
+                  </td>
+                  <td className="p-1.5 border border-zinc-300 text-center font-mono">
+                    {isProtocol ? '' : (inj.tailingFactor ?? '1.12')}
+                  </td>
+                  <td className="p-1.5 border border-zinc-300 text-center font-mono">
+                    {isProtocol ? '' : typeof inj.theoreticalPlates === 'number' ? inj.theoreticalPlates.toLocaleString() : (inj.theoreticalPlates ?? '4,850')}
                   </td>
                   <td className="p-1.5 border border-zinc-300 text-left text-zinc-600">{isProtocol ? '' : inj.remark}</td>
                 </tr>
@@ -1003,33 +1024,9 @@ export const RSAMVDocumentViewer: React.FC<RSAMVDocumentViewerProps> = ({
           </div>
         </div>
 
-        {/* 16. Revision History */}
-        <div className="mb-4">
-          <h2 className={`text-sm font-bold uppercase mb-2 ${sectionHeadingClass}`}>
-            16. Revision History
-          </h2>
-          <table className="w-full text-xs border-collapse border border-zinc-300 mb-3">
-            <thead>
-              <tr className={tableHeaderClass}>
-                <th className="p-1.5 border border-zinc-300 text-center w-20">Version</th>
-                <th className="p-1.5 border border-zinc-300 text-center w-28">Effective Date</th>
-                <th className="p-1.5 border border-zinc-300 text-left">Reason for Change</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.revisionHistory.map((rev, i) => (
-                <tr key={i} className={i % 2 === 1 ? 'bg-zinc-50' : ''}>
-                  <td className="p-1.5 border border-zinc-300 text-center font-mono font-bold">{rev.version}</td>
-                  <td className="p-1.5 border border-zinc-300 text-center font-mono">{rev.effectiveDate}</td>
-                  <td className="p-1.5 border border-zinc-300 text-zinc-700">{rev.reason}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="text-center pt-4 pb-2 border-t border-zinc-200">
-          <span className="text-xs font-bold tracking-widest text-zinc-400">— END OF DOCUMENT —</span>
+        {/* End of Document */}
+        <div className="pt-6 pb-2 text-center text-xs font-bold tracking-widest text-zinc-500 uppercase border-t border-zinc-200 mt-6">
+          — END OF DOCUMENT —
         </div>
 
         {runningFooter(7)}

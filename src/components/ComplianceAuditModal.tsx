@@ -180,7 +180,7 @@ export const ComplianceAuditModal: React.FC<ComplianceAuditModalProps> = ({
                           }}
                           className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-[11px] font-semibold flex items-center space-x-1 shadow-xs transition-colors"
                         >
-                          <span>Enter Mandatory Reason for Change (Rule 10)</span>
+                          <span>Enter Mandatory Reason for Change</span>
                         </button>
                       </div>
                     )}

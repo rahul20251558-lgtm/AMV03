@@ -23,6 +23,7 @@ export interface DocxOptions {
   theme: ThemeFormat;
   fontFamily?: string;
   fontSize?: number;
+  dataMode?: 'TEMPLATE' | 'DEMO';
 }
 
 export async function generateAndDownloadAMVDocx(
@@ -262,6 +263,23 @@ export async function generateAndDownloadAMVDocx(
       }),
     ],
   });
+
+  const page1DemoCallout =
+    options.dataMode === 'DEMO'
+      ? new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { before: 60, after: 80 },
+          children: [
+            new TextRun({
+              text: '*** DEMO / FORMAT-DEMONSTRATION ONLY — NOT FOR GMP USE ***',
+              bold: true,
+              size: 20,
+              font: FONT_FAMILY,
+              color: 'B45309',
+            }),
+          ],
+        })
+      : null;
 
   // Metadata Table (2 cols: 3106, 6800 dxa)
   const colMeta = [3106, 6800];
@@ -776,24 +794,6 @@ export async function generateAndDownloadAMVDocx(
   ];
   const abbrTable = createDocxTable(colAbbr, abbrRows);
 
-  // Section 15 Revision History Table (3 cols: 1606, 2300, 6000 dxa)
-  const colRev = [1606, 2300, 6000];
-  const revRows = [
-    createRow([
-      createHeaderCell('Version', colRev[0]),
-      createHeaderCell('Effective Date', colRev[1]),
-      createHeaderCell('Reason for Change', colRev[2], AlignmentType.LEFT),
-    ], true),
-    ...data.revisionHistory.map((rh) =>
-      createRow([
-        createDataCell(rh.version, AlignmentType.CENTER, true, undefined, colRev[0]),
-        createDataCell(rh.effectiveDate, AlignmentType.CENTER, false, undefined, colRev[1]),
-        createDataCell(rh.reason, AlignmentType.LEFT, false, undefined, colRev[2]),
-      ])
-    ),
-  ];
-  const revTable = createDocxTable(colRev, revRows);
-
   const endMarkParagraph = new Paragraph({
     alignment: AlignmentType.CENTER,
     spacing: { before: 180, after: 60 },
@@ -817,6 +817,7 @@ export async function generateAndDownloadAMVDocx(
     page1CompanyHeader,
     page1Address,
     page1DocTitle,
+    ...(page1DemoCallout ? [page1DemoCallout] : []),
     page1MetaTable,
     new Paragraph({ spacing: { before: 40, after: 40 } }),
     page1SignOffTable,
@@ -980,11 +981,6 @@ export async function generateAndDownloadAMVDocx(
     checkTable,
     createSectionHeader('14. Abbreviations', 70, 30),
     abbrTable,
-    new Paragraph({ children: [new PageBreak()] }),
-
-    // ---------------- PAGE 8 ----------------
-    createSectionHeader('15. Revision History', 80, 40),
-    revTable,
     endMarkParagraph,
   ];
 
@@ -1008,6 +1004,22 @@ export async function generateAndDownloadAMVDocx(
 
   const runningFooter = new Footer({
     children: [
+      ...(options.dataMode === 'DEMO'
+        ? [
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [
+                new TextRun({
+                  text: 'DEMO / FORMAT-DEMONSTRATION ONLY — NOT FOR GMP USE',
+                  size: 15,
+                  bold: true,
+                  color: 'B45309',
+                  font: FONT_FAMILY,
+                }),
+              ],
+            }),
+          ]
+        : []),
       new Paragraph({
         alignment: AlignmentType.CENTER,
         spacing: { before: 80, after: 0 },

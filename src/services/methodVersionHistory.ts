@@ -2,9 +2,9 @@
  * Method Version History & Parameter Baseline Service
  * 
  * Enforces GMP Change Control (ALCOA+) and ICH Q2(R2) Validation Integrity:
- * - Rule 9: Exact String Consistency for Document & Report Numbers
- * - Rule 10: Mandatory Specific Explanations for Major Method Parameter Changes (>5% RT, Wavelength, Column, Mobile Phase)
- * - Rule 11: Template-Aware Retention Time Section Registry
+ * - Exact String Consistency for Document & Report Numbers
+ * - Mandatory Specific Explanations for Major Method Parameter Changes (>5% RT, Wavelength, Column, Mobile Phase)
+ * - Template-Aware Retention Time Section Registry
  */
 
 export interface CoreMethodParameters {
@@ -386,7 +386,7 @@ export function compareCoreMethodParameters(
 }
 
 /**
- * Validates whether a Revision History "Reason for Change" meets Rule 10 requirements
+ * Validates whether a Revision History "Reason for Change" meets change control requirements
  * when major method parameters have changed
  */
 export function validateRevisionReasonForMajorChanges(
@@ -451,7 +451,7 @@ export function validateRevisionReasonForMajorChanges(
 }
 
 /**
- * Configuration Registry for Template-Aware RT Consistency Checking (Rule 11)
+ * Configuration Registry for Template-Aware RT Consistency Checking
  */
 export interface TemplateRtSectionConfig {
   sectionKey: string;
@@ -503,6 +503,9 @@ export const TEMPLATE_RT_SECTIONS_REGISTRY: Record<
       sectionKey: 'specificity_stress',
       sectionTitle: 'Specificity (Forced Degradation Active RT)',
       extractRt: (data) => {
+        if (!data?.includeForcedDegradation && (!data?.specificity?.stressRows || data.specificity.stressRows.length === 0)) {
+          return null;
+        }
         const stressRow = data?.specificity?.stressRows?.[0];
         const rt = Number(stressRow?.activeRtMin);
         return rt > 0 ? { rt, label: 'Specificity Forced Degradation' } : null;

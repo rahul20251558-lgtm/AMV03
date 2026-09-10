@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Sparkles, RefreshCw, Layers, Calendar, FileCode2, FlaskConical, Beaker, Building2 } from 'lucide-react';
+import { Search, Sparkles, RefreshCw, Layers, Calendar, FileCode2, FlaskConical, Beaker, Building2, UploadCloud, FileText, CheckCircle2 } from 'lucide-react';
 import { ThemeFormat, ValidationMethodType } from '../types';
 
 interface AMVInputFormProps {
@@ -19,6 +19,10 @@ interface AMVInputFormProps {
   onRefreshCodes: () => void;
   isLoading: boolean;
   theme: ThemeFormat;
+  coaUploaded?: boolean;
+  onCoaUpload?: (file: File) => void;
+  fpsUploaded?: boolean;
+  onFpsUpload?: (file: File) => void;
 }
 
 const RS_QUICK_SUGGESTIONS = [
@@ -72,6 +76,10 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
   onRefreshCodes,
   isLoading,
   theme,
+  coaUploaded,
+  onCoaUpload,
+  fpsUploaded,
+  onFpsUpload,
 }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const isRS = validationMethod === 'related_substances';
@@ -258,6 +266,72 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
                 {item}
               </button>
             ))}
+          </div>
+        </div>
+
+        {/* Document Upload Zone (COA & FPS) */}
+        <div className="pt-3 border-t border-zinc-200">
+          <label className="block text-xs font-semibold text-zinc-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <FileText className="w-3.5 h-3.5" /> Optional Reference Documents (COA & Spec)
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* COA Upload */}
+            <div className={`relative border-2 border-dashed rounded-lg p-3 text-center transition-colors ${coaUploaded ? 'border-green-400 bg-green-50' : 'border-zinc-300 hover:border-blue-400 hover:bg-blue-50/50'}`}>
+              <input 
+                type="file" 
+                accept=".pdf,.docx" 
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                onChange={(e) => {
+                  if (e.target.files?.[0] && onCoaUpload) {
+                    onCoaUpload(e.target.files[0]);
+                  }
+                }}
+              />
+              <div className="flex flex-col items-center justify-center pointer-events-none gap-1">
+                {coaUploaded ? (
+                  <>
+                    <CheckCircle2 className="w-5 h-5 text-green-600 mb-1" />
+                    <span className="text-xs font-medium text-green-700">COA Uploaded</span>
+                    <span className="text-[10px] text-green-600">Results aligned to routine batch</span>
+                  </>
+                ) : (
+                  <>
+                    <UploadCloud className="w-5 h-5 text-zinc-400 mb-1" />
+                    <span className="text-xs font-medium text-zinc-700">Upload Batch COA</span>
+                    <span className="text-[10px] text-zinc-500">Extracts actual precision baseline (PDF/DOCX)</span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* FPS Upload */}
+            <div className={`relative border-2 border-dashed rounded-lg p-3 text-center transition-colors ${fpsUploaded ? 'border-green-400 bg-green-50' : 'border-zinc-300 hover:border-blue-400 hover:bg-blue-50/50'}`}>
+              <input 
+                type="file" 
+                accept=".pdf,.docx" 
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                onChange={(e) => {
+                  if (e.target.files?.[0] && onFpsUpload) {
+                    onFpsUpload(e.target.files[0]);
+                  }
+                }}
+              />
+              <div className="flex flex-col items-center justify-center pointer-events-none gap-1">
+                {fpsUploaded ? (
+                  <>
+                    <CheckCircle2 className="w-5 h-5 text-green-600 mb-1" />
+                    <span className="text-xs font-medium text-green-700">Product Spec Uploaded</span>
+                    <span className="text-[10px] text-green-600">Limits synchronized</span>
+                  </>
+                ) : (
+                  <>
+                    <FileCode2 className="w-5 h-5 text-zinc-400 mb-1" />
+                    <span className="text-xs font-medium text-zinc-700">Upload Product Specification</span>
+                    <span className="text-[10px] text-zinc-500">Extracts custom acceptance limits</span>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 

@@ -153,13 +153,16 @@ export function recalculateDissolutionSystemSuitability(
 }
 
 /**
- * Generates 5 or 6 System Suitability injections with tight %RSD (< 1.0%)
+ * Generates 5 or 6 System Suitability injections with tight %RSD (< 1.0%), plates, and tailing
  */
 export function generateSystemSuitabilityInjections(
   productName: string,
   nominalArea: number,
   nominalWeightMg: number,
-  numInjections: number = 5
+  numInjections: number = 5,
+  baseRt: number = 4.80,
+  expectedPlates: number = 4850,
+  expectedTailing: number = 1.12
 ) {
   const rand = createSeededRandom(`${productName.toLowerCase()}_ss`);
   const targetRsd = 0.25 + rand() * 0.45; // 0.25% - 0.70%
@@ -167,17 +170,30 @@ export function generateSystemSuitabilityInjections(
 
   const injections = [];
   let sumArea = 0;
+  let sumPlates = 0;
+  let sumTailing = 0;
+  let sumRt = 0;
 
   for (let i = 1; i <= numInjections; i++) {
     const area = Math.round(normalRandom(rand, nominalArea, stdDev));
     const wt = Number((nominalWeightMg + (rand() - 0.5) * 0.12).toFixed(2));
+    const rt = Number((baseRt + (rand() - 0.5) * 0.02).toFixed(2));
+    const tailing = Number((expectedTailing + (rand() - 0.5) * 0.04).toFixed(2));
+    const plates = Math.round(expectedPlates + (rand() - 0.5) * 120);
+
     injections.push({
       srNo: i,
       weightMg: wt,
+      retentionTime: rt,
       peakArea: area,
+      tailingFactor: tailing,
+      theoreticalPlates: plates,
       remark: `Standard Preparation ${i}`,
     });
     sumArea += area;
+    sumPlates += plates;
+    sumTailing += tailing;
+    sumRt += rt;
   }
 
   const meanArea = Math.round(sumArea / numInjections);
@@ -187,7 +203,19 @@ export function generateSystemSuitabilityInjections(
   const sdArea = Number(Math.sqrt(variance).toFixed(1));
   const rsdArea = Number(((sdArea / meanArea) * 100).toFixed(2));
 
-  return { injections, meanArea, sdArea, rsdArea };
+  const meanPlates = Math.round(sumPlates / numInjections);
+  const meanTailing = Number((sumTailing / numInjections).toFixed(2));
+  const meanRt = Number((sumRt / numInjections).toFixed(2));
+
+  return {
+    injections,
+    meanArea,
+    sdArea,
+    rsdArea,
+    meanPlates,
+    meanTailing,
+    meanRt,
+  };
 }
 
 /**
@@ -224,7 +252,7 @@ export function generateLinearityData(
       nominalPercent: pct,
       concentrationPpm: Number(conc.toFixed(concDecimals)),
       nominalWeightMg: wtMg > 0 ? wtMg : 50.0,
-      dilutionVolumeMl: pct > 100 ? 100 : 50,
+      dilutionVolumeMl: 50,
       peakArea: area,
     });
   }

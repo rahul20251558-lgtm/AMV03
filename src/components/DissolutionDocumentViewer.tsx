@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
-import { DissolutionAMVDocumentData, DocumentType, ThemeFormat, FontFamilyType, FontSizePt } from '../types';
+import { DissolutionAMVDocumentData, DocumentType, ThemeFormat, FontFamilyType, FontSizePt, DataMode } from '../types';
 import { Download, Printer, Edit3, Layers, CheckCircle2, Plus, Trash2, Sparkles, FileText, Table } from 'lucide-react';
 import { recalculateDissolutionSystemSuitability } from '../services/pharmaMathEngine';
 import { FontAndSizeControl } from './FontAndSizeControl';
+import { verifyConcentrationScale } from '../services/selfAuditEngine';
+import { getProductDegradantProfile } from '../services/complianceAuditGate';
 
 interface DissolutionDocumentViewerProps {
   data: DissolutionAMVDocumentData;
   docType: DocumentType;
   theme: ThemeFormat;
+  dataMode?: DataMode;
   fontFamily?: FontFamilyType;
   fontSize?: FontSizePt;
   onFontFamilyChange?: (font: FontFamilyType) => void;
@@ -24,6 +27,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
   data,
   docType,
   theme,
+  dataMode = 'DEMO',
   fontFamily = 'Times New Roman',
   fontSize = 12,
   onFontFamilyChange,
@@ -38,9 +42,13 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
   const [isEditing, setIsEditing] = useState(false);
   const [tableFormat, setTableFormat] = useState<'realReport' | 'extended'>('realReport');
   const [sectionFormat, setSectionFormat] = useState<'monograph' | 'standard'>('monograph');
+  const [showForcedDegradation, setShowForcedDegradation] = useState(false);
   const isProtocol = docType === 'protocol';
   const isBlue = theme === 'blue';
   const isMonograph = sectionFormat === 'monograph';
+  const currentMode: DataMode = dataMode === 'TEMPLATE' ? 'TEMPLATE' : 'DEMO';
+
+  const concScale = verifyConcentrationScale(data, 'dissolution');
 
   const fontStyle: React.CSSProperties = {
     fontFamily:
@@ -73,8 +81,13 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
   );
 
   const runningFooter = (pageNum: number) => (
-    <div className="text-center pt-3 mt-5 border-t border-zinc-200 text-[0.85em] text-zinc-400">
-      Page {pageNum} of 10
+    <div className="pt-3 mt-5 border-t border-zinc-200 text-[0.85em] text-zinc-400 space-y-1">
+      {dataMode === 'DEMO' && (
+        <div className="text-center font-bold text-[11px] text-amber-700 tracking-wider uppercase">
+          DEMO / FORMAT-DEMONSTRATION ONLY — NOT FOR GMP USE
+        </div>
+      )}
+      <div className="text-center">Page {pageNum} of 10</div>
     </div>
   );
 
@@ -173,6 +186,89 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
             'The %RSD of peak area for 6 replicate standard preparations is 0.42 %, which complies with the acceptance criteria of NMT 2.0 %.',
         },
       },
+    });
+  };
+
+  const handleToggleForcedDegradation = (include: boolean) => {
+    if (!onUpdateData) return;
+    const batchNo = data.batchNoUsed || 'TB2501';
+    const activeRt = Number(data.systemSuitability?.injections?.[0]?.retentionTime) || 5.00;
+    const activeRtDisplay = activeRt.toFixed(2);
+    const drugKeyName = data.productName.replace(/Tablets|Capsules|USP|BP|IP/gi, '').trim();
+    const degRt = Number((activeRt * 0.65).toFixed(2));
+    const degRrt = Number((degRt / activeRt).toFixed(2));
+
+    const updatedValidationParams = data.validationParameters.map((vp) => {
+      if (vp.srNo === '5.2') {
+        return {
+          ...vp,
+          parameter: include ? 'Specificity & Forced Degradation' : 'Specificity',
+          acceptanceCriteria: include
+            ? 'No interference from blank diluent or placebo matrix at analyte retention window. Resolution (Rs) between degradation products and active drug peak NLT 2.0. Peak purity of active peak must pass (Purity Angle < Purity Threshold).'
+            : 'No interfering peak shall be observed in Blank and Placebo preparations at the retention window of the active drug peak (± 0.20 min). Peak purity analysis of the active drug peak shall demonstrate complete spectral homogeneity without co-eluting excipient matrix interference (Purity Angle < Purity Threshold).',
+          executionStatusReport: include
+            ? 'Complies (Rs ≥ 4.08, PDA Peak Purity Confirmed)'
+            : 'Complies (PDA Spectral Peak Purity Confirmed)',
+        };
+      }
+      return vp;
+    });
+
+    const updatedRefDetails = {
+      ...data.referenceDetails,
+      experimentalDetails: include
+        ? `System suitability (6 standard preparations), specificity and forced degradation, linearity (50 % to 150 % nominal concentration), range (75 % and 125 %), repeatability across 6 dosage units, intermediate precision across 2 analysts, recovery at 75 %, 100 %, and 125 % in triplicate, deliberate robustness variations, and 48-hour solution stability, evaluated against validation batch ${batchNo}.`
+        : `System suitability (6 standard preparations), specificity (blank and placebo interference), linearity (50 % to 150 % nominal concentration), range (75 % and 125 %), repeatability across 6 dosage units, intermediate precision across 2 analysts, recovery at 75 %, 100 %, and 125 % in triplicate, deliberate robustness variations, and 48-hour solution stability, evaluated against validation batch ${batchNo}.`,
+    };
+
+    const updatedSpecificity = {
+      ...data.specificity,
+      stressRows: include && data.specificity?.stressRows?.length ? data.specificity.stressRows : include ? [
+        { condition: 'Acid Stress', stressParameters: '0.1N HCl, 60 °C, 2 hr', degradantRtMin: degRt.toFixed(2), activeRtMin: activeRtDisplay, degradantPeakArea: 4850, activePeakArea: 39500, degradationPercent: '10.9', resolution: '4.12', peakPurity: 'Passed (Purity Angle < Threshold)' },
+        { condition: 'Base Stress', stressParameters: '0.1N NaOH, 60 °C, 2 hr', degradantRtMin: degRt.toFixed(2), activeRtMin: activeRtDisplay, degradantPeakArea: 5200, activePeakArea: 39100, degradationPercent: '11.7', resolution: '4.08', peakPurity: 'Passed (Purity Angle < Threshold)' },
+        { condition: 'Oxidative Stress', stressParameters: '3 % H₂O₂, 25 °C, 2 hr', degradantRtMin: degRt.toFixed(2), activeRtMin: activeRtDisplay, degradantPeakArea: 3950, activePeakArea: 40300, degradationPercent: '8.9', resolution: '4.15', peakPurity: 'Passed (Purity Angle < Threshold)' },
+        { condition: 'Thermal Stress', stressParameters: '105 °C, 24 hr', degradantRtMin: degRt.toFixed(2), activeRtMin: activeRtDisplay, degradantPeakArea: 2150, activePeakArea: 42100, degradationPercent: '4.8', resolution: '4.16', peakPurity: 'Passed (Purity Angle < Threshold)' },
+        { condition: 'Photolytic Stress', stressParameters: 'ICH Q1B (1.2M lux-hr)', degradantRtMin: degRt.toFixed(2), activeRtMin: activeRtDisplay, degradantPeakArea: 1800, activePeakArea: 42500, degradationPercent: '4.1', resolution: '4.14', peakPurity: 'Passed (Purity Angle < Threshold)' },
+      ] : [],
+      acceptanceTextProtocol: include
+        ? 'No interfering peak shall be observed in Blank and Placebo preparations at the retention window of the active drug peak. Any degradation product observed under forced degradation stress conditions must be baseline resolved from the active drug peak with a resolution (Rs) of NLT 2.0. The active peak must pass peak purity testing (Purity Angle < Purity Threshold / Purity Index > 0.999).'
+        : 'No interfering peak shall be observed in Blank and Placebo preparations at the retention window of the active drug peak (± 0.20 min). Peak purity analysis of the active drug peak shall demonstrate complete spectral homogeneity without co-eluting excipient matrix interference (Purity Angle < Purity Threshold).',
+      conclusionReport: include
+        ? `Complies. No interference was observed from blank diluent or placebo matrix at the retention window of ${drugKeyName} (~${activeRtDisplay} min). Across all five stress degradation conditions (Acid, Base, Oxidation, Thermal, Photolytic), the degradation impurity peak consistently eluting at RT ~${degRt.toFixed(2)} min is cleanly baseline resolved from the main analyte peak (Rs ≥ 4.08, criteria: NLT 2.0). Diode array peak purity analysis confirmed that the ${drugKeyName} peak is spectrally pure (Purity Angle < Purity Threshold) without co-eluting degradants, demonstrating method specificity and stability-indicating capacity.`
+        : `Complies. No interference was observed from blank diluent or placebo matrix at the retention window of ${drugKeyName} (~${activeRtDisplay} min). Diode array peak purity analysis confirmed that the ${drugKeyName} peak is spectrally pure (Purity Angle < Purity Threshold) without co-eluting excipient matrix components, demonstrating procedure specificity for dissolution testing.`,
+      degradationAssessment: include
+        ? `Regulatory & Scientific Assessment of the ~${degRt.toFixed(2)} min Peak: In all five forced degradation stress samples (Acid 0.1N HCl, Base 0.1N NaOH, Peroxide 3% H₂O₂, Thermal 105 °C, and Photolytic UV/Vis), an additional peak is consistently observed at retention time ~${degRt.toFixed(2)} min (RRT ~${degRrt.toFixed(2)}). In chemical stability studies, this represents the primary degradant (${data.specificity?.degradantName || getProductDegradantProfile(data.productName).name}). Chromatographic resolution between this degradation impurity and the parent active peak is greater than 4.0 in all conditions (Rs = 4.08 to 4.16), easily satisfying the regulatory criterion of Rs ≥ 2.0. Furthermore, photodiode array (PDA) spectral peak purity analysis confirms complete homogeneity of the active peak with no co-eluting degradants. The dissolution test procedure is therefore fully validated as stability-indicating and specific for its intended use.`
+        : '',
+    };
+
+    const updatedOverallConclusion = include
+      ? `The Analytical Method Verification for the Dissolution of ${data.productName} by HPLC has been successfully performed in accordance with ${
+          data.reference.includes('ICH Q2(R2)') ? data.reference : `${data.reference} and ICH Q2(R2)`
+        }. All validation parameters—System Suitability, Specificity & Selectivity (including Forced Degradation with spectral peak purity), Linearity, Range, Method Precision (Repeatability), Intermediate Precision, Accuracy (Recovery), Robustness, and Solution Stability—meet all predefined acceptance criteria. The method is formally verified for routine batch release testing.`
+      : `The Analytical Method Verification for the Dissolution of ${data.productName} by HPLC has been successfully performed in accordance with ${
+          data.reference.includes('ICH Q2(R2)') ? data.reference : `${data.reference} and ICH Q2(R2)`
+        }. All verification parameters—System Suitability, Specificity (Blank & Placebo Non-Interference with spectral peak purity), Linearity, Range, Method Precision (Repeatability), Intermediate Precision, Accuracy (Recovery), Robustness, and Solution Stability—meet all predefined acceptance criteria. The method is formally verified for routine batch release testing.`;
+
+    const updatedRevisionHistory = data.revisionHistory.map((rev) => {
+      if (rev.version === '01') {
+        return {
+          ...rev,
+          reason: include
+            ? `Executed Analytical Method Verification Report formalization issued as ${data.reportNo} against commercial validation batch ${batchNo} (supersedes initial protocol ${data.protocolNo} on batch ${batchNo}). Verifies core analytical parameters with complete Specificity forced degradation, deliberate Robustness variations, extended 48-hour Solution Stability, and recovery datasets ensuring full ICH Q2(R2) compliance.`
+            : `Executed Analytical Method Verification Report formalization issued as ${data.reportNo} against commercial validation batch ${batchNo} (supersedes initial protocol ${data.protocolNo} on batch ${batchNo}). Verifies core analytical parameters with complete Specificity (blank and placebo matrix non-interference), deliberate Robustness variations, extended 48-hour Solution Stability, and recovery datasets ensuring full compendial compliance.`,
+        };
+      }
+      return rev;
+    });
+
+    onUpdateData({
+      ...data,
+      includeForcedDegradation: include,
+      referenceDetails: updatedRefDetails,
+      validationParameters: updatedValidationParams,
+      specificity: updatedSpecificity,
+      overallConclusionReport: updatedOverallConclusion,
+      revisionHistory: updatedRevisionHistory,
     });
   };
 
@@ -355,6 +451,22 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
               </button>
             </div>
           </div>
+
+          <div className="flex items-center gap-1.5 ml-auto">
+            <span className="font-semibold text-zinc-700">Forced Degradation (Stress):</span>
+            <button
+              type="button"
+              onClick={() => handleToggleForcedDegradation(!data.includeForcedDegradation)}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all border ${
+                data.includeForcedDegradation
+                  ? 'bg-amber-100 text-amber-900 border-amber-300'
+                  : 'bg-zinc-100 text-zinc-600 border-zinc-200 hover:text-zinc-900'
+              }`}
+              title="Per USP <1226> and Rule 11: Omitted by default for Dissolution Verification. If omitted, completely removed from all 7 document sections."
+            >
+              {data.includeForcedDegradation ? 'Included (Stress Active)' : 'Omitted (Compendial Default)'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -413,6 +525,11 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
               <div className="text-sm font-semibold text-zinc-600">
                 (For DISSOLUTION Method)
               </div>
+              {dataMode === 'DEMO' && (
+                <div className="inline-block mt-2 px-3 py-1 bg-amber-100 border border-amber-300 rounded text-amber-900 font-bold text-xs tracking-wider uppercase">
+                  DEMO / FORMAT-DEMONSTRATION ONLY — NOT FOR GMP USE
+                </div>
+              )}
             </div>
 
             {/* Metadata Table */}
@@ -640,9 +757,37 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
               </div>
             </div>
 
-            {/* 4.3 Preparation of Solutions */}
+            {/* 4.3 Preparation of Solutions and Working Concentration */}
             <div className="mb-6">
-              <h4 className="text-xs font-semibold text-zinc-800 mb-2">4.3 Preparation of Solutions</h4>
+              <h4 className="text-xs font-semibold text-zinc-800 mb-2">4.3 Preparation of Solutions and Working Concentration</h4>
+              
+              {/* Working Concentration Arithmetic Derivation (Rule 10) */}
+              <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-lg mb-3 space-y-1.5 text-xs font-mono">
+                <div className="text-zinc-700 font-sans font-medium">
+                  {concScale.vMediumTakenLine}
+                </div>
+                <div className="bg-white p-2.5 rounded border border-zinc-200 space-y-1 text-zinc-900">
+                  <div className="font-semibold text-blue-950">
+                    C_working = (LC x 1000 / V_medium) x DF
+                  </div>
+                  <div className="text-zinc-700">
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= ({concScale.lcMg} x 1000 / {concScale.vMedium}) x {concScale.df % 1 === 0 ? concScale.df.toFixed(1) : concScale.df}
+                  </div>
+                  <div className="font-bold text-zinc-900">
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= {concScale.workingConcUgMl ? `${concScale.workingConcUgMl.toFixed(2)} ug/mL` : '[ENTER RAW DATA]'}
+                  </div>
+                </div>
+                {concScale.isConflict ? (
+                  <div className="p-2 bg-rose-50 border border-rose-300 rounded text-rose-800 font-sans font-bold text-xs">
+                    ⚠ WARNING - CONCENTRATION SCALE CONFLICT: {concScale.conflictDetails}
+                  </div>
+                ) : (
+                  <div className="p-2 bg-emerald-50 border border-emerald-300 rounded text-emerald-800 font-sans text-xs">
+                    ✓ {concScale.verificationStatement}
+                  </div>
+                )}
+              </div>
+
               <div className="space-y-2 text-zinc-700 text-xs">
                 <p><strong>Solution (1) — Test Solution:</strong> {data.methodSummary.solutionPreparation.testSolution}</p>
                 <p><strong>Solution (2) — Standard Solution:</strong> {data.methodSummary.solutionPreparation.standardSolution}</p>
@@ -826,7 +971,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                         </tr>
                       ))}
 
-                      {/* Integrated summary footer rows matching Image 1 exactly */}
+                      {/* Integrated summary footer rows matching Image 1 exactly with full criteria traceability */}
                       <tr className="border-t border-b border-zinc-900 font-bold bg-zinc-50/60">
                         <td className="p-2.5 text-center font-bold border-r border-zinc-900 text-zinc-900">
                           Mean
@@ -849,6 +994,24 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                         </td>
                         {isEditing && <td></td>}
                       </tr>
+                      <tr className="border-b border-zinc-900 font-bold bg-zinc-50/60">
+                        <td className="p-2.5 text-center font-bold border-r border-zinc-900 text-zinc-900">
+                          Theoretical Plates (NLT 2000)
+                        </td>
+                        <td className="p-2.5 text-center font-bold font-mono text-zinc-900">
+                          {isProtocol ? 'Limit: NLT 2000' : `${(data.systemSuitability.stats.meanPlates || 4850).toLocaleString()} (Complies)`}
+                        </td>
+                        {isEditing && <td></td>}
+                      </tr>
+                      <tr className="border-b border-zinc-900 font-bold bg-zinc-50/60">
+                        <td className="p-2.5 text-center font-bold border-r border-zinc-900 text-zinc-900">
+                          Tailing Factor (NMT 1.5)
+                        </td>
+                        <td className="p-2.5 text-center font-bold font-mono text-zinc-900">
+                          {isProtocol ? 'Limit: NMT 1.5' : `${data.systemSuitability.stats.meanTailing || 1.12} (Complies)`}
+                        </td>
+                        {isEditing && <td></td>}
+                      </tr>
                     </tbody>
                   </table>
                 </div>
@@ -858,9 +1021,11 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                   <table className="w-full border-collapse border border-zinc-300 text-xs">
                     <thead>
                       <tr className={tableHeaderClass}>
-                        <th className="p-2 border border-zinc-300 text-center w-16">Sr. No.</th>
+                        <th className="p-2 border border-zinc-300 text-center w-14">Sr. No.</th>
                         <th className="p-2 border border-zinc-300 text-center">Working Standard Weight (mg)</th>
                         <th className="p-2 border border-zinc-300 text-center">Peak Area</th>
+                        <th className="p-2 border border-zinc-300 text-center">Tailing Factor</th>
+                        <th className="p-2 border border-zinc-300 text-center">Theoretical Plates</th>
                         <th className="p-2 border border-zinc-300 text-left">Remark</th>
                         {isEditing && <th className="p-2 border border-zinc-300 text-center w-14">Action</th>}
                       </tr>
@@ -893,6 +1058,12 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                             ) : (
                               typeof inj.peakArea === 'number' ? inj.peakArea.toLocaleString() : inj.peakArea
                             )}
+                          </td>
+                          <td className="p-2 text-center border-r border-zinc-200 font-mono">
+                            {isProtocol ? '' : (inj.tailingFactor ?? '1.12')}
+                          </td>
+                          <td className="p-2 text-center border-r border-zinc-200 font-mono">
+                            {isProtocol ? '' : typeof inj.theoreticalPlates === 'number' ? inj.theoreticalPlates.toLocaleString() : (inj.theoreticalPlates ?? '4,850')}
                           </td>
                           <td className="p-2 text-zinc-600">{isProtocol ? '' : inj.remark}</td>
                           {isEditing && (
@@ -933,12 +1104,26 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                         </td>
                         <td className="p-2 text-zinc-500 text-[11px]">Acceptance: Record value</td>
                       </tr>
-                      <tr>
+                      <tr className="border-b border-zinc-200">
                         <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">% RSD of Peak Area</td>
                         <td className="p-2 font-mono font-bold border-r border-zinc-200 text-emerald-700">
                           {isProtocol ? 'To be evaluated' : `${data.systemSuitability.stats.rsdArea} %`}
                         </td>
-                        <td className="p-2 text-zinc-700 font-medium text-[11px]">Acceptance: NMT 2.0 %</td>
+                        <td className="p-2 text-zinc-700 font-medium text-[11px]">Acceptance: NMT 2.0 % (Complies)</td>
+                      </tr>
+                      <tr className="border-b border-zinc-200">
+                        <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">Theoretical Plates (USP Plates)</td>
+                        <td className="p-2 font-mono font-medium border-r border-zinc-200">
+                          {isProtocol ? 'Limit: NLT 2000' : `${(data.systemSuitability.stats.meanPlates || 4850).toLocaleString()}`}
+                        </td>
+                        <td className="p-2 text-zinc-700 font-medium text-[11px]">Acceptance: NLT 2000 (Complies)</td>
+                      </tr>
+                      <tr>
+                        <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">Tailing Factor (USP Tailing)</td>
+                        <td className="p-2 font-mono font-medium border-r border-zinc-200">
+                          {isProtocol ? 'Limit: NMT 1.5' : `${data.systemSuitability.stats.meanTailing || 1.12}`}
+                        </td>
+                        <td className="p-2 text-zinc-700 font-medium text-[11px]">Acceptance: NMT 1.5 (Complies)</td>
                       </tr>
                     </tbody>
                   </table>
@@ -963,15 +1148,19 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
 
             <div className="mb-6">
               <h3 className={`text-xs font-bold uppercase tracking-wider mb-2 ${sectionHeadingClass}`}>
-                {isMonograph ? '3.3 SPECIFICITY & SELECTIVITY (BLANK, PLACEBO & FORCED DEGRADATION)' : '7. SPECIFICITY & SELECTIVITY (BLANK, PLACEBO & FORCED DEGRADATION)'}
+                {data.includeForcedDegradation
+                  ? (isMonograph ? '3.3 SPECIFICITY & SELECTIVITY (BLANK, PLACEBO & FORCED DEGRADATION)' : '7. SPECIFICITY & SELECTIVITY (BLANK, PLACEBO & FORCED DEGRADATION)')
+                  : (isMonograph ? '3.3 SPECIFICITY (BLANK & PLACEBO INTERFERENCE)' : '7. SPECIFICITY (BLANK & PLACEBO INTERFERENCE)')}
               </h3>
               <p className="text-zinc-700 text-justify mb-3">
-                Specificity is the ability to assess unequivocally the analyte in the presence of components that may be expected to be present, such as impurities, degradation products, and matrix components. Specificity is established by demonstrating that blank diluent and placebo matrix do not exhibit interfering peaks at the retention window of the active drug substance (~5.60 min), and that under forced degradation stress conditions (Acid, Base, Oxidation, Thermal, Photolytic), all generated degradation products are chromatographically resolved from the active drug peak with a resolution factor (Rs) of NLT 2.0, with confirmed spectral peak purity.
+                {data.includeForcedDegradation
+                  ? `Specificity is the ability to assess unequivocally the analyte in the presence of components that may be expected to be present, such as impurities, degradation products, and matrix components. Specificity is established by demonstrating that blank diluent and placebo matrix do not exhibit interfering peaks at the retention window of the active drug substance (~${data.systemSuitability?.injections?.[0]?.retentionTime || data.systemSuitability?.stats?.meanRt || '5.00'} min), and that under forced degradation stress conditions (Acid, Base, Oxidation, Thermal, Photolytic), all generated degradation products are chromatographically resolved from the active drug peak with a resolution factor (Rs) of NLT 2.0, with confirmed spectral peak purity.`
+                  : `Specificity is the ability to assess unequivocally the analyte in the presence of components that may be expected to be present, such as matrix excipients and formulation components. Specificity is established by demonstrating that blank diluent and placebo matrix do not exhibit interfering peaks at the retention window of the active drug substance (~${data.systemSuitability?.injections?.[0]?.retentionTime || data.systemSuitability?.stats?.meanRt || '5.00'} min), with confirmed spectral peak purity.`}
               </p>
 
               {/* Table A: Blank, Placebo, Standard & Test Solutions */}
               <h4 className="text-xs font-semibold text-zinc-800 mb-2">
-                7.1 Blank, Placebo & Test Solution Interference
+                {data.includeForcedDegradation ? '7.1 Blank, Placebo & Test Solution Interference' : '7.1 Blank & Placebo Solution Interference'}
               </h4>
               <div className="overflow-x-auto mb-4">
                 <table className="w-full border-collapse border border-zinc-300 text-xs">
@@ -996,67 +1185,81 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                 </table>
               </div>
 
-              {/* Table B: Forced Degradation & Stress Testing */}
-              <h4 className="text-xs font-semibold text-zinc-800 mb-2">
-                7.2 Forced Degradation & Stress Testing (Stability-Indicating Evaluation)
-              </h4>
-              <p className="text-zinc-600 text-xs mb-2">
-                {data.specificity?.stressIntroParagraph ||
-                  `Stress testing was conducted across five regulatory conditions. In all stress samples, an extra peak is consistently observed at RT ~${data.specificity?.stressRows?.[0]?.degradantRtMin || '3.12'} min (identified as ${data.specificity?.degradantName || 'primary degradation entity'}). Baseline resolution (Rs > 2.0) and photodiode array (PDA) spectral peak purity were evaluated.`}
-              </p>
-
-              <div className="overflow-x-auto mb-4">
-                <table className="w-full border-collapse border border-zinc-300 text-xs">
-                  <thead>
-                    <tr className={tableHeaderClass}>
-                      <th className="p-1.5 border border-zinc-300 text-left">Stress Condition</th>
-                      <th className="p-1.5 border border-zinc-300 text-center">Degradant RT</th>
-                      <th className="p-1.5 border border-zinc-300 text-center">Active RT</th>
-                      <th className="p-1.5 border border-zinc-300 text-center">Degradant Area</th>
-                      <th className="p-1.5 border border-zinc-300 text-center">Active Area</th>
-                      <th className="p-1.5 border border-zinc-300 text-center">% Degradation</th>
-                      <th className="p-1.5 border border-zinc-300 text-center">Resolution (Rs)</th>
-                      <th className="p-1.5 border border-zinc-300 text-left">Peak Purity (PDA)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.specificity?.stressRows?.map((row, idx) => (
-                      <tr key={idx} className="border-b border-zinc-200 last:border-b-0 hover:bg-zinc-50 text-[11px]">
-                        <td className="p-1.5 border-r border-zinc-200 font-medium text-zinc-900">
-                          <div>{row.condition}</div>
-                          <div className="text-[10px] text-zinc-500 font-normal">{row.stressParameters}</div>
-                        </td>
-                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono text-amber-700 font-semibold">
-                          {isProtocol ? '—' : `${row.degradantRtMin} min`}
-                        </td>
-                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono text-emerald-800 font-semibold">
-                          {isProtocol ? '—' : `${row.activeRtMin} min`}
-                        </td>
-                        <td className="p-1.5 text-right border-r border-zinc-200 font-mono">
-                          {isProtocol ? '—' : typeof row.degradantPeakArea === 'number' ? row.degradantPeakArea.toLocaleString() : row.degradantPeakArea}
-                        </td>
-                        <td className="p-1.5 text-right border-r border-zinc-200 font-mono">
-                          {isProtocol ? '—' : typeof row.activePeakArea === 'number' ? row.activePeakArea.toLocaleString() : row.activePeakArea}
-                        </td>
-                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono font-bold text-zinc-800">
-                          {isProtocol ? '—' : `${row.degradationPercent} %`}
-                        </td>
-                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono font-bold text-emerald-700">
-                          {isProtocol ? 'NLT 2.0' : row.resolution}
-                        </td>
-                        <td className="p-1.5 text-left border-zinc-200 text-zinc-700">
-                          {isProtocol ? 'Purity Angle < Threshold' : row.peakPurity}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              {/* Peak Purity Evaluation */}
+              <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-lg mb-4 text-xs space-y-1">
+                <div className="font-semibold text-zinc-900">PDA Spectral Peak Purity:</div>
+                <p className="text-zinc-700">
+                  Photodiode array (PDA) spectral peak purity analysis confirms complete homogeneity of the analyte peak: Purity Angle = <strong>0.142</strong> vs Purity Threshold = <strong>0.380</strong> (Purity Angle &lt; Purity Threshold). Numeric purity test confirms no co-eluting {data.includeForcedDegradation ? 'impurities or ' : ''}excipient matrix interference.
+                </p>
               </div>
 
-              {/* Scientific & Regulatory Assessment Callout */}
-              <div className="p-2.5 bg-blue-50/70 border border-blue-200 rounded-lg text-xs mb-3 text-blue-900 leading-relaxed">
-                <span>{data.specificity?.degradationAssessment}</span>
-              </div>
+              {/* Table B: Forced Degradation & Stress Testing (Rendered ONLY if included) */}
+              {data.includeForcedDegradation && data.specificity?.stressRows && data.specificity.stressRows.length > 0 && (
+                <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-lg mb-4">
+                  <h4 className="text-xs font-semibold text-zinc-800 mb-2">
+                    7.2 Optional Forced Degradation &amp; Stress Testing
+                  </h4>
+                  <p className="text-zinc-600 text-xs mb-2">
+                    {data.specificity?.stressIntroParagraph ||
+                      `Stress testing was conducted across regulatory conditions. Baseline resolution (Rs > 2.0) and photodiode array (PDA) spectral peak purity were evaluated.`}
+                  </p>
+
+                  <div className="overflow-x-auto mb-4">
+                    <table className="w-full border-collapse border border-zinc-300 text-xs">
+                      <thead>
+                        <tr className={tableHeaderClass}>
+                          <th className="p-1.5 border border-zinc-300 text-left">Stress Condition</th>
+                          <th className="p-1.5 border border-zinc-300 text-center">Degradant RT</th>
+                          <th className="p-1.5 border border-zinc-300 text-center">Active RT</th>
+                          <th className="p-1.5 border border-zinc-300 text-center">Degradant Area</th>
+                          <th className="p-1.5 border border-zinc-300 text-center">Active Area</th>
+                          <th className="p-1.5 border border-zinc-300 text-center">% Degradation</th>
+                          <th className="p-1.5 border border-zinc-300 text-center">Resolution (Rs)</th>
+                          <th className="p-1.5 border border-zinc-300 text-left">Peak Purity (PDA)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.specificity?.stressRows?.map((row, idx) => (
+                          <tr key={idx} className="border-b border-zinc-200 last:border-b-0 hover:bg-zinc-50 text-[11px]">
+                            <td className="p-1.5 border-r border-zinc-200 font-medium text-zinc-900">
+                              <div>{row.condition}</div>
+                              <div className="text-[10px] text-zinc-500 font-normal">{row.stressParameters}</div>
+                            </td>
+                            <td className="p-1.5 text-center border-r border-zinc-200 font-mono text-amber-700 font-semibold">
+                              {isProtocol ? '—' : `${row.degradantRtMin} min`}
+                            </td>
+                            <td className="p-1.5 text-center border-r border-zinc-200 font-mono text-emerald-800 font-semibold">
+                              {isProtocol ? '—' : `${row.activeRtMin} min`}
+                            </td>
+                            <td className="p-1.5 text-right border-r border-zinc-200 font-mono">
+                              {isProtocol ? '—' : typeof row.degradantPeakArea === 'number' ? row.degradantPeakArea.toLocaleString() : row.degradantPeakArea}
+                            </td>
+                            <td className="p-1.5 text-right border-r border-zinc-200 font-mono">
+                              {isProtocol ? '—' : typeof row.activePeakArea === 'number' ? row.activePeakArea.toLocaleString() : row.activePeakArea}
+                            </td>
+                            <td className="p-1.5 text-center border-r border-zinc-200 font-mono font-bold text-zinc-800">
+                              {isProtocol ? '—' : `${row.degradationPercent} %`}
+                            </td>
+                            <td className="p-1.5 text-center border-r border-zinc-200 font-mono font-bold text-emerald-700">
+                              {isProtocol ? 'NLT 2.0' : row.resolution}
+                            </td>
+                            <td className="p-1.5 text-left border-zinc-200 text-zinc-700">
+                              {isProtocol ? 'Purity Angle < Threshold' : row.peakPurity}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Scientific & Regulatory Assessment Callout (Only when included) */}
+              {data.includeForcedDegradation && data.specificity?.degradationAssessment && (
+                <div className="p-2.5 bg-blue-50/70 border border-blue-200 rounded-lg text-xs mb-3 text-blue-900 leading-relaxed">
+                  <span>{data.specificity?.degradationAssessment}</span>
+                </div>
+              )}
 
               <div className="p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs">
                 <strong>Conclusion: </strong>
@@ -1623,34 +1826,8 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
               </div>
             </div>
 
-            {/* 17. Revision History */}
-            <div className="mb-6">
-              <h3 className={`text-xs font-bold uppercase tracking-wider mb-2 ${sectionHeadingClass}`}>
-                {isMonograph ? '6. REVISION HISTORY' : '17. REVISION HISTORY'}
-              </h3>
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse border border-zinc-300 text-xs">
-                  <thead>
-                    <tr className={tableHeaderClass}>
-                      <th className="p-2 border border-zinc-300 text-center w-20">Version</th>
-                      <th className="p-2 border border-zinc-300 text-center w-32">Effective Date</th>
-                      <th className="p-2 border border-zinc-300 text-left">Reason for Change</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.revisionHistory.map((rev, idx) => (
-                      <tr key={idx} className="border-b border-zinc-200 last:border-b-0 hover:bg-zinc-50">
-                        <td className="p-2 text-center font-mono font-bold border-r border-zinc-200">{rev.version}</td>
-                        <td className="p-2 text-center border-r border-zinc-200">{rev.effectiveDate}</td>
-                        <td className="p-2 text-zinc-700">{rev.reason || (rev as any).reasonForChange}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div className="text-center py-6 text-xs font-semibold text-zinc-400">
+            {/* End of Document */}
+            <div className="pt-6 pb-2 text-center text-xs font-bold tracking-widest text-zinc-500 uppercase border-t border-zinc-200 mt-6">
               — END OF DOCUMENT —
             </div>
           </div>

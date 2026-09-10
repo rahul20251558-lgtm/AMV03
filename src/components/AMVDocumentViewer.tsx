@@ -7,6 +7,7 @@ import {
   AccuracyRecoveryRow,
   FontFamilyType,
   FontSizePt,
+  DataMode,
 } from '../types';
 import { formatNum, formatInt } from '../services/mathUtils';
 import { LinearityChart } from './LinearityChart';
@@ -24,6 +25,7 @@ interface AMVDocumentViewerProps {
   data: AMVDocumentData;
   docType: DocumentType;
   theme: ThemeFormat;
+  dataMode?: 'TEMPLATE' | 'DEMO';
   fontFamily?: FontFamilyType;
   fontSize?: FontSizePt;
   onFontFamilyChange?: (font: FontFamilyType) => void;
@@ -40,6 +42,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
   data,
   docType,
   theme,
+  dataMode = 'DEMO',
   fontFamily = 'Times New Roman',
   fontSize = 12,
   onFontFamilyChange,
@@ -55,6 +58,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
   const [showChart, setShowChart] = useState(false);
   const isProtocol = docType === 'protocol';
   const isBlue = theme === 'blue';
+  const currentMode: DataMode = dataMode === 'TEMPLATE' ? 'TEMPLATE' : 'DEMO';
 
   const fontStyle: React.CSSProperties = {
     fontFamily:
@@ -125,8 +129,13 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
 
   // Running footer component for each page (Page X of 8)
   const RunningFooter = ({ pageNum }: { pageNum: number }) => (
-    <div className="text-center pt-3 mt-5 border-t border-zinc-200 text-[11px] text-zinc-400 font-sans">
-      Page {pageNum} of 8
+    <div className="pt-3 mt-5 border-t border-zinc-200 text-[11px] text-zinc-400 font-sans space-y-1">
+      {dataMode === 'DEMO' && (
+        <div className="text-center font-bold text-[11px] text-amber-700 tracking-wider uppercase">
+          DEMO / FORMAT-DEMONSTRATION ONLY — NOT FOR GMP USE
+        </div>
+      )}
+      <div className="text-center">Page {pageNum} of 8</div>
     </div>
   );
 
@@ -286,6 +295,11 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
               ? 'ANALYTICAL METHOD VALIDATION PROTOCOL (Assay by HPLC)'
               : 'ANALYTICAL METHOD VALIDATION REPORT (Assay by HPLC)'}
           </h2>
+          {dataMode === 'DEMO' && (
+            <div className="inline-block mt-2 px-3 py-1 bg-amber-100 border border-amber-300 rounded text-amber-900 font-bold text-xs tracking-wider uppercase">
+              DEMO / FORMAT-DEMONSTRATION ONLY — NOT FOR GMP USE
+            </div>
+          )}
         </div>
 
         {/* Metadata Table */}
@@ -1450,38 +1464,9 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
           </div>
         </div>
 
-        {/* 15. Revision History */}
-        <div className="mb-6">
-          <h3 className={`text-xs font-bold uppercase mb-2 ${sectionHeadingClass}`}>
-            15. Revision History
-          </h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs border-collapse border border-zinc-300">
-              <thead>
-                <tr className={tableHeaderClass}>
-                  <th className="p-2 border border-zinc-300 text-center w-20">Version</th>
-                  <th className="p-2 border border-zinc-300 text-center w-36">Effective Date</th>
-                  <th className="p-2 border border-zinc-300 text-left">Reason for Change</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.revisionHistory.map((rh, idx) => (
-                  <tr key={idx}>
-                    <td className="p-1.5 border border-zinc-300 text-center font-mono font-bold text-zinc-900">{rh.version}</td>
-                    <td className="p-1.5 border border-zinc-300 text-center font-mono text-zinc-800">{rh.effectiveDate}</td>
-                    <td className="p-1.5 border border-zinc-300 text-zinc-800">{rh.reason}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* End of Document Mark */}
-        <div className="text-center pt-6 pb-2">
-          <p className="text-xs font-bold text-zinc-400 tracking-widest uppercase">
-            — END OF DOCUMENT —
-          </p>
+        {/* End of Document */}
+        <div className="pt-6 pb-2 text-center text-xs font-bold tracking-widest text-zinc-500 uppercase border-t border-zinc-200 mt-6">
+          — END OF DOCUMENT —
         </div>
 
         <RunningFooter pageNum={8} />

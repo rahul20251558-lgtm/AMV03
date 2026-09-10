@@ -22,6 +22,7 @@ export interface RSDocxOptions {
   theme: ThemeFormat;
   fontFamily?: string;
   fontSize?: number;
+  dataMode?: 'TEMPLATE' | 'DEMO';
 }
 
 export async function generateAndDownloadRSAMVDocx(
@@ -252,6 +253,25 @@ export async function generateAndDownloadRSAMVDocx(
     })
   );
 
+  // If DEMO mode, add prominent regulatory disclaimer callout
+  if (options.dataMode === 'DEMO') {
+    docElements.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 80, after: 120 },
+        children: [
+          new TextRun({
+            text: '*** DEMO / FORMAT-DEMONSTRATION ONLY — NOT FOR GMP USE ***',
+            bold: true,
+            size: 20,
+            font: FONT_FAMILY,
+            color: 'B45309',
+          }),
+        ],
+      })
+    );
+  }
+
   // Metadata Table
   const metaColWidths = [2800, 7106];
   const metaRows: TableRow[] = [
@@ -261,7 +281,7 @@ export async function generateAndDownloadRSAMVDocx(
     ]),
     createRow([
       createDataCell(isProtocol ? 'Protocol Date' : 'Report Date', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
-      createDataCell(isProtocol ? data.protocolDate : (data.reportDate || '17/07/2024'), AlignmentType.LEFT, false, undefined, 7106),
+      createDataCell(isProtocol ? data.protocolDate : (data.reportDate || '17-Jul-2024'), AlignmentType.LEFT, false, undefined, 7106),
     ]),
     createRow([
       createDataCell('Product Name', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
@@ -300,25 +320,25 @@ export async function generateAndDownloadRSAMVDocx(
       createDataCell('Prepared By', AlignmentType.LEFT, true, undefined, 2200),
       createDataCell(data.signOffs.preparedBy.designation, AlignmentType.LEFT, false, undefined, 2600),
       createDataCell(data.signOffs.preparedBy.name, AlignmentType.LEFT, false, undefined, 2600),
-      createDataCell(isProtocol ? `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.dateProtocol || '09/07/2024'}` : `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.dateReport || data.signOffs.preparedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
+      createDataCell(isProtocol ? `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.dateProtocol || '09-Jul-2024'}` : `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.dateReport || data.signOffs.preparedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
     ]),
     createRow([
       createDataCell('Checked By', AlignmentType.LEFT, true, undefined, 2200),
       createDataCell(data.signOffs.checkedBy.designation, AlignmentType.LEFT, false, undefined, 2600),
       createDataCell(data.signOffs.checkedBy.name, AlignmentType.LEFT, false, undefined, 2600),
-      createDataCell(isProtocol ? `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.dateProtocol || '09/07/2024'}` : `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.dateReport || data.signOffs.checkedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
+      createDataCell(isProtocol ? `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.dateProtocol || '09-Jul-2024'}` : `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.dateReport || data.signOffs.checkedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
     ]),
     createRow([
       createDataCell('Reviewed By', AlignmentType.LEFT, true, undefined, 2200),
       createDataCell(data.signOffs.reviewedBy.designation, AlignmentType.LEFT, false, undefined, 2600),
       createDataCell(data.signOffs.reviewedBy.name, AlignmentType.LEFT, false, undefined, 2600),
-      createDataCell(isProtocol ? `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.dateProtocol || '10/07/2024'}` : `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.dateReport || data.signOffs.reviewedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
+      createDataCell(isProtocol ? `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.dateProtocol || '10-Jul-2024'}` : `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.dateReport || data.signOffs.reviewedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
     ]),
     createRow([
       createDataCell('Authorised By', AlignmentType.LEFT, true, undefined, 2200),
       createDataCell(data.signOffs.authorisedBy.designation, AlignmentType.LEFT, false, undefined, 2600),
       createDataCell(data.signOffs.authorisedBy.name, AlignmentType.LEFT, false, undefined, 2600),
-      createDataCell(isProtocol ? `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.dateProtocol || '10/07/2024'}` : `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.dateReport || data.signOffs.authorisedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
+      createDataCell(isProtocol ? `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.dateProtocol || '10-Jul-2024'}` : `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.dateReport || data.signOffs.authorisedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
     ]),
   ];
   docElements.push(createDocxTable(signColWidths, signRows));
@@ -485,20 +505,24 @@ export async function generateAndDownloadRSAMVDocx(
   // 6. System Suitability
   docElements.push(createSectionHeader('6. SYSTEM SUITABILITY', 120, 50));
   const ssInjLabel = isProtocol ? 'Working Standard Weight (mg)' : 'Working Standard Weight (mg)';
-  const ssColWidths = [1200, 2800, 2900, 3006];
+  const ssColWidths = [1000, 2400, 2300, 1600, 1600, 1006];
   const ssRows: TableRow[] = [
     createRow([
-      createHeaderCell('Sr. No.', 1200),
-      createHeaderCell(ssInjLabel, 2800),
-      createHeaderCell('Peak Area', 2900),
-      createHeaderCell('Remark', 3006),
+      createHeaderCell('Sr. No.', 1000),
+      createHeaderCell(ssInjLabel, 2400),
+      createHeaderCell('Peak Area', 2300),
+      createHeaderCell('Tailing Factor', 1600),
+      createHeaderCell('Theoretical Plates', 1600),
+      createHeaderCell('Remark', 1006),
     ], true),
     ...data.systemSuitability.injections.map((inj, i) =>
       createRow([
-        createDataCell(inj.srNo, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1200),
-        createDataCell(isProtocol ? '' : inj.weightMg, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 2800),
-        createDataCell(isProtocol ? '' : inj.peakArea, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 2900),
-        createDataCell(isProtocol ? '' : inj.remark, AlignmentType.LEFT, false, i % 2 === 1 ? altRowBgColor : undefined, 3006),
+        createDataCell(inj.srNo, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1000),
+        createDataCell(isProtocol ? '' : inj.weightMg, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 2400),
+        createDataCell(isProtocol ? '' : inj.peakArea, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 2300),
+        createDataCell(isProtocol ? '' : (inj.tailingFactor ?? '1.12'), AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1600),
+        createDataCell(isProtocol ? '' : typeof inj.theoreticalPlates === 'number' ? inj.theoreticalPlates.toLocaleString() : (inj.theoreticalPlates ?? '4,850'), AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1600),
+        createDataCell(isProtocol ? '' : inj.remark, AlignmentType.LEFT, false, i % 2 === 1 ? altRowBgColor : undefined, 1006),
       ])
     ),
   ];
@@ -832,23 +856,8 @@ export async function generateAndDownloadRSAMVDocx(
       ])
     ),
   ];
-  docElements.push(createDocxTable(abbrColWidths, abbrRows));
-
-  // 16. Revision History
-  docElements.push(createSectionHeader('16. REVISION HISTORY', 120, 50));
-  const revColWidths = [1500, 2500, 5906];
-  const revRows: TableRow[] = [
-    createRow([createHeaderCell('Version', 1500), createHeaderCell('Effective Date', 2500), createHeaderCell('Reason for Change', 5906)], true),
-    ...data.revisionHistory.map((rev, i) =>
-      createRow([
-        createDataCell(rev.version, AlignmentType.CENTER, true, i % 2 === 1 ? altRowBgColor : undefined, 1500),
-        createDataCell(rev.effectiveDate, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 2500),
-        createDataCell(rev.reason, AlignmentType.LEFT, false, i % 2 === 1 ? altRowBgColor : undefined, 5906),
-      ])
-    ),
-  ];
   docElements.push(
-    createDocxTable(revColWidths, revRows),
+    createDocxTable(abbrColWidths, abbrRows),
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { before: 200, after: 100 },
@@ -884,6 +893,22 @@ export async function generateAndDownloadRSAMVDocx(
 
   const docFooter = new Footer({
     children: [
+      ...(options.dataMode === 'DEMO'
+        ? [
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [
+                new TextRun({
+                  text: 'DEMO / FORMAT-DEMONSTRATION ONLY — NOT FOR GMP USE',
+                  size: 15,
+                  bold: true,
+                  color: 'B45309',
+                  font: FONT_FAMILY,
+                }),
+              ],
+            }),
+          ]
+        : []),
       new Paragraph({
         alignment: AlignmentType.CENTER,
         spacing: { before: 100 },
