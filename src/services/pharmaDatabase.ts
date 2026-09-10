@@ -6,6 +6,7 @@ import {
   generatePrecisionData,
   generateAccuracyRecoveryData,
   createSeededRandom,
+  extractDynamicLabelClaim,
 } from './pharmaMathEngine';
 
 export interface UniqueCodes {
@@ -992,6 +993,12 @@ export function buildFullAMVDataFromMonograph(
     ...(existingCodes || {}),
   };
 
+  
+  const extracted = extractDynamicLabelClaim(productName, mono.testParameter, mono.activeSubstance, mono.labelClaim);
+  let dynamicLabelClaim = extracted.labelClaim;
+  let dynamicActiveSubstance = extracted.activeSubstance;
+
+
   const baseArea = mono.nominalArea;
   const rt = mono.retentionTimeMin;
   const nominalWeight = mono.targetNominalWeight;
@@ -1153,7 +1160,7 @@ export function buildFullAMVDataFromMonograph(
   }));
 
   reagents.push({
-    name: `${mono.activeSubstance} RS`,
+    name: `${dynamicActiveSubstance} RS`,
     grade: 'USP Reference Standard',
     make: 'USP',
     batchNo: codes.referenceStandardLot,
@@ -1231,8 +1238,8 @@ export function buildFullAMVDataFromMonograph(
     protocolDate: '01-Apr-2026',
     reportDate: codes.approvedDate || '20-Apr-2026',
     productName: productName,
-    activeSubstance: mono.activeSubstance,
-    labelClaim: mono.labelClaim,
+    activeSubstance: dynamicActiveSubstance,
+    labelClaim: dynamicLabelClaim,
     testParameter: 'Assay by HPLC',
     reference: mono.reference,
     batchNoUsed: codes.validationBatchNo,
@@ -1257,14 +1264,14 @@ export function buildFullAMVDataFromMonograph(
       },
     },
 
-    objective: `To validate the HPLC analytical method for quantification of ${mono.activeSubstance} in ${productName} in compliance with ICH Q2(R2) and USP <1225> guidelines.`,
+    objective: `To validate the HPLC analytical method for quantification of ${dynamicActiveSubstance} in ${productName} in compliance with ICH Q2(R2) and USP <1225> guidelines.`,
     scope: `This protocol applies to the validation of the HPLC Assay method for ${productName} manufactured at ${existingCodes?.companyName || 'Westcoast Pharmaceutical Works Ltd.'}.`,
 
     verificationDetails: {
       reference: mono.reference,
       typeOfVerification:
         'Verification of a compendial assay procedure under actual conditions of use, as per USP <1225> and ICH Q2(R2)',
-      testToBeVerified: `Assay by HPLC (${mono.activeSubstance} content)`,
+      testToBeVerified: `Assay by HPLC (${dynamicActiveSubstance} content)`,
       verificationTeam:
         'Analyst 1: Sahil Panchal (Chemist, QC); Analyst 2: Smit Patel (Executive, QC); Supervisor: Anil Parmar (Manager, QC)',
       experimentalDetails: `Specificity, system suitability, linearity (50 % to 150 %), accuracy / recovery (50 %, 100 %, 150 % or 80 %, 100 %, 120 %), range (80 %, 100 %, 120 %), precision (repeatability) and intermediate precision (six determinations each by 2 analysts on 2 instruments on 2 different days), robustness and stability of analytical solutions up to 24 hours, executed on batch ${codes.validationBatchNo} with the corresponding placebo blend.`,
@@ -1278,11 +1285,11 @@ export function buildFullAMVDataFromMonograph(
       notes: [
         '• AT = Peak area of analyte in the sample chromatogram',
         '• AS = Mean peak area of analyte in standard chromatograms',
-        `• WS = Weight of ${mono.activeSubstance} working standard taken (${nominalWeight.toFixed(1)} mg)`,
+        `• WS = Weight of ${dynamicActiveSubstance} working standard taken (${nominalWeight.toFixed(1)} mg)`,
         '• WT = Weight of powdered dosage unit sample taken (mg)',
         '• AVG_WT = Average weight of 20 dosage units (mg)',
-        `• LC = Label claim of ${mono.activeSubstance} per unit (${mono.labelClaim.match(/(\d+(?:\.\d+)?)\s*(mg|g|mcg|µg)/i)?.[0] || `${nominalWeight} mg`})`,
-        `• Purity = Decimal purity of ${mono.activeSubstance} reference standard`,
+        `• LC = Label claim of ${dynamicActiveSubstance} per unit (${dynamicLabelClaim.match(/(\d+(?:\.\d+)?)\s*(mg|g|mcg|µg)/i)?.[0] || `${nominalWeight} mg`})`,
+        `• Purity = Decimal purity of ${dynamicActiveSubstance} reference standard`,
       ],
     },
     reagentsAndStandards: reagents,
@@ -1308,7 +1315,7 @@ export function buildFullAMVDataFromMonograph(
       rows: specificityRows,
       acceptanceTextProtocol:
         'Acceptance Criteria: No interfering peak from blank or placebo matrix shall co-elute with the active substance peak. Peak purity shall be verified.',
-      conclusionReport: `Conclusion: No peak interference observed at ${mono.activeSubstance} retention time (${rt.toFixed(2)} min) in blank or placebo chromatograms. Peak purity confirmed by PDA detector.`,
+      conclusionReport: `Conclusion: No peak interference observed at ${dynamicActiveSubstance} retention time (${rt.toFixed(2)} min) in blank or placebo chromatograms. Peak purity confirmed by PDA detector.`,
     },
 
     linearity: {

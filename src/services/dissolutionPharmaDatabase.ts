@@ -38,6 +38,7 @@ import {
   generatePrecisionData,
   generateAccuracyRecoveryData,
   createSeededRandom,
+  extractDynamicLabelClaim,
 } from './pharmaMathEngine';
 
 export interface DissolutionMonographInfo {
@@ -677,6 +678,12 @@ export function buildFullDissolutionAMVData(
     mono = { ...mono, ...overrides.verifiedMonograph };
   }
 
+  
+  const extracted = extractDynamicLabelClaim(productName, mono.testParameter, mono.productName, mono.labelClaim);
+  let dynamicLabelClaim = extracted.labelClaim;
+  let dynamicActiveSubstance = extracted.activeSubstance;
+
+
   const includeForcedDegradation = overrides?.includeForcedDegradation === true;
   const company = overrides?.companyName || 'WESTCOAST PHARMACEUTICAL WORKS LTD.';
   const protocolNo = overrides?.protocolNo || 'WC/QC/AMV/0316';
@@ -714,7 +721,7 @@ export function buildFullDissolutionAMVData(
   const nominalArea = computeNominalDissolutionPeakArea(mono.productName || productName, mono.wavelengthNum || 240);
 
   // 1. Reagents & Reference Standards specific to this drug
-  const drugKeyName = (mono.productName.split(' ')[0] || 'Active').replace(/[^a-zA-Z]/g, '');
+  const drugKeyName = (dynamicActiveSubstance || mono.productName.split(' ')[0] || 'Active').replace(/[^a-zA-Z]/g, '');
   const requirements: DissolutionRequirementItem[] = [
     {
       name: `${drugKeyName} Working Standard`,

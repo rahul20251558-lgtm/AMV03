@@ -23,6 +23,7 @@ import {
   generateAccuracyRecoveryData,
   createSeededRandom,
   normalRandom,
+  extractDynamicLabelClaim,
 } from './pharmaMathEngine';
 
 export interface RSMonographSeed {
@@ -1150,6 +1151,12 @@ export function buildFullRSAMVData(
     seed = { ...seed, ...options.verifiedMonograph };
   }
 
+  
+  const extracted = extractDynamicLabelClaim(productName, seed.testParameter, seed.activeSubstance, seed.labelClaim);
+  let dynamicLabelClaim = extracted.labelClaim;
+  let dynamicActiveSubstance = extracted.activeSubstance;
+
+
   const docNo = options?.protocolNo || 'WC/QC/AMV/0285';
   const docDate = options?.protocolDate || '09-Jul-2024';
   const batchNo = options?.batchNo || `WC-${productName.substring(0, 3).toUpperCase()}-2401`;
@@ -1361,7 +1368,7 @@ export function buildFullRSAMVData(
     reportNo: reportNumber,
     reportDate: '17-Jul-2024',
     productName: seed.productName,
-    labelClaim: `${strengthNum} ${unit}`,
+    labelClaim: dynamicLabelClaim,
     testParameter: seed.testParameter,
     reference: seed.reference,
     batchNoUsed: batchNo,
