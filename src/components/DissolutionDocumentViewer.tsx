@@ -5,6 +5,7 @@ import { recalculateDissolutionSystemSuitability } from '../services/pharmaMathE
 import { FontAndSizeControl } from './FontAndSizeControl';
 import { verifyConcentrationScale } from '../services/selfAuditEngine';
 import { getProductDegradantProfile } from '../services/complianceAuditGate';
+import { getCleanDrugDisplayName } from '../services/postGenerationSanitizer';
 
 interface DissolutionDocumentViewerProps {
   data: DissolutionAMVDocumentData;
@@ -194,7 +195,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
     const batchNo = data.batchNoUsed || 'TB2501';
     const activeRt = Number(data.systemSuitability?.injections?.[0]?.retentionTime) || 5.00;
     const activeRtDisplay = activeRt.toFixed(2);
-    const drugKeyName = data.productName.replace(/Tablets|Capsules|USP|BP|IP/gi, '').trim();
+    const drugKeyName = getCleanDrugDisplayName(data.productName);
     const degRt = Number((activeRt * 0.65).toFixed(2));
     const degRrt = Number((degRt / activeRt).toFixed(2));
 

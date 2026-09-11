@@ -208,7 +208,10 @@ export function App() {
     // Instant real-time regeneration on product change (0 ms lag)
     if (validationMethod === 'dissolution') {
       const localDiss = buildFullDissolutionAMVData(newProduct, {
-        verifiedMonograph: fpsOverrides ? { ...fpsOverrides, medium: fpsOverrides.diluent, paddleSpeed: '', qLimit: '', apparatus: '', samplingTime: '' } : undefined,
+        verifiedMonograph: fpsOverrides ? {
+          ...fpsOverrides,
+          ...(fpsOverrides.diluent ? { medium: fpsOverrides.diluent } : {}),
+        } : undefined,
         protocolNo: cleanDocNo,
         batchNo: codes.validationBatchNo,
         companyName,
@@ -252,7 +255,10 @@ export function App() {
 
     if (validationMethod === 'dissolution') {
       const localDiss = buildFullDissolutionAMVData(activeProduct, {
-        verifiedMonograph: overrides ? { ...overrides, medium: overrides.diluent, paddleSpeed: '', qLimit: '', apparatus: '', samplingTime: '' } : undefined,
+        verifiedMonograph: overrides ? {
+          ...overrides,
+          ...(overrides.diluent ? { medium: overrides.diluent } : {}),
+        } : undefined,
         protocolNo: documentNo,
         batchNo,
         companyName,
@@ -355,7 +361,10 @@ export function App() {
     try {
       if (validationMethod === 'dissolution') {
         const localDiss = buildFullDissolutionAMVData(productName, {
-          verifiedMonograph: fpsOverrides ? { ...fpsOverrides, medium: fpsOverrides.diluent, paddleSpeed: '', qLimit: '', apparatus: '', samplingTime: '' } : undefined,
+          verifiedMonograph: fpsOverrides ? {
+            ...fpsOverrides,
+            ...(fpsOverrides.diluent ? { medium: fpsOverrides.diluent } : {}),
+          } : undefined,
           protocolNo: documentNo,
           batchNo,
           companyName,

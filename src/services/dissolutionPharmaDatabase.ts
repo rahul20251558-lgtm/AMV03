@@ -29,6 +29,7 @@ import {
   identifyActiveDrug,
 } from './complianceAuditGate';
 import { filterUsedAbbreviations } from './abbreviationFilter';
+import { getCleanDrugDisplayName, postProcessSanitizeDocument } from './postGenerationSanitizer';
 import {
   parseProductStrength,
   computeNominalPeakArea,
@@ -544,9 +545,37 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
     degradantName: 'Pregabalin Related Compound A (4-isobutylpyrrolidin-2-one / Lactam entity)',
     degradantRtMin: 3.12,
   },
+  'vildagliptin tablets 50 mg': {
+    productName: 'Vildagliptin Tablets 50 mg',
+    labelClaim: 'Each tablet contains Vildagliptin 50 mg',
+    testParameter: 'Dissolution of Vildagliptin Tablets by HPLC with UV Detection',
+    reference: 'In-house Monograph / Validated Compendial Standard',
+    qLimit: 'Not less than 75 % (Q) in 45 minutes',
+    samplingTime: '45 minutes',
+    medium: '900 mL of 0.1 M Hydrochloric acid dissolution medium',
+    apparatus: 'Apparatus 2 (paddle)',
+    paddleSpeed: '50 revolutions per minute',
+    mediumTemperature: '37 °C ± 0.5 °C',
+    diluent: 'Dissolution medium / Mobile phase (1:1 v/v)',
+    wavelength: '210 nm',
+    wavelengthNum: 210,
+    column: 'Inertsil ODS-3 C18 (150 mm × 4.6 mm, 5 µm) or equivalent USP L1',
+    mobilePhase: 'Phosphate Buffer pH 6.8 and Acetonitrile (85:15 v/v)',
+    flowRate: '1.0 mL per minute',
+    columnTemperature: '30 °C',
+    injectionVolume: '20 µL',
+    isocraticOrGradient: 'Isocratic',
+    approxRetentionTime: '4.20 min',
+    retentionTimeMin: 4.20,
+    degradantName: 'Vildagliptin Related Compound A (Pyrrolidine-2-carbonitrile degradant)',
+    degradantRtMin: 2.73,
+  },
 };
 
 export function getDissolutionMonograph(productName: string): DissolutionMonographInfo {
+  if (!productName || !productName.trim()) {
+    return DISSOLUTION_COMPENDIUM['tibolone tablets bp 2.5 mg'];
+  }
   const clean = productName.trim().toLowerCase();
   for (const [key, mono] of Object.entries(DISSOLUTION_COMPENDIUM)) {
     const keyClean = key.replace(/tablets?|capsules?|bp|usp|\d+\s*(?:mg|ml|g|mcg)/gi, '').trim();
@@ -556,7 +585,8 @@ export function getDissolutionMonograph(productName: string): DissolutionMonogra
 
     if (
       clean.includes(key) ||
-      key.includes(clean) ||
+      (keyClean.length >= 3 && clean.includes(keyClean)) ||
+      (prodClean.length >= 3 && key.includes(prodClean)) ||
       (prodClean && keyClean && (prodClean === keyClean || prodClean.includes(keyClean) || keyClean.includes(prodClean))) ||
       (prodPrimary.length >= 4 && keyPrimary.length >= 4 && (prodClean.includes(keyPrimary) || keyClean.includes(prodPrimary)))
     ) {
@@ -579,11 +609,13 @@ export function getDissolutionMonograph(productName: string): DissolutionMonogra
   }
 
   // Dynamic scientific compendial synthesizer for custom / newly entered drugs
-  const { strengthNum, unit } = parseProductStrength(productName);
+  const safeName = productName.trim() || 'Tibolone Tablets BP 2.5 mg';
+  const cleanDrugName = getCleanDrugDisplayName(safeName);
+  const { strengthNum, unit } = parseProductStrength(safeName);
   const isCapsule = clean.includes('capsule');
   const isGastro = clean.includes('gastro') || clean.includes('enteric') || clean.includes('delayed');
 
-  const rand = createSeededRandom(productName.toLowerCase());
+  const rand = createSeededRandom(safeName.toLowerCase());
   const wavelengths = [215, 225, 238, 245, 254, 268, 275, 282];
   const chosenWavelength = wavelengths[Math.floor(rand() * wavelengths.length)];
 
@@ -597,10 +629,10 @@ export function getDissolutionMonograph(productName: string): DissolutionMonogra
   }
 
   return {
-    productName: productName.trim(),
-    labelClaim: `Each ${isCapsule ? 'capsule' : 'tablet'} contains active substance ${strengthNum} ${unit}`,
-    testParameter: `Dissolution of ${productName.trim()} by HPLC with UV Detection`,
-    reference: `BP Monograph — ${productName.trim()} (current edition); BP Appendix XII B1; BP Appendix III D; USP <711>; ICH Q2(R2)`,
+    productName: safeName,
+    labelClaim: `Each ${isCapsule ? 'capsule' : 'tablet'} contains ${cleanDrugName} ${strengthNum} ${unit}`,
+    testParameter: `Dissolution of ${cleanDrugName} ${isCapsule ? 'Capsules' : 'Tablets'} by HPLC with UV Detection`,
+    reference: `BP Monograph — ${safeName} (current edition); BP Appendix XII B1; BP Appendix III D; USP <711>; ICH Q2(R2)`,
     qLimit: 'Not less than 75 % (Q) of the stated amount',
     samplingTime: isGastro ? 'Buffer stage: 45 minutes' : '45 minutes',
     medium,
@@ -674,13 +706,27 @@ export function buildFullDissolutionAMVData(
     includeForcedDegradation?: boolean;
   }
 ): DissolutionAMVDocumentData {
-  let mono = getDissolutionMonograph(productName);
+  const safeProductName = (productName && productName.trim()) ? productName.trim() : 'Tibolone Tablets BP 2.5 mg';
+  let mono = getDissolutionMonograph(safeProductName);
   if (overrides?.verifiedMonograph) {
-    mono = { ...mono, ...overrides.verifiedMonograph };
+    const cleanMonograph: Partial<DissolutionMonographInfo> = {};
+    for (const [k, v] of Object.entries(overrides.verifiedMonograph)) {
+      if (v !== undefined && v !== null) {
+        if (typeof v === 'string' && v.trim() !== '') {
+          (cleanMonograph as any)[k] = v.trim();
+        } else if (typeof v === 'number' && !isNaN(v)) {
+          (cleanMonograph as any)[k] = v;
+        }
+      }
+    }
+    mono = { ...mono, ...cleanMonograph };
   }
 
-  
-  const extracted = extractDynamicLabelClaim(productName, mono.testParameter, mono.productName, mono.labelClaim);
+  if (!mono.productName || !mono.productName.trim()) {
+    mono.productName = safeProductName;
+  }
+
+  const extracted = extractDynamicLabelClaim(safeProductName, mono.testParameter, mono.productName, mono.labelClaim);
   let dynamicLabelClaim = extracted.labelClaim;
   let dynamicActiveSubstance = extracted.activeSubstance;
 
@@ -722,13 +768,15 @@ export function buildFullDissolutionAMVData(
   const nominalArea = computeNominalDissolutionPeakArea(mono.productName || productName, mono.wavelengthNum || 240);
 
   // 1. Reagents & Reference Standards specific to this drug
-  const drugKeyName = (dynamicActiveSubstance || mono.productName.split(' ')[0] || 'Active').replace(/[^a-zA-Z]/g, '');
+  const referenceStandardDisplayName = getCleanDrugDisplayName(mono.productName || productName, dynamicActiveSubstance);
+  const drugKeyName = referenceStandardDisplayName;
+  const drugCode = (referenceStandardDisplayName.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase()) || 'ACT';
   const requirements: DissolutionRequirementItem[] = [
     {
       name: `${drugKeyName} Working Standard`,
       grade: 'Characterised WS — potency on anhydrous/as-is basis',
       make: 'In-house / Primary Reference Standard',
-      batchNo: `WS/${drugKeyName.substring(0, 3).toUpperCase()}/2401`,
+      batchNo: `WS/${drugCode}/2401`,
     },
     {
       name: mono.productName,
@@ -740,13 +788,13 @@ export function buildFullDissolutionAMVData(
       name: `${drugKeyName} BPCRS / USP Reference Standard`,
       grade: 'Official Compendial Chemical Reference Standard',
       make: 'EDQM / USP Convention',
-      batchNo: `CRS-${drugKeyName.substring(0, 3).toUpperCase()}-981`,
+      batchNo: `CRS-${drugCode}-981`,
     },
     {
       name: `Placebo Matrix (${mono.productName})`,
       grade: 'As per approved master formula without active API',
       make: company,
-      batchNo: `PL/${drugKeyName.substring(0, 3).toUpperCase()}/2401`,
+      batchNo: `PL/${drugCode}/2401`,
     },
     {
       name: 'Methanol R2 / Acetonitrile',
@@ -1208,7 +1256,7 @@ export function buildFullDissolutionAMVData(
       name: `${drugKeyName} Working Standard (WS)`,
       grade: 'In-house Characterised Working Standard',
       make: 'In-house QC Reference Laboratory',
-      lotNo: `WS/${drugKeyName.substring(0, 3).toUpperCase()}/2025/01`,
+      lotNo: `WS/${drugCode}/2025/01`,
       potency: '99.82 %',
       basis: 'As-is basis (Loss on Drying: 0.18 % w/w)',
       expiryDate: '15-Dec-2026',
@@ -1217,7 +1265,7 @@ export function buildFullDissolutionAMVData(
       name: `${drugKeyName} Official Reference Standard (BPCRS / USP RS)`,
       grade: 'Official Compendial Chemical Reference Substance',
       make: 'EDQM / United States Pharmacopeial Convention',
-      lotNo: `CRS-${drugKeyName.substring(0, 3).toUpperCase()}-9812`,
+      lotNo: `CRS-${drugCode}-9812`,
       potency: '99.90 %',
       basis: 'Anhydrous basis',
       expiryDate: '30-Nov-2027',
@@ -1235,7 +1283,7 @@ export function buildFullDissolutionAMVData(
       name: `Placebo Formulation Matrix (${mono.productName})`,
       grade: 'Master Formula Excipient Blend (API-free)',
       make: company,
-      lotNo: `PL/${drugKeyName.substring(0, 3).toUpperCase()}/2501`,
+      lotNo: `PL/${drugCode}/2501`,
       potency: 'N/A (Excipient composite)',
       basis: 'Finished oral solid dosage matrix',
       expiryDate: '31-May-2028',
@@ -1594,7 +1642,7 @@ export function buildFullDissolutionAMVData(
     protocolDate,
     reportNo,
     reportDate,
-    productName: mono.productName,
+    productName: mono.productName || safeProductName,
     labelClaim: `${strengthNum} ${unit}`,
     testParameter: mono.testParameter,
     reference: mono.reference,
@@ -1850,5 +1898,5 @@ export function buildFullDissolutionAMVData(
   const docText = JSON.stringify({ ...doc, abbreviations: [] });
   doc.abbreviations = filterUsedAbbreviations(doc.abbreviations || [], docText, true);
 
-  return doc;
+  return postProcessSanitizeDocument(doc, 'dissolution');
 }

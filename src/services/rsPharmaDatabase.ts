@@ -15,6 +15,7 @@ import {
   RSAccuracyRecoveryRow,
 } from '../types';
 import { filterUsedAbbreviations } from './abbreviationFilter';
+import { getCleanDrugDisplayName, postProcessSanitizeDocument } from './postGenerationSanitizer';
 import {
   parseProductStrength,
   computeNominalPeakArea,
@@ -77,6 +78,57 @@ function hashString(str: string): number {
 
 // Comprehensive Compendial Related Substances Monographs
 export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
+  vildagliptin: {
+    productName: 'Vildagliptin Tablets 50 mg',
+    activeSubstance: 'Vildagliptin',
+    labelClaim: 'Each tablet contains Vildagliptin 50 mg',
+    testParameter: 'Related Substances (Organic Impurities) by HPLC with UV Detection',
+    reference: 'In-house Monograph / Compendial Reference Standard; ICH Q2(R2); USP <1226>',
+    technique: 'HPLC',
+    detector: 'High Performance Liquid Chromatograph with UV/Vis Detector',
+    column: 'Inertsil ODS-3 C18, 250 mm × 4.6 mm, 5 µm (USP L1)',
+    carrierGasOrMobilePhase: '0.02 M Potassium Dihydrogen Phosphate Buffer pH 6.8 : Acetonitrile (82 : 18 v/v)',
+    injectionTempOrFlowRate: '1.0 mL per minute',
+    detectorTempOrWavelength: 'UV at 210 nm',
+    injectionVolume: '20 µL',
+    splitRatio: 'N/A (HPLC)',
+    ovenProgrammeOrGradient: 'Isocratic for 35 minutes at 30 °C',
+    totalRunTime: '35 minutes',
+    diluent: 'Phosphate Buffer pH 6.8 : Acetonitrile (82 : 18 v/v)',
+    internalStandard: 'N/A (External Standardisation)',
+    relativeRetention: 'With reference to Vildagliptin (RT ~ 9.50 min): Vildagliptin Related Compound A about 0.58',
+    nominalPpm: 500,
+    activeRtMin: 9.50,
+    impurityName: 'Vildagliptin Related Compound A (Pyrrolidine-2-carbonitrile)',
+    impurityRtMin: 5.51,
+    internalStandardRtMin: undefined,
+    nominalArea: 4850000,
+    ovenProgramme: [
+      { timeRange: '0 — 35 min', temperature: '30 °C (Column Oven)', comment: 'Isocratic HPLC elution' },
+    ],
+    solutionPreparation: {
+      internalStandard: 'N/A',
+      testSolution: 'Disperse powdered tablets equivalent to 50.0 mg Vildagliptin in 70 mL diluent, sonicate 20 min, dilute to 100.0 mL (500 µg/mL). Filter through 0.45 µm PTFE filter.',
+      referenceSolution: 'Dilute 1.0 mL of test solution to 100.0 mL with diluent. Further dilute 1.0 mL to 10.0 mL with diluent (0.10 % level, 0.5 µg/mL).',
+      systemSuitabilitySolution: 'Solution containing Vildagliptin Working Standard (500 µg/mL) and Vildagliptin Related Compound A (5 µg/mL).',
+      blank: 'Diluent (Mobile Phase).',
+      placeboSolution: 'Transfer quantity of placebo excipient blend equivalent to one tablet into 100 mL flask, extract with diluent identically, and filter.',
+      handlingNote: 'Keep solutions protected from actinic light. Equilibrate HPLC system until baseline stability is established.',
+    },
+    monographLimits: [
+      { criterion: 'Vildagliptin Related Compound A', limit: 'NMT 0.20 %' },
+      { criterion: 'Any unspecified impurity', limit: 'NMT 0.10 %' },
+      { criterion: 'Total impurities', limit: 'NMT 0.50 %' },
+      { criterion: 'Disregard limit', limit: '0.05 %' },
+    ],
+    requirements: [
+      { name: 'Vildagliptin Working Standard', grade: 'Characterised Working Standard (Potency: 99.82 %)', make: 'In-house QC Lab', batchNo: 'WS/VIL/2025/01' },
+      { name: 'Vildagliptin Related Compound A Reference Standard', grade: 'Compendial Reference Standard (CRS/USP)', make: 'EDQM / USP', batchNo: 'CRS-VIL-A-01' },
+      { name: 'Finished Product Validation Batch', grade: 'Commercial finished formulation', make: 'Manufacturing Site', batchNo: 'VIL-2025-01' },
+      { name: 'Placebo Blend', grade: 'Master Formula excipient composite', make: 'Manufacturing Site', batchNo: 'PL-VIL-2501' },
+      { name: 'Acetonitrile (HPLC Grade)', grade: 'Spectroscopic / HPLC Grade (≥ 99.9 %)', make: 'Merck / Honeywell', batchNo: 'ACN-88421' },
+    ],
+  },
   valproate: {
     productName: 'Sodium Valproate Oral Solution BP 200 mg / 5 mL',
     labelClaim: 'Each 5 mL contains Sodium Valproate BP 200 mg',
@@ -1014,6 +1066,9 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
 };
 
 export function getRSMonograph(productName: string): RSMonographSeed {
+  if (!productName || !productName.trim()) {
+    return RS_MONOGRAPH_LIBRARY.valproate;
+  }
   const norm = productName.trim().toLowerCase();
 
   if (norm.includes('valproate') || norm.includes('valproic')) {
@@ -1064,9 +1119,8 @@ export function getRSMonograph(productName: string): RSMonographSeed {
   const { strengthNum, unit } = parseProductStrength(productName);
 
   const isGC = false;
-  const cleanDrug = productName
-    .replace(/tablets?|capsules?|solution|injection|cream|gel|bp|usp|\d+\s*(?:mg|ml|g|mcg)/gi, '')
-    .trim() || 'Active Pharmaceutical Ingredient';
+  const cleanDrug = getCleanDrugDisplayName(productName, 'Active Pharmaceutical Ingredient');
+  const cleanDrugCode = (cleanDrug.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase()) || 'ACT';
 
   const wavelengths = [215, 225, 238, 245, 254, 268, 275, 282];
   const chosenWavelength = wavelengths[Math.floor(rand() * wavelengths.length)];
@@ -1121,8 +1175,8 @@ export function getRSMonograph(productName: string): RSMonographSeed {
       { criterion: 'Disregard limit', limit: '0.05 %' },
     ],
     requirements: [
-      { name: `${cleanDrug} Working Standard`, grade: 'Characterised WS', make: 'USP / In-house', batchNo: `WS/${cleanDrug.substring(0, 3).toUpperCase()}/2401` },
-      { name: `${impurityName} Reference Standard`, grade: 'Official CRS', make: 'EDQM / USP', batchNo: `CRS-${cleanDrug.substring(0, 3).toUpperCase()}-01` },
+      { name: `${cleanDrug} Working Standard`, grade: 'Characterised WS', make: 'USP / In-house', batchNo: `WS/${cleanDrugCode}/2401` },
+      { name: `${impurityName} Reference Standard`, grade: 'Official CRS', make: 'EDQM / USP', batchNo: `CRS-${cleanDrugCode}-01` },
       { name: 'HPLC Grade Solvents & Reagents', grade: 'HPLC / Spectroscopy grade', make: 'Merck / Honeywell', batchNo: 'SOLV-8821' },
     ],
   };
@@ -1138,13 +1192,27 @@ export function buildFullRSAMVData(
     verifiedMonograph?: Partial<RSMonographSeed>;
   }
 ): RSAMVDocumentData {
-  let seed = getRSMonograph(productName);
+  const safeProductName = (productName && productName.trim()) ? productName.trim() : 'Sodium Valproate Oral Solution BP';
+  let seed = getRSMonograph(safeProductName);
   if (options?.verifiedMonograph) {
-    seed = { ...seed, ...options.verifiedMonograph };
+    const cleanMonograph: Partial<RSMonographSeed> = {};
+    for (const [k, v] of Object.entries(options.verifiedMonograph)) {
+      if (v !== undefined && v !== null) {
+        if (typeof v === 'string' && v.trim() !== '') {
+          (cleanMonograph as any)[k] = v.trim();
+        } else if (typeof v === 'number' && !isNaN(v)) {
+          (cleanMonograph as any)[k] = v;
+        }
+      }
+    }
+    seed = { ...seed, ...cleanMonograph };
   }
 
-  
-  const extracted = extractDynamicLabelClaim(productName, seed.testParameter, seed.activeSubstance || seed.productName.split(' ')[0], seed.labelClaim);
+  if (!seed.productName || !seed.productName.trim()) {
+    seed.productName = safeProductName;
+  }
+
+  const extracted = extractDynamicLabelClaim(safeProductName, seed.testParameter, seed.activeSubstance || seed.productName.split(' ')[0], seed.labelClaim);
   let dynamicLabelClaim = extracted.labelClaim;
   let dynamicActiveSubstance = extracted.activeSubstance;
 
@@ -1178,11 +1246,12 @@ export function buildFullRSAMVData(
   }));
 
   // 2. Specificity
+  const referenceStandardDisplayName = getCleanDrugDisplayName(seed.productName || productName, dynamicActiveSubstance);
   const specificityRows: RSSpecificityRow[] = [
     { solution: 'Blank Solution', retentionTime: '—', peakArea: 'No peak observed', interferenceObserved: 'Nil' },
     { solution: 'Placebo Solution', retentionTime: '—', peakArea: 'No peak observed at analyte retention window', interferenceObserved: 'Nil' },
     {
-      solution: `Reference Standard (${seed.productName.split(' ')[0]})`,
+      solution: `Reference Standard (${referenceStandardDisplayName})`,
       retentionTime: `${seed.activeRtMin} min`,
       peakArea: '3,842,500',
       interferenceObserved: 'Nil — Baseline resolved',
@@ -1615,5 +1684,5 @@ export function buildFullRSAMVData(
   const isVerif = (doc.referenceDetails.reference || '').includes('1226') || (doc.referenceDetails.typeOfStudy || '').toLowerCase().includes('verification');
   doc.abbreviations = filterUsedAbbreviations(doc.abbreviations || [], docText, isVerif);
 
-  return doc;
+  return postProcessSanitizeDocument(doc, 'related_substances');
 }

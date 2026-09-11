@@ -14,9 +14,11 @@
  *  G. Pre-Output Final Gate Runner (Blocks Invalid DOCX Export)
  */
 
+import { validateWordBreaks } from './postGenerationSanitizer';
+
 export interface AuditCheckItem {
   id: string;
-  category: 'Product Identity' | 'Calculation Engine' | 'Data Synchronization' | 'Structural Uniformity' | 'Traceability & Control' | 'Audit Trail & Chronology';
+  category: 'Product Identity' | 'Calculation Engine' | 'Data Synchronization' | 'Structural Uniformity' | 'Traceability & Control' | 'Audit Trail & Chronology' | 'Data Integrity & Formatting';
   title: string;
   status: 'passed' | 'warning' | 'failed';
   message: string;
@@ -374,8 +376,48 @@ export function runPreOutputAuditGate(
   const blockers: string[] = [];
   const warnings: string[] = [];
 
-  const productName = docData?.productName || docData?.methodSummary?.generalInformation?.productName || '';
-  const activeDrug = identifyActiveDrug(productName);
+  // 1. Robust Product Name & Active Drug resolution with fallback scanning
+  let productName = (docData?.productName || docData?.methodSummary?.generalInformation?.productName || '').trim();
+  let activeDrug = identifyActiveDrug(productName);
+
+  if (activeDrug === 'unknown') {
+    const fallbackCandidates = [
+      docData?.activeSubstance,
+      docData?.testParameter,
+      docData?.methodSummary?.generalInformation?.testParameter,
+      docData?.methodSummary?.testParameter,
+      docData?.reference,
+      docData?.referenceDetails?.reference,
+      docData?.referenceDetails?.testToBeVerified,
+      docData?.objective,
+      docData?.labelClaim,
+      docData?.documentTitle,
+      docData?.subTitle,
+    ];
+    for (const cand of fallbackCandidates) {
+      if (typeof cand === 'string' && cand.trim().length > 0) {
+        const detected = identifyActiveDrug(cand);
+        if (detected !== 'unknown') {
+          activeDrug = detected;
+          if (!productName) {
+            const cap = detected.charAt(0).toUpperCase() + detected.slice(1);
+            productName = cand.toLowerCase().includes('capsule')
+              ? `${cap} Capsules`
+              : cand.toLowerCase().includes('solution')
+              ? `${cap} Oral Solution`
+              : `${cap} Tablets`;
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  // Auto-heal docData.productName if it was missing or blank
+  if (!docData.productName && productName) {
+    docData.productName = productName;
+  }
+
   const activeAliases = getActiveDrugAliases(activeDrug);
   const isDissolution = validationMethod === 'dissolution';
 
@@ -404,58 +446,11 @@ export function runPreOutputAuditGate(
     });
   }
 
-
   // -------------------------------------------------------------
   // CHECK 1: Product-Identity Safety & Cross-Contamination Scan (PILLAR A)
   // -------------------------------------------------------------
-  const allTextEntries = extractAllStrings(docData);
-  const foreignDrugs = KNOWN_PHARMA_DRUGS.filter((d) => !activeAliases.has(d.toLowerCase()));
-  const contaminationFindings: Array<{ foreignDrug: string; path: string; snippet: string }> = [];
-
-  for (const entry of allTextEntries) {
-    const lowerText = entry.text.toLowerCase();
-
-    // 1a. Check foreign drug names
-    for (const fDrug of foreignDrugs) {
-      // Use regex word boundary to avoid partial substring false positives (e.g. 'par' in 'parameters')
-      const regex = new RegExp(`\\b${fDrug}\\b`, 'i');
-      if (regex.test(lowerText)) {
-        // Confirm this word isn't part of an allowed active alias
-        const isPartOfActiveAlias = Array.from(activeAliases).some(
-          (alias) => alias.includes(fDrug) && lowerText.includes(alias)
-        );
-        if (!isPartOfActiveAlias) {
-          contaminationFindings.push({
-            foreignDrug: fDrug.toUpperCase(),
-            path: entry.path,
-            snippet: entry.text.length > 80 ? `${entry.text.substring(0, 80)}...` : entry.text,
-          });
-        }
-      }
-    }
-
-    // 1b. Check foreign chemical degradants
-    for (const [ownerDrug, degradants] of Object.entries(KNOWN_DRUG_DEGRADANTS)) {
-      if (!activeAliases.has(ownerDrug.toLowerCase())) {
-        for (const deg of degradants) {
-          if (lowerText.includes(deg.toLowerCase())) {
-            contaminationFindings.push({
-              foreignDrug: `${deg} (Degradant of ${ownerDrug.toUpperCase()})`,
-              path: entry.path,
-              snippet: entry.text.length > 80 ? `${entry.text.substring(0, 80)}...` : entry.text,
-            });
-          }
-        }
-      }
-    }
-  }
-
-  if (contaminationFindings.length > 0) {
-    const findingDesc = contaminationFindings
-      .slice(0, 3)
-      .map((f) => `Found "${f.foreignDrug}" in [${f.path}]: "${f.snippet}"`)
-      .join('; ');
-    const msg = `Cross-product contamination detected! Current product is "${productName}", but ${contaminationFindings.length} foreign reference(s) were found. Generation blocked.`;
+  if (activeDrug === 'unknown' || !productName) {
+    const msg = 'Product Identity Unresolved: Unable to determine active pharmaceutical substance. Please ensure a valid Product Name or Monograph reference is provided.';
     blockers.push(msg);
     checks.push({
       id: 'audit-01-cross-contamination',
@@ -463,16 +458,75 @@ export function runPreOutputAuditGate(
       title: 'Product Identity & Cross-Contamination Scan',
       status: 'failed',
       message: msg,
-      details: findingDesc,
+      details: 'Active drug could not be derived from document fields.',
     });
   } else {
-    checks.push({
-      id: 'audit-01-cross-contamination',
-      category: 'Product Identity',
-      title: 'Product Identity & Cross-Contamination Scan',
-      status: 'passed',
-      message: `Zero cross-product contamination detected. All document elements consistently trace to "${productName}" (${activeDrug.toUpperCase()}).`,
-    });
+    const allTextEntries = extractAllStrings(docData);
+    const foreignDrugs = KNOWN_PHARMA_DRUGS.filter((d) => !activeAliases.has(d.toLowerCase()));
+    const contaminationFindings: Array<{ foreignDrug: string; path: string; snippet: string }> = [];
+
+    for (const entry of allTextEntries) {
+      const lowerText = entry.text.toLowerCase();
+
+      // 1a. Check foreign drug names
+      for (const fDrug of foreignDrugs) {
+        // Use regex word boundary to avoid partial substring false positives (e.g. 'par' in 'parameters')
+        const regex = new RegExp(`\\b${fDrug}\\b`, 'i');
+        if (regex.test(lowerText)) {
+          // Confirm this word isn't part of an allowed active alias
+          const isPartOfActiveAlias = Array.from(activeAliases).some(
+            (alias) => alias.includes(fDrug) && lowerText.includes(alias)
+          );
+          if (!isPartOfActiveAlias) {
+            contaminationFindings.push({
+              foreignDrug: fDrug.toUpperCase(),
+              path: entry.path,
+              snippet: entry.text.length > 80 ? `${entry.text.substring(0, 80)}...` : entry.text,
+            });
+          }
+        }
+      }
+
+      // 1b. Check foreign chemical degradants
+      for (const [ownerDrug, degradants] of Object.entries(KNOWN_DRUG_DEGRADANTS)) {
+        if (!activeAliases.has(ownerDrug.toLowerCase())) {
+          for (const deg of degradants) {
+            if (lowerText.includes(deg.toLowerCase())) {
+              contaminationFindings.push({
+                foreignDrug: `${deg} (Degradant of ${ownerDrug.toUpperCase()})`,
+                path: entry.path,
+                snippet: entry.text.length > 80 ? `${entry.text.substring(0, 80)}...` : entry.text,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    if (contaminationFindings.length > 0) {
+      const findingDesc = contaminationFindings
+        .slice(0, 3)
+        .map((f) => `Found "${f.foreignDrug}" in [${f.path}]: "${f.snippet}"`)
+        .join('; ');
+      const msg = `Cross-product contamination detected! Current product is "${productName}", but ${contaminationFindings.length} foreign reference(s) were found. Generation blocked.`;
+      blockers.push(msg);
+      checks.push({
+        id: 'audit-01-cross-contamination',
+        category: 'Product Identity',
+        title: 'Product Identity & Cross-Contamination Scan',
+        status: 'failed',
+        message: msg,
+        details: findingDesc,
+      });
+    } else {
+      checks.push({
+        id: 'audit-01-cross-contamination',
+        category: 'Product Identity',
+        title: 'Product Identity & Cross-Contamination Scan',
+        status: 'passed',
+        message: `Zero cross-product contamination detected. All document elements consistently trace to "${productName}" (${activeDrug.toUpperCase()}).`,
+      });
+    }
   }
 
   // -------------------------------------------------------------
@@ -490,8 +544,8 @@ export function runPreOutputAuditGate(
     const specViolations: string[] = [];
 
     // 2a. Confirm active substance name or alias is referenced
-    const hasActiveDrug = Array.from(activeAliases).some((alias) => fullSpecNarrative.toLowerCase().includes(alias));
-    if (!hasActiveDrug) {
+    const hasActiveDrug = activeDrug !== 'unknown' && Array.from(activeAliases).some((alias) => fullSpecNarrative.toLowerCase().includes(alias));
+    if (!hasActiveDrug && activeDrug !== 'unknown') {
       specFailed = true;
       specViolations.push(`Section 7 Specificity narrative does not reference active substance "${activeDrug}".`);
     }
@@ -1167,6 +1221,28 @@ export function runPreOutputAuditGate(
       title: 'Major Parameter Change Revision Explanation',
       status: 'passed',
       message: 'Core analytical parameters (Retention Time, Wavelength, Column, Mobile Phase) align with monograph baseline without unrecorded major shifts.',
+    });
+  }
+
+  // Rule 2 & 3: Word-Break & Concatenation Integrity Check (Template-wide)
+  const wordBreakResult = validateWordBreaks(docData);
+  if (!wordBreakResult.valid) {
+    const badTokens = wordBreakResult.suspiciousWords.slice(0, 5).join(', ');
+    checks.push({
+      id: 'audit-14-word-break-integrity',
+      category: 'Data Integrity & Formatting',
+      title: 'Word-Break & Concatenation Integrity',
+      status: 'failed',
+      message: `Template-variable concatenation defect detected! Found unspaced continuous word token(s) >= 20 characters: [${badTokens}]. Variables must be separated by whitespace and reference clean drug names.`,
+    });
+    blockers.push(`Concatenation defect: Found unspaced word token(s) [${badTokens}] in document.`);
+  } else {
+    checks.push({
+      id: 'audit-14-word-break-integrity',
+      category: 'Data Integrity & Formatting',
+      title: 'Word-Break & Concatenation Integrity',
+      status: 'passed',
+      message: 'All text strings verified for clean word boundaries. No concatenated multi-variable tokens (>= 20 characters) detected.',
     });
   }
 

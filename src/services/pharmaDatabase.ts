@@ -1,5 +1,6 @@
 import { AMVDocumentData, ChemicalRequirement, EquipmentRequirement } from '../types';
 import { recalculateAMVData } from './mathUtils';
+import { postProcessSanitizeDocument } from './postGenerationSanitizer';
 import {
   generateSystemSuitabilityInjections,
   generateLinearityData,
@@ -1236,7 +1237,7 @@ export function buildFullAMVDataFromMonograph(productName, mono, existingCodes) 
       }
     ]
   };
-  return recalculateAMVData(doc);
+  return postProcessSanitizeDocument(recalculateAMVData(doc), 'assay');
 }
 
 export function generateUniqueValidationCodes(productName: string): UniqueCodes {

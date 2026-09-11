@@ -5,6 +5,9 @@
  * calibrated specifically to any product's active strength, dosage form, and chromophore.
  */
 
+import { getCleanDrugDisplayName } from './postGenerationSanitizer';
+export { getCleanDrugDisplayName };
+
 export interface GeneratedLinearityLevel {
   levelName: string;
   nominalPercent: number;
@@ -510,24 +513,21 @@ export function extractDynamicLabelClaim(productName: string, testParameter: str
     const strength = singleStrengthMatch[1];
     const unit = singleStrengthMatch[2].toLowerCase();
     
-    // Find active name from test parameter if possible, e.g. "Assay of Paracetamol" -> "Paracetamol"
+    // Find active name cleanly from test parameter, product name, or fallback
     let derivedActive = fallbackActive;
-    const assayMatch = targetActive.match(/Assay of (.+)/i);
-    const dissoMatch = targetActive.match(/Dissolution of (.+)(?: by)?/i);
-    const rsMatch = targetActive.match(/(?:Organic Impurities|Related Substances) (?:of|in) (.+)/i);
-    
-    if (assayMatch) derivedActive = assayMatch[1].trim();
-    else if (dissoMatch) derivedActive = dissoMatch[1].trim();
-    else if (rsMatch) derivedActive = rsMatch[1].trim();
-    else {
-      // Just extract active from product name (everything before strength)
+    const activeFromParam = getCleanDrugDisplayName(targetActive, '');
+    const activeFromName = getCleanDrugDisplayName(name, '');
+
+    if (activeFromParam && activeFromParam !== 'Active' && activeFromParam.length >= 3) {
+      derivedActive = activeFromParam;
+    } else if (activeFromName && activeFromName !== 'Active' && activeFromName.length >= 3) {
+      derivedActive = activeFromName;
+    } else {
       const activesPart = name.substring(0, singleStrengthMatch.index).trim();
-      if (activesPart) derivedActive = activesPart;
+      if (activesPart) derivedActive = getCleanDrugDisplayName(activesPart, fallbackActive);
     }
     
-    // Clean up derived active
-    derivedActive = derivedActive.replace(/ by HPLC| by UV| BP| USP| EP/ig, '').trim();
-    const formattedActive = derivedActive.charAt(0).toUpperCase() + derivedActive.slice(1).toLowerCase();
+    const formattedActive = getCleanDrugDisplayName(derivedActive, fallbackActive);
     
     return {
       activeSubstance: formattedActive,
@@ -535,5 +535,6 @@ export function extractDynamicLabelClaim(productName: string, testParameter: str
     };
   }
   
-  return { activeSubstance: fallbackActive, labelClaim: fallbackLabelClaim };
+  const fallbackClean = getCleanDrugDisplayName(fallbackActive, 'Active');
+  return { activeSubstance: fallbackClean, labelClaim: fallbackLabelClaim };
 }
