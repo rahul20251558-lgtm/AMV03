@@ -1013,9 +1013,9 @@ export const RSAMVDocumentViewer: React.FC<RSAMVDocumentViewerProps> = ({
               {data.completionRecord.map((rec, i) => (
                 <tr key={i} className={i % 2 === 1 ? 'bg-zinc-50' : ''}>
                   <td className="p-1.5 border border-zinc-300 font-semibold text-zinc-800">{rec.particulars}</td>
-                  <td className="p-1.5 border border-zinc-300 text-zinc-700">{isProtocol ? (rec.detailsProtocol || '') : rec.details}</td>
+                  <td className="p-1.5 border border-zinc-300 text-zinc-700">{isProtocol ? (rec.detailsProtocol || '') : (rec.detailsReport || rec.details)}</td>
                   <td className="p-1.5 border border-zinc-300 text-center font-mono text-zinc-600">
-                    {isProtocol ? (rec.signatureDateProtocol || '—') : rec.signatureDate}
+                    {isProtocol ? (rec.signatureDateProtocol || '—') : (rec.signatureDateReport || rec.signatureDate)}
                   </td>
                 </tr>
               ))}

@@ -513,32 +513,69 @@ export function extractDynamicLabelClaim(productName: string, testParameter: str
     const strength = singleStrengthMatch[1];
     const unit = singleStrengthMatch[2].toLowerCase();
     
-    // Find active name cleanly from product name first (SSOT), then fallbackActive, then test parameter
+    // Find active name cleanly from test parameter, product name, or fallback
     let derivedActive = fallbackActive;
-    const activeFromName = getCleanDrugDisplayName(name, '');
     const activeFromParam = getCleanDrugDisplayName(targetActive, '');
+    const activeFromName = getCleanDrugDisplayName(name, '');
 
-    if (activeFromName && activeFromName !== 'Active' && activeFromName.length >= 3) {
-      derivedActive = activeFromName;
-    } else if (fallbackActive && fallbackActive !== 'Active' && fallbackActive.length >= 3) {
-      derivedActive = fallbackActive;
-    } else if (activeFromParam && activeFromParam !== 'Active' && activeFromParam.length >= 3) {
+    if (activeFromParam && activeFromParam !== 'Active' && activeFromParam.length >= 3) {
       derivedActive = activeFromParam;
+    } else if (activeFromName && activeFromName !== 'Active' && activeFromName.length >= 3) {
+      derivedActive = activeFromName;
     } else {
       const activesPart = name.substring(0, singleStrengthMatch.index).trim();
       if (activesPart) derivedActive = getCleanDrugDisplayName(activesPart, fallbackActive);
     }
     
     const formattedActive = getCleanDrugDisplayName(derivedActive, fallbackActive);
-    const isCapsule = /\bcapsules?\b/i.test(productName);
-    const containerType = isCapsule ? 'capsule' : 'tablet';
     
     return {
       activeSubstance: formattedActive,
-      labelClaim: `Each ${containerType} contains ${formattedActive} ${strength} ${unit}`
+      labelClaim: `Each tablet contains ${formattedActive} ${strength} ${unit}`
     };
   }
   
   const fallbackClean = getCleanDrugDisplayName(fallbackActive, 'Active');
   return { activeSubstance: fallbackClean, labelClaim: fallbackLabelClaim };
 }
+
+const PHARMA_MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+export function formatPharmaDate(d: Date): string {
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = PHARMA_MONTH_NAMES[d.getMonth()];
+  const year = d.getFullYear();
+  return `${day}-${month}-${year}`;
+}
+
+export function parsePharmaDate(dateStr: string | undefined | null): Date | null {
+  if (!dateStr) return null;
+  const clean = String(dateStr).replace(/^Signed\s*\/?\s*/i, '').trim();
+  if (!clean || clean === '—' || clean === '-') return null;
+
+  const dMmmYMatch = clean.match(/^(\d{1,2})[\-\/\s]([A-Za-z]{3})[\-\/\s](\d{4})$/);
+  if (dMmmYMatch) {
+    const months: Record<string, number> = {
+      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+    };
+    const m = months[dMmmYMatch[2].toLowerCase()];
+    if (m !== undefined) {
+      return new Date(parseInt(dMmmYMatch[3], 10), m, parseInt(dMmmYMatch[1], 10));
+    }
+  }
+
+  const dmyMatch = clean.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (dmyMatch) {
+    return new Date(parseInt(dmyMatch[3], 10), parseInt(dmyMatch[2], 10) - 1, parseInt(dmyMatch[1], 10));
+  }
+
+  const isoMatch = clean.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (isoMatch) {
+    return new Date(parseInt(isoMatch[1], 10), parseInt(isoMatch[2], 10) - 1, parseInt(isoMatch[3], 10));
+  }
+
+  const parsed = new Date(clean);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+

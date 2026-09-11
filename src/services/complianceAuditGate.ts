@@ -47,32 +47,8 @@ import {
   validateRevisionReasonForMajorChanges,
 } from './methodVersionHistory';
 
-/**
- * Robust date parser supporting DD/MM/YYYY, YYYY-MM-DD, and signed date strings
- */
-export function parsePharmaDate(dateStr?: string): Date | null {
-  if (!dateStr || typeof dateStr !== 'string') return null;
-  const clean = dateStr.replace(/^Signed\s*\/\s*/i, '').trim();
-  const dmyMatch = clean.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
-  if (dmyMatch) {
-    const day = parseInt(dmyMatch[1], 10);
-    const month = parseInt(dmyMatch[2], 10) - 1;
-    const year = parseInt(dmyMatch[3], 10);
-    return new Date(year, month, day);
-  }
-  const isoMatch = clean.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
-  if (isoMatch) {
-    const year = parseInt(isoMatch[1], 10);
-    const month = parseInt(isoMatch[2], 10) - 1;
-    const day = parseInt(isoMatch[3], 10);
-    return new Date(year, month, day);
-  }
-  const timestamp = Date.parse(clean);
-  if (!isNaN(timestamp)) {
-    return new Date(timestamp);
-  }
-  return null;
-}
+import { parsePharmaDate } from './pharmaMathEngine';
+export { parsePharmaDate };
 
 // Registry of known pharmaceutical active substances
 export const KNOWN_PHARMA_DRUGS = [

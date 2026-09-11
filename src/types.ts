@@ -481,6 +481,8 @@ export interface RSCompletionRecordItem {
   signatureDate: string;
   detailsProtocol?: string;
   signatureDateProtocol?: string;
+  detailsReport?: string;
+  signatureDateReport?: string;
 }
 
 export interface RSAMVDocumentData {

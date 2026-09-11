@@ -17,9 +17,18 @@ interface AMVInputFormProps {
   onReportDateChange?: (val: string) => void;
   validationMethod: ValidationMethodType;
   onValidationMethodChange: (method: ValidationMethodType) => void;
-  onGenerate: () => void;
+  onGenerate: (targetProduct?: string) => void;
+  onSelectSuggestion?: (item: string) => void;
   onRefreshCodes: () => void;
   isLoading: boolean;
+  loadingStepText?: string;
+  newAMVReadyInfo?: {
+    productName: string;
+    method: ValidationMethodType;
+    docNo: string;
+    timestamp: string;
+  } | null;
+  onDismissSuccessInfo?: () => void;
   theme: ThemeFormat;
   coaUploaded?: boolean;
   onCoaUpload?: (file: File) => void;
@@ -78,8 +87,12 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
   validationMethod,
   onValidationMethodChange,
   onGenerate,
+  onSelectSuggestion,
   onRefreshCodes,
   isLoading,
+  loadingStepText,
+  newAMVReadyInfo,
+  onDismissSuccessInfo,
   theme,
   coaUploaded,
   onCoaUpload,
@@ -93,8 +106,18 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!productName.trim()) return;
-    onGenerate();
+    if (!productName.trim() || isLoading) return;
+    onGenerate(productName);
+  };
+
+  const handleSuggestionClick = (item: string) => {
+    if (isLoading) return;
+    if (onSelectSuggestion) {
+      onSelectSuggestion(item);
+    } else {
+      onProductNameChange(item);
+      onGenerate(item);
+    }
   };
 
   const currentSuggestions = isDissolution
@@ -243,6 +266,78 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
           </div>
         </div>
 
+        {/* Real-time Synthesis Progress Indicator */}
+        {isLoading && (
+          <div className="p-3.5 bg-blue-50/90 border border-blue-200 rounded-xl flex items-center justify-between animate-in fade-in duration-200 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0 border border-blue-200">
+                <RefreshCw className="w-4 h-4 text-[#1F4E79] animate-spin" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-blue-950">
+                  Synthesizing AMV Validation Protocol &amp; Report for &ldquo;{productName}&rdquo;...
+                </p>
+                <p className="text-[11px] text-blue-700 mt-0.5">
+                  {loadingStepText || 'Calibrating chromatographic parameters, system suitability & statistical calculations...'}
+                </p>
+              </div>
+            </div>
+            <div className="hidden sm:flex items-center gap-2.5">
+              <div className="w-24 h-2 bg-blue-200/80 rounded-full overflow-hidden">
+                <div className="h-full bg-[#1F4E79] rounded-full animate-pulse w-4/5" />
+              </div>
+              <span className="text-[10px] font-mono text-blue-800 font-semibold bg-blue-100/80 px-2 py-0.5 rounded border border-blue-200">
+                ICH Q2(R2)
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* New AMV Ready Notification Banner */}
+        {newAMVReadyInfo && !isLoading && (
+          <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center justify-between animate-in fade-in slide-in-from-top-1 duration-200 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0 border border-emerald-300 text-emerald-700">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-bold text-emerald-950">
+                    ✓ New AMV Successfully Generated &amp; Ready!
+                  </span>
+                  <span className="text-xs font-bold text-emerald-900 bg-white px-2 py-0.5 rounded-md border border-emerald-300 font-mono shadow-2xs">
+                    {newAMVReadyInfo.productName}
+                  </span>
+                  <span className="text-[10px] bg-emerald-200/80 text-emerald-900 font-mono font-semibold px-2 py-0.5 rounded">
+                    Doc: {newAMVReadyInfo.docNo}
+                  </span>
+                </div>
+                <p className="text-[11px] text-emerald-700 mt-0.5">
+                  Generated at {newAMVReadyInfo.timestamp} &bull; System suitability, chromatographic conditions, linearity (r &gt; 0.999), and GMP validation tables are active.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <a
+                href="#amv-document-viewer-container"
+                className="text-[11px] font-semibold text-emerald-800 bg-white hover:bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-lg transition-all shadow-2xs hover:shadow-xs"
+              >
+                View AMV Document &darr;
+              </a>
+              {onDismissSuccessInfo && (
+                <button
+                  type="button"
+                  onClick={onDismissSuccessInfo}
+                  className="text-emerald-600 hover:text-emerald-950 p-1.5 rounded-md hover:bg-emerald-100 transition-colors"
+                  title="Dismiss notification"
+                >
+                  &times;
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Quick Suggestions Chips */}
         <div>
           <div className="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5 font-medium">
@@ -258,16 +353,15 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
               <button
                 key={item}
                 type="button"
-                onClick={() => {
-                  onProductNameChange(item);
-                }}
+                disabled={isLoading}
+                onClick={() => handleSuggestionClick(item)}
                 className={`text-xs px-2.5 py-1 rounded-md border transition-all ${
                   productName === item
                     ? theme === 'blue'
                       ? 'bg-[#1F4E79] text-white border-[#1F4E79] font-medium'
                       : 'bg-zinc-900 text-white border-zinc-900 font-medium'
                     : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'
-                }`}
+                } ${isLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
               >
                 {item}
               </button>

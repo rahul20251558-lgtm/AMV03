@@ -836,8 +836,8 @@ export async function generateAndDownloadRSAMVDocx(
     ...data.completionRecord.map((rec, i) =>
       createRow([
         createDataCell(rec.particulars, AlignmentType.LEFT, true, i % 2 === 1 ? altRowBgColor : undefined, 3800),
-        createDataCell(isProtocol ? (rec.detailsProtocol || '') : rec.details, AlignmentType.LEFT, false, i % 2 === 1 ? altRowBgColor : undefined, 3100),
-        createDataCell(isProtocol ? (rec.signatureDateProtocol || '—') : rec.signatureDate, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 3006),
+        createDataCell(isProtocol ? (rec.detailsProtocol || '') : (rec.detailsReport || rec.details), AlignmentType.LEFT, false, i % 2 === 1 ? altRowBgColor : undefined, 3100),
+        createDataCell(isProtocol ? (rec.signatureDateProtocol || '—') : (rec.signatureDateReport || rec.signatureDate), AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 3006),
       ])
     ),
   ];

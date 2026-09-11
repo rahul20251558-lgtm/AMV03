@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { RefreshCw, CheckCircle2, Sparkles } from 'lucide-react';
 import {
   AMVDocumentData,
   RSAMVDocumentData,
@@ -58,6 +59,23 @@ export function App() {
   const [fontSize, setFontSize] = useState<FontSizePt>(12); // Standard 12pt pharma standard
   const [dataMode, setDataMode] = useState<DataMode>('DEMO'); // 'TEMPLATE' (default blank raw data) or 'DEMO' (verified analytical demonstration with watermark)
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingStepText, setLoadingStepText] = useState('');
+  const [newAMVReadyInfo, setNewAMVReadyInfo] = useState<{
+    productName: string;
+    method: ValidationMethodType;
+    docNo: string;
+    timestamp: string;
+  } | null>(null);
+
+  const generationTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const generationStepTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (generationTimerRef.current) clearTimeout(generationTimerRef.current);
+      if (generationStepTimerRef.current) clearTimeout(generationStepTimerRef.current);
+    };
+  }, []);
 
   // COA and FPS Upload states
   const [coaUploaded, setCoaUploaded] = useState(false);
@@ -181,11 +199,34 @@ export function App() {
 
   const handleProductNameChange = (newProduct: string) => {
     setProductName(newProduct);
-    const codes = generateUniqueValidationCodes(newProduct);
+  };
+
+  // Trigger full AMV generation for a target or current product with realistic loading and progress feedback
+  const triggerGenerateAMV = (
+    targetProduct?: string,
+    targetMethod?: ValidationMethodType,
+    customOverrides?: FPSOverrides | null
+  ) => {
+    const activeProduct = (targetProduct && targetProduct.trim().length > 0)
+      ? targetProduct.trim()
+      : (productName.trim() || 'Tibolone Tablets BP 2.5 mg');
+    const activeMethod = targetMethod || validationMethod;
+    const activeOverrides = customOverrides !== undefined ? customOverrides : fpsOverrides;
+
+    // Clear any previous timers
+    if (generationTimerRef.current) clearTimeout(generationTimerRef.current);
+    if (generationStepTimerRef.current) clearTimeout(generationStepTimerRef.current);
+
+    setProductName(activeProduct);
+    setIsLoading(true);
+    setLoadingStepText(`Validating compendial monograph & chromatographic parameters for "${activeProduct}"...`);
+
+    // Prepare fresh codes for this product
+    const codes = generateUniqueValidationCodes(activeProduct);
     const prefix =
-      validationMethod === 'dissolution'
+      activeMethod === 'dissolution'
         ? 'WC/QC/AMV'
-        : validationMethod === 'related_substances'
+        : activeMethod === 'related_substances'
         ? 'WC/QC/RS'
         : 'WC/QC/AMV';
     const cleanDocNo = codes.documentNo.replace('WC/QC/AMV', prefix);
@@ -193,46 +234,69 @@ export function App() {
     setBatchNo(codes.validationBatchNo);
     setStandardLot(codes.standardLotNo);
 
-    // Synchronize ALL THREE templates simultaneously from the single source of truth
-    const localDiss = buildFullDissolutionAMVData(newProduct, {
-      verifiedMonograph: fpsOverrides ? {
-        ...fpsOverrides,
-        ...(fpsOverrides.diluent ? { medium: fpsOverrides.diluent } : {}),
-      } : undefined,
-      protocolNo: cleanDocNo,
-      batchNo: codes.validationBatchNo,
-      companyName,
-      reportDate,
-    });
-    setDissolutionData(localDiss);
+    // Mid-way step progress feedback
+    generationStepTimerRef.current = setTimeout(() => {
+      setLoadingStepText(`Computing System Suitability, Linearity (r > 0.999) & Precision Tables for "${activeProduct}"...`);
+    }, 320);
 
-    const localRS = buildFullRSAMVData(newProduct, {
-      verifiedMonograph: fpsOverrides ? fpsOverrides : undefined,
-      protocolNo: cleanDocNo,
-      batchNo: codes.validationBatchNo,
-      companyName,
-      reportDate,
-    });
-    setRsData(localRS);
+    // Finalize generation after realistic calculation window (~700ms)
+    generationTimerRef.current = setTimeout(() => {
+      try {
+        const localDiss = buildFullDissolutionAMVData(activeProduct, {
+          verifiedMonograph: activeOverrides ? {
+            ...activeOverrides,
+            ...(activeOverrides.diluent ? { medium: activeOverrides.diluent } : {}),
+          } : undefined,
+          protocolNo: cleanDocNo,
+          batchNo: codes.validationBatchNo,
+          companyName,
+          reportDate,
+        });
+        setDissolutionData(localDiss);
 
-    const localData = generateAMVDataForProduct(newProduct, {
-      documentNo: cleanDocNo,
-      validationBatchNo: codes.validationBatchNo,
-      standardLotNo: codes.standardLotNo,
-      companyName,
-      reportDate,
-      effectiveDate: reportDate,
-    }, fpsOverrides);
-    const recalculated = recalculateAMVData(localData);
-    setAssayData(recalculated);
+        const localRS = buildFullRSAMVData(activeProduct, {
+          verifiedMonograph: activeOverrides ? activeOverrides : undefined,
+          protocolNo: cleanDocNo,
+          batchNo: codes.validationBatchNo,
+          companyName,
+          reportDate,
+        });
+        setRsData(localRS);
 
-    if (validationMethod === 'dissolution') {
-      checkAndPromptMajorChanges(localDiss, 'dissolution', newProduct);
-    } else if (validationMethod === 'related_substances') {
-      checkAndPromptMajorChanges(localRS, 'related_substances', newProduct);
-    } else {
-      checkAndPromptMajorChanges(recalculated, 'assay', newProduct);
-    }
+        const localData = generateAMVDataForProduct(activeProduct, {
+          documentNo: cleanDocNo,
+          validationBatchNo: codes.validationBatchNo,
+          standardLotNo: codes.standardLotNo,
+          companyName,
+          reportDate,
+          effectiveDate: reportDate,
+        }, activeOverrides);
+        const recalculated = recalculateAMVData(localData);
+        setAssayData(recalculated);
+
+        if (activeMethod === 'dissolution') {
+          checkAndPromptMajorChanges(localDiss, 'dissolution', activeProduct);
+        } else if (activeMethod === 'related_substances') {
+          checkAndPromptMajorChanges(localRS, 'related_substances', activeProduct);
+        } else {
+          checkAndPromptMajorChanges(recalculated, 'assay', activeProduct);
+        }
+
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        setNewAMVReadyInfo({
+          productName: activeProduct,
+          method: activeMethod,
+          docNo: cleanDocNo,
+          timestamp: timeStr,
+        });
+      } catch (err) {
+        console.error('Generation failed:', err);
+      } finally {
+        setIsLoading(false);
+        setLoadingStepText('');
+      }
+    }, 700);
   };
 
   const handleConfirmFpsOverrides = (overrides: FPSOverrides, detectedProductName?: string) => {
@@ -244,85 +308,12 @@ export function App() {
       ? detectedProductName.trim()
       : productName;
 
-    if (detectedProductName && detectedProductName.trim().length > 0) {
-      setProductName(activeProduct);
-    }
-
-    const localDiss = buildFullDissolutionAMVData(activeProduct, {
-      verifiedMonograph: overrides ? {
-        ...overrides,
-        ...(overrides.diluent ? { medium: overrides.diluent } : {}),
-      } : undefined,
-      protocolNo: documentNo,
-      batchNo,
-      companyName,
-      reportDate,
-    });
-    setDissolutionData(localDiss);
-
-    const localRS = buildFullRSAMVData(activeProduct, {
-      verifiedMonograph: overrides ? overrides : undefined,
-      protocolNo: documentNo,
-      batchNo,
-      companyName,
-      reportDate,
-    });
-    setRsData(localRS);
-
-    const localData = generateAMVDataForProduct(activeProduct, {
-      documentNo,
-      validationBatchNo: batchNo,
-      standardLotNo: standardLot,
-      companyName,
-      reportDate,
-      effectiveDate: reportDate,
-    }, overrides);
-    const recalculated = recalculateAMVData(localData);
-    setAssayData(recalculated);
-
-    if (validationMethod === 'dissolution') {
-      checkAndPromptMajorChanges(localDiss, 'dissolution', activeProduct);
-    } else if (validationMethod === 'related_substances') {
-      checkAndPromptMajorChanges(localRS, 'related_substances', activeProduct);
-    } else {
-      checkAndPromptMajorChanges(recalculated, 'assay', activeProduct);
-    }
+    triggerGenerateAMV(activeProduct, validationMethod, overrides);
   };
 
   // Roll new dynamic identifiers
   const handleRefreshCodes = () => {
-    const codes = generateUniqueValidationCodes(productName);
-    const prefix =
-      validationMethod === 'dissolution'
-        ? 'WC/QC/AMV'
-        : validationMethod === 'related_substances'
-        ? 'WC/QC/RS'
-        : 'WC/QC/AMV';
-    const cleanDocNo = codes.documentNo.replace('WC/QC/AMV', prefix);
-    setDocumentNo(cleanDocNo);
-    setBatchNo(codes.validationBatchNo);
-    setStandardLot(codes.standardLotNo);
-
-    setDissolutionData((prev) => ({
-      ...prev,
-      protocolNo: cleanDocNo,
-      batchNoUsed: codes.validationBatchNo,
-    }));
-    setRsData((prev) => ({
-      ...prev,
-      protocolNo: cleanDocNo,
-      batchNoUsed: codes.validationBatchNo,
-    }));
-    setAssayData((prev) =>
-      recalculateAMVData({
-        ...prev,
-        documentNo: cleanDocNo,
-        batchNoUsed: codes.validationBatchNo,
-        reagentsAndStandards: prev.reagentsAndStandards.map((r) =>
-          r.name.includes('RS') ? { ...r, batchNo: codes.referenceStandardLot } : r
-        ),
-      })
-    );
+    triggerGenerateAMV(productName);
   };
 
   // Automated diff check to prompt user for Reason for Change if major parameters altered
@@ -346,55 +337,9 @@ export function App() {
     }
   };
 
-  // Generate AMV Data for current product (Dissolution, RS, or Assay) - 100% Instant & Offline
-  const handleGenerate = () => {
-    setIsLoading(true);
-
-    try {
-      const localDiss = buildFullDissolutionAMVData(productName, {
-        verifiedMonograph: fpsOverrides ? {
-          ...fpsOverrides,
-          ...(fpsOverrides.diluent ? { medium: fpsOverrides.diluent } : {}),
-        } : undefined,
-        protocolNo: documentNo,
-        batchNo,
-        companyName,
-        reportDate,
-      });
-      setDissolutionData(localDiss);
-
-      const localRS = buildFullRSAMVData(productName, {
-        verifiedMonograph: fpsOverrides ? fpsOverrides : undefined,
-        protocolNo: documentNo,
-        batchNo,
-        companyName,
-        reportDate,
-      });
-      setRsData(localRS);
-
-      const localData = generateAMVDataForProduct(productName, {
-        documentNo,
-        validationBatchNo: batchNo,
-        standardLotNo: standardLot,
-        companyName,
-        reportDate,
-        effectiveDate: reportDate,
-      }, fpsOverrides);
-      const recalculated = recalculateAMVData(localData);
-      setAssayData(recalculated);
-
-      if (validationMethod === 'dissolution') {
-        checkAndPromptMajorChanges(localDiss, 'dissolution', productName);
-      } else if (validationMethod === 'related_substances') {
-        checkAndPromptMajorChanges(localRS, 'related_substances', productName);
-      } else {
-        checkAndPromptMajorChanges(recalculated, 'assay', productName);
-      }
-    } catch (err) {
-      console.error('Generation failed:', err);
-    } finally {
-      setIsLoading(false);
-    }
+  // Generate AMV Data for current product (Dissolution, RS, or Assay)
+  const handleGenerate = (targetProduct?: string) => {
+    triggerGenerateAMV(targetProduct || productName);
   };
 
   const handleApplyRevisionReason = (newReason: string) => {
@@ -625,8 +570,12 @@ export function App() {
           validationMethod={validationMethod}
           onValidationMethodChange={handleValidationMethodChange}
           onGenerate={handleGenerate}
+          onSelectSuggestion={triggerGenerateAMV}
           onRefreshCodes={handleRefreshCodes}
           isLoading={isLoading}
+          loadingStepText={loadingStepText}
+          newAMVReadyInfo={newAMVReadyInfo}
+          onDismissSuccessInfo={() => setNewAMVReadyInfo(null)}
           theme={theme}
           coaUploaded={coaUploaded}
           onCoaUpload={(file) => {
@@ -677,59 +626,108 @@ export function App() {
           </div>
         )}
 
-        {/* Live Document Viewer & Exporter: Dissolution vs AMV (RS Format) vs Assay Format */}
-        {validationMethod === 'dissolution' ? (
-          <DissolutionDocumentViewer
-            data={dissolutionData}
-            docType={docType}
-            theme={theme}
-            dataMode={dataMode}
-            fontFamily={fontFamily}
-            fontSize={fontSize}
-            onFontFamilyChange={setFontFamily}
-            onFontSizeChange={setFontSize}
-            onDocTypeChange={setDocType}
-            onThemeChange={setTheme}
-            onDownloadProtocol={handleDownloadProtocol}
-            onDownloadReport={handleDownloadReport}
-            onDownloadBoth={handleDownloadBoth}
-            onUpdateData={handleUpdateDissolutionData}
-          />
-        ) : validationMethod === 'related_substances' ? (
-          <RSAMVDocumentViewer
-            data={rsData}
-            docType={docType}
-            theme={theme}
-            dataMode={dataMode}
-            fontFamily={fontFamily}
-            fontSize={fontSize}
-            onFontFamilyChange={setFontFamily}
-            onFontSizeChange={setFontSize}
-            onDocTypeChange={setDocType}
-            onThemeChange={setTheme}
-            onDownloadProtocol={handleDownloadProtocol}
-            onDownloadReport={handleDownloadReport}
-            onDownloadBoth={handleDownloadBoth}
-            onUpdateData={handleUpdateRSData}
-          />
-        ) : (
-          <AMVDocumentViewer
-            data={assayData}
-            docType={docType}
-            theme={theme}
-            dataMode={dataMode}
-            fontFamily={fontFamily}
-            fontSize={fontSize}
-            onFontFamilyChange={setFontFamily}
-            onFontSizeChange={setFontSize}
-            onDocTypeChange={setDocType}
-            onThemeChange={setTheme}
-            onDownloadProtocol={handleDownloadProtocol}
-            onDownloadReport={handleDownloadReport}
-            onDownloadBoth={handleDownloadBoth}
-            onUpdateData={handleUpdateAssayData}
-          />
-        )}
+        {/* Document Viewer Container with Active Status Header & Loading Overlay */}
+        <div id="amv-document-viewer-container" className="relative space-y-2">
+          {/* Active Product Status Header */}
+          <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold shadow-2xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Active AMV Monograph: {productName}
+              </span>
+              <span className="text-zinc-500 font-mono text-[11px] hidden sm:inline-block">
+                {documentNo} &bull; Batch: {batchNo}
+              </span>
+            </div>
+            {newAMVReadyInfo && (
+              <span className="inline-flex items-center gap-1.5 text-[11px] text-emerald-800 font-semibold bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                AMV Ready ({newAMVReadyInfo.timestamp})
+              </span>
+            )}
+          </div>
+
+          {/* Loading Overlay with Spinning Pharmaceutical Synthesizer */}
+          {isLoading && (
+            <div className="absolute inset-0 bg-white/85 backdrop-blur-xs z-30 flex flex-col items-center justify-center p-6 text-center min-h-[450px] rounded-2xl border border-blue-200 shadow-xl">
+              <div className="bg-white p-7 rounded-2xl shadow-2xl border border-zinc-200 flex flex-col items-center max-w-md w-full animate-in zoom-in-95 duration-150">
+                <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center mb-3 border border-blue-100 shadow-2xs">
+                  <RefreshCw className="w-7 h-7 text-[#1F4E79] animate-spin" />
+                </div>
+                <h3 className="text-base font-bold text-zinc-900">
+                  Synthesizing New AMV Document
+                </h3>
+                <p className="text-xs font-semibold text-[#1F4E79] mt-1">
+                  {productName}
+                </p>
+                <p className="text-xs text-zinc-600 mt-2.5 max-w-xs">
+                  {loadingStepText || 'Processing chromatographic system, system suitability & statistical calculations...'}
+                </p>
+                <div className="w-full bg-zinc-100 h-2 rounded-full mt-4 overflow-hidden border border-zinc-200">
+                  <div className="h-full bg-[#1F4E79] rounded-full animate-pulse w-4/5" />
+                </div>
+                <div className="flex items-center justify-between w-full mt-3 text-[10px] font-mono text-zinc-400">
+                  <span>ICH Q2(R2) Validation</span>
+                  <span className="text-blue-700 font-semibold">ALCOA+ Compliant</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Live Document Viewer & Exporter: Dissolution vs AMV (RS Format) vs Assay Format */}
+          {validationMethod === 'dissolution' ? (
+            <DissolutionDocumentViewer
+              data={dissolutionData}
+              docType={docType}
+              theme={theme}
+              dataMode={dataMode}
+              fontFamily={fontFamily}
+              fontSize={fontSize}
+              onFontFamilyChange={setFontFamily}
+              onFontSizeChange={setFontSize}
+              onDocTypeChange={setDocType}
+              onThemeChange={setTheme}
+              onDownloadProtocol={handleDownloadProtocol}
+              onDownloadReport={handleDownloadReport}
+              onDownloadBoth={handleDownloadBoth}
+              onUpdateData={handleUpdateDissolutionData}
+            />
+          ) : validationMethod === 'related_substances' ? (
+            <RSAMVDocumentViewer
+              data={rsData}
+              docType={docType}
+              theme={theme}
+              dataMode={dataMode}
+              fontFamily={fontFamily}
+              fontSize={fontSize}
+              onFontFamilyChange={setFontFamily}
+              onFontSizeChange={setFontSize}
+              onDocTypeChange={setDocType}
+              onThemeChange={setTheme}
+              onDownloadProtocol={handleDownloadProtocol}
+              onDownloadReport={handleDownloadReport}
+              onDownloadBoth={handleDownloadBoth}
+              onUpdateData={handleUpdateRSData}
+            />
+          ) : (
+            <AMVDocumentViewer
+              data={assayData}
+              docType={docType}
+              theme={theme}
+              dataMode={dataMode}
+              fontFamily={fontFamily}
+              fontSize={fontSize}
+              onFontFamilyChange={setFontFamily}
+              onFontSizeChange={setFontSize}
+              onDocTypeChange={setDocType}
+              onThemeChange={setTheme}
+              onDownloadProtocol={handleDownloadProtocol}
+              onDownloadReport={handleDownloadReport}
+              onDownloadBoth={handleDownloadBoth}
+              onUpdateData={handleUpdateAssayData}
+            />
+          )}
+        </div>
       </main>
 
       {/* Pre-Output Compliance & Contamination Audit Modal */}
@@ -776,7 +774,7 @@ export function App() {
         onClose={() => setIsPromptModalOpen(false)}
         onSelectProduct={(method, name) => {
           setValidationMethod(method);
-          setProductName(name);
+          triggerGenerateAMV(name, method);
           setIsPromptModalOpen(false);
         }}
       />

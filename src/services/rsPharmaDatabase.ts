@@ -26,6 +26,8 @@ import {
   createSeededRandom,
   normalRandom,
   extractDynamicLabelClaim,
+  formatPharmaDate,
+  parsePharmaDate,
 } from './pharmaMathEngine';
 
 export interface RSMonographSeed {
@@ -1210,28 +1212,56 @@ export function buildFullRSAMVData(
     seed = { ...seed, ...cleanMonograph };
   }
 
-  if (!seed.productName || !seed.productName.trim()) {
-    seed.productName = safeProductName;
-  }
+  seed.productName = safeProductName;
 
-  const extracted = extractDynamicLabelClaim(safeProductName, seed.testParameter, seed.activeSubstance || seed.productName.split(' ')[0], seed.labelClaim);
+  const extracted = extractDynamicLabelClaim(safeProductName, seed.testParameter, seed.activeSubstance || safeProductName.split(' ')[0], seed.labelClaim);
   let dynamicLabelClaim = extracted.labelClaim;
   let dynamicActiveSubstance = extracted.activeSubstance;
 
-
-  const docNo = options?.protocolNo || 'WC/QC/AMV/0285';
-  const docDate = options?.protocolDate || '09-Jul-2024';
-  const batchNo = options?.batchNo || `WC-${productName.substring(0, 3).toUpperCase()}-2401`;
   const rawCompanyName = options?.companyName || 'WESTCOAST PHARMACEUTICAL WORKS LTD.';
   const companyName = rawCompanyName.replace(/\.+$/, '');
 
-  const { strengthNum, unit } = parseProductStrength(seed.productName || productName);
-  const nomPpm = seed.nominalPpm || 250;
+  const { strengthNum, unit } = parseProductStrength(safeProductName);
+  const nomPpm = seed.nominalPpm || (strengthNum ? strengthNum * 5 : 250);
   const p50 = Math.round(nomPpm * 0.5);
   const p75 = Math.round(nomPpm * 0.75);
   const p100 = nomPpm;
   const p125 = Math.round(nomPpm * 1.25);
   const p150 = Math.round(nomPpm * 1.5);
+
+  const solPrep = { ...seed.solutionPreparation };
+  if (solPrep.testSolution && strengthNum) {
+    solPrep.testSolution = solPrep.testSolution.replace(
+      /equivalent to \d+(?:\.\d+)?\s*(?:mg|g)\s+([A-Za-z]+)/i,
+      `equivalent to ${strengthNum}.0 mg $1`
+    );
+  }
+
+  const rawReportDate = options?.reportDate || '20-Apr-2026';
+  const parsedReport = parsePharmaDate(rawReportDate) || new Date(2026, 3, 20);
+  const finalApprovalDate = formatPharmaDate(parsedReport);
+  const reportDate = finalApprovalDate; // Header Report Date ALWAYS equals final approval date!
+
+  const d1 = new Date(parsedReport);
+  d1.setDate(d1.getDate() - 1);
+  const reportPrepDate = formatPharmaDate(d1);
+
+  const d2 = new Date(parsedReport);
+  d2.setDate(d2.getDate() - 2);
+  const executionDate = formatPharmaDate(d2);
+
+  const d7 = new Date(parsedReport);
+  d7.setDate(d7.getDate() - 7);
+  const parsedProtocol = options?.protocolDate ? (parsePharmaDate(options.protocolDate) || d7) : d7;
+  const protocolApprovalDate = formatPharmaDate(parsedProtocol);
+  const protocolDate = protocolApprovalDate;
+
+  const d8 = new Date(parsedProtocol);
+  d8.setDate(d8.getDate() - 1);
+  const protocolPrepDate = formatPharmaDate(d8);
+
+  const docNo = options?.protocolNo || 'WC/QC/AMV/0285';
+  const batchNo = options?.batchNo || `WC-${safeProductName.substring(0, 3).toUpperCase()}-2401`;
 
   const nominalArea = seed.nominalArea || computeNominalPeakArea(productName, 245);
 
@@ -1423,17 +1453,16 @@ export function buildFullRSAMVData(
   ];
 
   const reportNumber = docNo.includes('/AMV/') ? docNo.replace('/AMV/', '/AMVR/') : `${docNo}/R`;
-  const safeReportDate = options?.reportDate || '17-Jul-2024';
 
   const doc: RSAMVDocumentData = {
     companyName,
     documentTitle: `ANALYTICAL METHOD VALIDATION PROTOCOL / REPORT FOR ORGANIC IMPURITY (RELATED SUBSTANCES) BY ${seed.technique}`,
     subTitle: `(${seed.technique === 'GC' ? 'Organic Impurity by Gas Chromatography' : 'Related Substances by HPLC'})`,
     protocolNo: docNo,
-    protocolDate: docDate,
+    protocolDate: protocolDate,
     reportNo: reportNumber,
-    reportDate: safeReportDate,
-    productName: seed.productName,
+    reportDate: reportDate,
+    productName: safeProductName,
     labelClaim: dynamicLabelClaim,
     testParameter: seed.testParameter,
     reference: seed.reference,
@@ -1444,33 +1473,33 @@ export function buildFullRSAMVData(
         designation: 'Chemist, Quality Control',
         name: 'Riya Patel',
         signature: 'Signed',
-        date: '16-Jul-2024',
-        dateProtocol: '09-Jul-2024',
-        dateReport: safeReportDate,
+        date: reportPrepDate,
+        dateProtocol: protocolPrepDate,
+        dateReport: reportPrepDate,
       },
       checkedBy: {
         designation: 'Executive, Quality Control',
         name: 'Jeel Patel',
         signature: 'Signed',
-        date: '16-Jul-2024',
-        dateProtocol: '09-Jul-2024',
-        dateReport: safeReportDate,
+        date: reportPrepDate,
+        dateProtocol: protocolPrepDate,
+        dateReport: reportPrepDate,
       },
       reviewedBy: {
         designation: 'Manager, Quality Assurance',
         name: 'Anil Parmar',
         signature: 'Signed',
-        date: safeReportDate,
-        dateProtocol: '10-Jul-2024',
-        dateReport: safeReportDate,
+        date: reportDate,
+        dateProtocol: protocolApprovalDate,
+        dateReport: reportDate,
       },
       authorisedBy: {
         designation: 'General Manager, Quality (Head QA/QC)',
         name: 'Suresh Shah',
         signature: 'Signed',
-        date: safeReportDate,
-        dateProtocol: '10-Jul-2024',
-        dateReport: safeReportDate,
+        date: reportDate,
+        dateProtocol: protocolApprovalDate,
+        dateReport: reportDate,
       },
     },
 
@@ -1506,7 +1535,7 @@ export function buildFullRSAMVData(
         relativeRetention: seed.relativeRetention,
       },
       ovenProgramme: seed.ovenProgramme,
-      solutionPreparation: seed.solutionPreparation,
+      solutionPreparation: solPrep,
       monographLimits: seed.monographLimits,
       requirements: seed.requirements,
     },
@@ -1625,37 +1654,47 @@ export function buildFullRSAMVData(
       {
         particulars: 'Protocol Preparation',
         details: 'Prepared by Chemist QC',
-        signatureDate: 'Signed / 09-Jul-2024',
+        signatureDate: `Signed / ${protocolPrepDate}`,
         detailsProtocol: 'Prepared by Chemist QC',
-        signatureDateProtocol: 'Signed / 09-Jul-2024',
+        signatureDateProtocol: `Signed / ${protocolPrepDate}`,
+        detailsReport: 'Prepared by Chemist QC',
+        signatureDateReport: `Signed / ${protocolPrepDate}`,
       },
       {
         particulars: 'Protocol Approval',
         details: 'Approved by Head QA/QC',
-        signatureDate: 'Signed / 10-Jul-2024',
+        signatureDate: `Signed / ${protocolApprovalDate}`,
         detailsProtocol: 'Approved by Head QA/QC',
-        signatureDateProtocol: 'Signed / 10-Jul-2024',
+        signatureDateProtocol: `Signed / ${protocolApprovalDate}`,
+        detailsReport: 'Approved by Head QA/QC',
+        signatureDateReport: `Signed / ${protocolApprovalDate}`,
       },
       {
         particulars: 'Verification Execution',
-        details: 'Executed by Analytical Team (11-Jul-2024 – 15-Jul-2024)',
-        signatureDate: 'Signed / 15-Jul-2024',
+        details: `Executed by Analytical Team (${executionDate})`,
+        signatureDate: `Signed / ${executionDate}`,
         detailsProtocol: 'To be executed as per approved protocol',
         signatureDateProtocol: '—',
+        detailsReport: 'Executed by Analytical Team',
+        signatureDateReport: `Signed / ${executionDate}`,
       },
       {
         particulars: 'Report Preparation',
         details: 'Compiled with all chromatographic data and integration reports',
-        signatureDate: 'Signed / 16-Jul-2024',
+        signatureDate: `Signed / ${reportPrepDate}`,
         detailsProtocol: 'To be compiled with chromatograms upon execution',
         signatureDateProtocol: '—',
+        detailsReport: 'Compiled with all chromatographic data and integration reports',
+        signatureDateReport: `Signed / ${reportPrepDate}`,
       },
       {
         particulars: 'Final Report Approval',
         details: 'Authorised by Head QA/QC',
-        signatureDate: 'Signed / 17-Jul-2024',
+        signatureDate: `Signed / ${finalApprovalDate}`,
         detailsProtocol: 'To be authorised upon completion',
         signatureDateProtocol: '—',
+        detailsReport: 'Authorised by Head QA/QC',
+        signatureDateReport: `Signed / ${finalApprovalDate}`,
       },
     ],
 
@@ -1678,9 +1717,9 @@ export function buildFullRSAMVData(
     revisionHistory: [
       {
         version: '00',
-        effectiveDate: docDate,
+        effectiveDate: reportDate,
         docNumber: reportNumber,
-        reason: `Analytical Method Validation study report issued as ${reportNumber} for Organic Impurities in ${seed.productName} by ${seed.technique}. Validates chromatographic system parameters (Stationary phase ${seed.column}, mobile phase ${seed.carrierGasOrMobilePhase}, detector ${seed.detectorTempOrWavelength}, flow rate ${seed.injectionTempOrFlowRate}) with complete system suitability, LOQ, LOD, linearity, precision, and accuracy under ICH Q2(R2).`,
+        reason: `Analytical Method Validation study report issued as ${reportNumber} for Organic Impurities in ${safeProductName} by ${seed.technique}. Validates chromatographic system parameters (Stationary phase ${seed.column}, mobile phase ${seed.carrierGasOrMobilePhase}, detector ${seed.detectorTempOrWavelength}, flow rate ${seed.injectionTempOrFlowRate}) with complete system suitability, LOQ, LOD, linearity, precision, and accuracy under ICH Q2(R2).`,
       },
     ],
   };
