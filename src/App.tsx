@@ -648,6 +648,7 @@ export function App() {
             setIsLoading(false);
           }}
           fpsUploaded={fpsUploaded}
+          onOpenFpsModal={() => setIsFpsModalOpen(true)}
           onFpsUpload={(file) => {
             const reader = new FileReader();
             reader.onload = (e) => {

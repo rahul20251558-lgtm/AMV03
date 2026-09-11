@@ -23,6 +23,7 @@ interface AMVInputFormProps {
   onCoaUpload?: (file: File) => void;
   fpsUploaded?: boolean;
   onFpsUpload?: (file: File) => void;
+  onOpenFpsModal?: () => void;
 }
 
 const RS_QUICK_SUGGESTIONS = [
@@ -80,6 +81,7 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
   onCoaUpload,
   fpsUploaded,
   onFpsUpload,
+  onOpenFpsModal,
 }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const isRS = validationMethod === 'related_substances';
@@ -304,12 +306,13 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
               </div>
             </div>
 
-            {/* FPS Upload */}
-            <div className={`relative border-2 border-dashed rounded-lg p-3 text-center transition-colors ${fpsUploaded ? 'border-green-400 bg-green-50' : 'border-zinc-300 hover:border-blue-400 hover:bg-blue-50/50'}`}>
+            {/* FPS / MOA PDF Upload & Synchronizer */}
+            <div className={`relative border-2 border-dashed rounded-lg p-3 text-center transition-all ${fpsUploaded ? 'border-green-400 bg-green-50/80 hover:bg-green-100/60' : 'border-zinc-300 hover:border-blue-400 hover:bg-blue-50/50'}`}>
               <input 
                 type="file" 
-                accept=".pdf,image/*" 
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                accept=".pdf,text/plain" 
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                title="Click to browse or drop FPS / MOA PDF"
                 onChange={(e) => {
                   if (e.target.files?.[0] && onFpsUpload) {
                     onFpsUpload(e.target.files[0]);
@@ -320,17 +323,29 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
                 {fpsUploaded ? (
                   <>
                     <CheckCircle2 className="w-5 h-5 text-green-600 mb-1" />
-                    <span className="text-xs font-medium text-green-700">Product Spec Uploaded</span>
-                    <span className="text-[10px] text-green-600">Limits synchronized</span>
+                    <span className="text-xs font-semibold text-green-800">FPS / MOA Synchronized</span>
+                    <span className="text-[10px] text-green-700">Client-side parsed • Click to view overrides</span>
                   </>
                 ) : (
                   <>
                     <FileCode2 className="w-5 h-5 text-zinc-400 mb-1" />
-                    <span className="text-xs font-medium text-zinc-700">Upload Product Specification</span>
-                    <span className="text-[10px] text-zinc-500">Extracts custom acceptance limits</span>
+                    <span className="text-xs font-semibold text-zinc-700">Auto-fill from FPS/MOA PDF</span>
+                    <span className="text-[10px] text-zinc-500">Zero-upload client-side extraction</span>
                   </>
                 )}
               </div>
+              {onOpenFpsModal && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenFpsModal();
+                  }}
+                  className="mt-1 relative z-20 text-[10px] text-blue-700 hover:text-blue-900 font-semibold underline underline-offset-2 hover:bg-blue-100/50 px-2 py-0.5 rounded transition-colors"
+                >
+                  {fpsUploaded ? 'Edit Parameters' : 'Open Synchronizer / Presets'}
+                </button>
+              )}
             </div>
           </div>
         </div>
