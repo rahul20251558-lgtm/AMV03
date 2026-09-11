@@ -722,11 +722,14 @@ export function buildFullDissolutionAMVData(
     mono = { ...mono, ...cleanMonograph };
   }
 
-  if (!mono.productName || !mono.productName.trim()) {
-    mono.productName = safeProductName;
-  }
+  mono.productName = safeProductName;
 
-  const extracted = extractDynamicLabelClaim(safeProductName, mono.testParameter, mono.productName, mono.labelClaim);
+  const extracted = extractDynamicLabelClaim(
+    safeProductName,
+    '',
+    (mono as any).activeSubstance || (mono as any).activePharmaceuticalIngredient || mono.productName,
+    mono.labelClaim
+  );
   let dynamicLabelClaim = extracted.labelClaim;
   let dynamicActiveSubstance = extracted.activeSubstance;
 

@@ -549,7 +549,7 @@ export async function generateAndDownloadRSAMVDocx(
     createRow([
       createDataCell('Theoretical Plates (N)', AlignmentType.LEFT, true, metaLabelBgColor, 3300),
       createDataCell(isProtocol ? 'To be evaluated' : ssStats.theoreticalPlates, AlignmentType.CENTER, false, undefined, 3300),
-      createDataCell('Acceptance: NLT 800', AlignmentType.LEFT, true, undefined, 3306),
+      createDataCell(`Acceptance: ${ssStats.theoreticalPlatesCriteria || 'NLT 1500'}`, AlignmentType.LEFT, true, undefined, 3306),
     ]),
     createRow([
       createDataCell('Resolution (Rs)', AlignmentType.LEFT, true, metaLabelBgColor, 3300),

@@ -513,25 +513,29 @@ export function extractDynamicLabelClaim(productName: string, testParameter: str
     const strength = singleStrengthMatch[1];
     const unit = singleStrengthMatch[2].toLowerCase();
     
-    // Find active name cleanly from test parameter, product name, or fallback
+    // Find active name cleanly from product name first (SSOT), then fallbackActive, then test parameter
     let derivedActive = fallbackActive;
-    const activeFromParam = getCleanDrugDisplayName(targetActive, '');
     const activeFromName = getCleanDrugDisplayName(name, '');
+    const activeFromParam = getCleanDrugDisplayName(targetActive, '');
 
-    if (activeFromParam && activeFromParam !== 'Active' && activeFromParam.length >= 3) {
-      derivedActive = activeFromParam;
-    } else if (activeFromName && activeFromName !== 'Active' && activeFromName.length >= 3) {
+    if (activeFromName && activeFromName !== 'Active' && activeFromName.length >= 3) {
       derivedActive = activeFromName;
+    } else if (fallbackActive && fallbackActive !== 'Active' && fallbackActive.length >= 3) {
+      derivedActive = fallbackActive;
+    } else if (activeFromParam && activeFromParam !== 'Active' && activeFromParam.length >= 3) {
+      derivedActive = activeFromParam;
     } else {
       const activesPart = name.substring(0, singleStrengthMatch.index).trim();
       if (activesPart) derivedActive = getCleanDrugDisplayName(activesPart, fallbackActive);
     }
     
     const formattedActive = getCleanDrugDisplayName(derivedActive, fallbackActive);
+    const isCapsule = /\bcapsules?\b/i.test(productName);
+    const containerType = isCapsule ? 'capsule' : 'tablet';
     
     return {
       activeSubstance: formattedActive,
-      labelClaim: `Each tablet contains ${formattedActive} ${strength} ${unit}`
+      labelClaim: `Each ${containerType} contains ${formattedActive} ${strength} ${unit}`
     };
   }
   

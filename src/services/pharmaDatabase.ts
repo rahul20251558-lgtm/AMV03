@@ -18,6 +18,7 @@ export interface UniqueCodes {
   standardLotNo: string;
   referenceStandardLot: string;
   effectiveDate: string;
+  reportDate?: string;
   supersedes: string;
   preparedDate: string;
   reviewedDate: string;
@@ -863,7 +864,7 @@ export function buildFullAMVDataFromMonograph(productName, mono, existingCodes) 
     ...generateUniqueValidationCodes(productName),
     ...existingCodes || {}
   };
-  const extracted = extractDynamicLabelClaim(productName, mono.testParameter, mono.activeSubstance, mono.labelClaim);
+  const extracted = extractDynamicLabelClaim(productName, '', mono.activeSubstance, mono.labelClaim);
   let dynamicLabelClaim = extracted.labelClaim;
   let dynamicActiveSubstance = extracted.activeSubstance;
   const baseArea = mono.nominalArea;
@@ -1075,15 +1076,15 @@ export function buildFullAMVDataFromMonograph(productName, mono, existingCodes) 
     companyAddress: existingCodes?.companyAddress || "GOTA, Ahmedabad, Gujarat, India",
     documentNo: codes.documentNo,
     reportNo: reportNumber,
-    protocolDate: "01-Apr-2026",
-    reportDate: codes.approvedDate || "20-Apr-2026",
+    protocolDate: codes.preparedDate || "01-Apr-2026",
+    reportDate: (existingCodes as any)?.reportDate || codes.approvedDate || "20-Apr-2026",
     productName,
     activeSubstance: dynamicActiveSubstance,
     labelClaim: dynamicLabelClaim,
     testParameter: "Assay by HPLC",
     reference: mono.reference,
     batchNoUsed: codes.validationBatchNo,
-    effectiveDate: codes.effectiveDate,
+    effectiveDate: (existingCodes as any)?.reportDate || codes.effectiveDate || "20-Apr-2026",
     supersedes: codes.supersedes,
     signOffs: {
       preparedBy: {
@@ -1099,7 +1100,7 @@ export function buildFullAMVDataFromMonograph(productName, mono, existingCodes) 
       approvedBy: {
         name: "Hardik Shah",
         designation: "QA In-charge (Head \u2013 QA)",
-        date: codes.approvedDate
+        date: (existingCodes as any)?.reportDate || codes.approvedDate || "20-Apr-2026"
       }
     },
     objective: `To validate the HPLC analytical method for quantification of ${dynamicActiveSubstance} in ${productName} in compliance with ICH Q2(R2) and USP <1225> guidelines.`,

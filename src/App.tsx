@@ -51,6 +51,7 @@ export function App() {
   const [batchNo, setBatchNo] = useState('TB2501');
   const [standardLot, setStandardLot] = useState('WS/DIS/2026/019');
   const [companyName, setCompanyName] = useState('WESTCOAST PHARMACEUTICAL WORKS LTD.');
+  const [reportDate, setReportDate] = useState('20-Apr-2026');
   const [docType, setDocType] = useState<DocumentType>('report');
   const [theme, setTheme] = useState<ThemeFormat>('blue'); // 'blue' (Executive Blue) or 'simple' (Simple Format No Color)
   const [fontFamily, setFontFamily] = useState<FontFamilyType>('Times New Roman'); // Matches authentic monograph
@@ -75,35 +76,39 @@ export function App() {
 
   const [pendingExport, setPendingExport] = useState<'protocol' | 'report' | 'both' | null>(null);
 
-  // Initialize authentic Dissolution document state
+  // Initialize authentic Dissolution document state (Single Shared Product: Tibolone Tablets BP 2.5 mg)
   const [dissolutionData, setDissolutionData] = useState<DissolutionAMVDocumentData>(() =>
     buildFullDissolutionAMVData('Tibolone Tablets BP 2.5 mg', {
       protocolNo: 'WC/QC/AMV/0316',
       batchNo: 'TB2501',
       companyName: 'WESTCOAST PHARMACEUTICAL WORKS LTD.',
+      reportDate: '20-Apr-2026',
     })
   );
 
-  // Initialize authentic RS document state for Sodium Valproate
+  // Initialize authentic RS document state for the same shared product
   const [rsData, setRsData] = useState<RSAMVDocumentData>(() =>
-    buildFullRSAMVData('Sodium Valproate Oral Solution BP', {
-      protocolNo: 'WC/QC/RS/045',
-      batchNo: 'SVS-2601',
+    buildFullRSAMVData('Tibolone Tablets BP 2.5 mg', {
+      protocolNo: 'WC/QC/AMV/0316',
+      batchNo: 'TB2501',
       companyName: 'WESTCOAST PHARMACEUTICAL WORKS LTD.',
+      reportDate: '20-Apr-2026',
     })
   );
 
-  // Initialize authentic Assay document state for Acarbose Tablets
+  // Initialize authentic Assay document state for the same shared product
   const [assayData, setAssayData] = useState<AMVDocumentData>(() =>
-    generateAMVDataForProduct('Acarbose Tablets 100 mg', {
-      documentNo: 'WC/QC/AMV/033',
-      validationBatchNo: 'ACT-2601',
-      standardLotNo: 'WS/2026/042',
+    generateAMVDataForProduct('Tibolone Tablets BP 2.5 mg', {
+      documentNo: 'WC/QC/AMV/0316',
+      validationBatchNo: 'TB2501',
+      standardLotNo: 'WS/DIS/2026/019',
       companyName: 'WESTCOAST PHARMACEUTICAL WORKS LTD.',
+      reportDate: '20-Apr-2026',
+      effectiveDate: '20-Apr-2026',
     })
   );
 
-  // Dedicated reactive field handlers to instantly reflect user input changes across active documents
+  // Dedicated reactive field handlers to instantly reflect user input changes across ALL active documents
   const handleCompanyNameChange = (newCompany: string) => {
     setCompanyName(newCompany);
     setDissolutionData((prev) => ({ ...prev, companyName: newCompany }));
@@ -113,24 +118,16 @@ export function App() {
 
   const handleDocumentNoChange = (newDocNo: string) => {
     setDocumentNo(newDocNo);
-    if (validationMethod === 'dissolution') {
-      setDissolutionData((prev) => ({ ...prev, protocolNo: newDocNo }));
-    } else if (validationMethod === 'related_substances') {
-      setRsData((prev) => ({ ...prev, protocolNo: newDocNo }));
-    } else {
-      setAssayData((prev) => ({ ...prev, documentNo: newDocNo }));
-    }
+    setDissolutionData((prev) => ({ ...prev, protocolNo: newDocNo }));
+    setRsData((prev) => ({ ...prev, protocolNo: newDocNo }));
+    setAssayData((prev) => ({ ...prev, documentNo: newDocNo }));
   };
 
   const handleBatchNoChange = (newBatchNo: string) => {
     setBatchNo(newBatchNo);
-    if (validationMethod === 'dissolution') {
-      setDissolutionData((prev) => ({ ...prev, batchNoUsed: newBatchNo }));
-    } else if (validationMethod === 'related_substances') {
-      setRsData((prev) => ({ ...prev, batchNoUsed: newBatchNo }));
-    } else {
-      setAssayData((prev) => ({ ...prev, batchNoUsed: newBatchNo }));
-    }
+    setDissolutionData((prev) => ({ ...prev, batchNoUsed: newBatchNo }));
+    setRsData((prev) => ({ ...prev, batchNoUsed: newBatchNo }));
+    setAssayData((prev) => ({ ...prev, batchNoUsed: newBatchNo }));
   };
 
   const handleStandardLotChange = (newLot: string) => {
@@ -145,50 +142,41 @@ export function App() {
     }));
   };
 
+  const handleReportDateChange = (newDate: string) => {
+    setReportDate(newDate);
+    setDissolutionData((prev) => ({
+      ...prev,
+      reportDate: newDate,
+      effectiveDate: newDate,
+      signOffs: prev.signOffs ? {
+        ...prev.signOffs,
+        approvedBy: { ...prev.signOffs.approvedBy, date: newDate },
+      } : prev.signOffs,
+    }));
+    setRsData((prev) => ({
+      ...prev,
+      reportDate: newDate,
+      effectiveDate: newDate,
+      signOffs: prev.signOffs ? {
+        ...prev.signOffs,
+        approvedBy: { ...prev.signOffs.approvedBy, date: newDate },
+      } : prev.signOffs,
+    }));
+    setAssayData((prev) => ({
+      ...prev,
+      reportDate: newDate,
+      effectiveDate: newDate,
+      signOffs: prev.signOffs ? {
+        ...prev.signOffs,
+        approvedBy: { ...prev.signOffs.approvedBy, date: newDate },
+      } : prev.signOffs,
+    }));
+  };
+
   // Handle switching between Dissolution, Related Substances, and Assay methods
+  // Preserves the single shared product name, strength, batch and report date
   const handleValidationMethodChange = (newMethod: ValidationMethodType) => {
     setValidationMethod(newMethod);
-    if (newMethod === 'dissolution') {
-      const defaultDissProduct = 'Tibolone Tablets BP 2.5 mg';
-      setProductName(defaultDissProduct);
-      setDocumentNo('WC/QC/AMV/0316');
-      setBatchNo('TB2501');
-      setStandardLot('WS/DIS/2026/019');
-      setDissolutionData(
-        buildFullDissolutionAMVData(defaultDissProduct, {
-          protocolNo: 'WC/QC/AMV/0316',
-          batchNo: 'TB2501',
-          companyName,
-        })
-      );
-    } else if (newMethod === 'related_substances') {
-      const defaultRSProduct = 'Sodium Valproate Oral Solution BP';
-      setProductName(defaultRSProduct);
-      setDocumentNo('WC/QC/RS/045');
-      setBatchNo('SVS-2601');
-      setStandardLot('WS/RS/2026/018');
-      setRsData(
-        buildFullRSAMVData(defaultRSProduct, {
-          protocolNo: 'WC/QC/RS/045',
-          batchNo: 'SVS-2601',
-          companyName,
-        })
-      );
-    } else {
-      const defaultAssayProduct = 'Acarbose Tablets 100 mg';
-      setProductName(defaultAssayProduct);
-      setDocumentNo('WC/QC/AMV/033');
-      setBatchNo('ACT-2601');
-      setStandardLot('WS/2026/042');
-      setAssayData(
-        generateAMVDataForProduct(defaultAssayProduct, {
-          documentNo: 'WC/QC/AMV/033',
-          validationBatchNo: 'ACT-2601',
-          standardLotNo: 'WS/2026/042',
-          companyName,
-        })
-      );
-    }
   };
 
   const handleProductNameChange = (newProduct: string) => {
@@ -205,37 +193,44 @@ export function App() {
     setBatchNo(codes.validationBatchNo);
     setStandardLot(codes.standardLotNo);
 
-    // Instant real-time regeneration on product change (0 ms lag)
+    // Synchronize ALL THREE templates simultaneously from the single source of truth
+    const localDiss = buildFullDissolutionAMVData(newProduct, {
+      verifiedMonograph: fpsOverrides ? {
+        ...fpsOverrides,
+        ...(fpsOverrides.diluent ? { medium: fpsOverrides.diluent } : {}),
+      } : undefined,
+      protocolNo: cleanDocNo,
+      batchNo: codes.validationBatchNo,
+      companyName,
+      reportDate,
+    });
+    setDissolutionData(localDiss);
+
+    const localRS = buildFullRSAMVData(newProduct, {
+      verifiedMonograph: fpsOverrides ? fpsOverrides : undefined,
+      protocolNo: cleanDocNo,
+      batchNo: codes.validationBatchNo,
+      companyName,
+      reportDate,
+    });
+    setRsData(localRS);
+
+    const localData = generateAMVDataForProduct(newProduct, {
+      documentNo: cleanDocNo,
+      validationBatchNo: codes.validationBatchNo,
+      standardLotNo: codes.standardLotNo,
+      companyName,
+      reportDate,
+      effectiveDate: reportDate,
+    }, fpsOverrides);
+    const recalculated = recalculateAMVData(localData);
+    setAssayData(recalculated);
+
     if (validationMethod === 'dissolution') {
-      const localDiss = buildFullDissolutionAMVData(newProduct, {
-        verifiedMonograph: fpsOverrides ? {
-          ...fpsOverrides,
-          ...(fpsOverrides.diluent ? { medium: fpsOverrides.diluent } : {}),
-        } : undefined,
-        protocolNo: cleanDocNo,
-        batchNo: codes.validationBatchNo,
-        companyName,
-      });
-      setDissolutionData(localDiss);
       checkAndPromptMajorChanges(localDiss, 'dissolution', newProduct);
     } else if (validationMethod === 'related_substances') {
-      const localRS = buildFullRSAMVData(newProduct, {
-        verifiedMonograph: fpsOverrides ? fpsOverrides : undefined,
-        protocolNo: cleanDocNo,
-        batchNo: codes.validationBatchNo,
-        companyName,
-      });
-      setRsData(localRS);
       checkAndPromptMajorChanges(localRS, 'related_substances', newProduct);
     } else {
-      const localData = generateAMVDataForProduct(newProduct, {
-        documentNo: cleanDocNo,
-        validationBatchNo: codes.validationBatchNo,
-        standardLotNo: codes.standardLotNo,
-        companyName,
-      }, fpsOverrides);
-      const recalculated = recalculateAMVData(localData);
-      setAssayData(recalculated);
       checkAndPromptMajorChanges(recalculated, 'assay', newProduct);
     }
   };
@@ -253,42 +248,43 @@ export function App() {
       setProductName(activeProduct);
     }
 
+    const localDiss = buildFullDissolutionAMVData(activeProduct, {
+      verifiedMonograph: overrides ? {
+        ...overrides,
+        ...(overrides.diluent ? { medium: overrides.diluent } : {}),
+      } : undefined,
+      protocolNo: documentNo,
+      batchNo,
+      companyName,
+      reportDate,
+    });
+    setDissolutionData(localDiss);
+
+    const localRS = buildFullRSAMVData(activeProduct, {
+      verifiedMonograph: overrides ? overrides : undefined,
+      protocolNo: documentNo,
+      batchNo,
+      companyName,
+      reportDate,
+    });
+    setRsData(localRS);
+
+    const localData = generateAMVDataForProduct(activeProduct, {
+      documentNo,
+      validationBatchNo: batchNo,
+      standardLotNo: standardLot,
+      companyName,
+      reportDate,
+      effectiveDate: reportDate,
+    }, overrides);
+    const recalculated = recalculateAMVData(localData);
+    setAssayData(recalculated);
+
     if (validationMethod === 'dissolution') {
-      const localDiss = buildFullDissolutionAMVData(activeProduct, {
-        verifiedMonograph: overrides ? {
-          ...overrides,
-          ...(overrides.diluent ? { medium: overrides.diluent } : {}),
-        } : undefined,
-        protocolNo: documentNo,
-        batchNo,
-        companyName,
-      });
-      setDissolutionData(localDiss);
-      setDocumentNo(localDiss.protocolNo);
-      setBatchNo(localDiss.batchNoUsed);
       checkAndPromptMajorChanges(localDiss, 'dissolution', activeProduct);
     } else if (validationMethod === 'related_substances') {
-      const localRS = buildFullRSAMVData(activeProduct, {
-        verifiedMonograph: overrides ? overrides : undefined,
-        protocolNo: documentNo,
-        batchNo,
-        companyName,
-      });
-      setRsData(localRS);
-      setDocumentNo(localRS.protocolNo);
-      setBatchNo(localRS.batchNoUsed);
       checkAndPromptMajorChanges(localRS, 'related_substances', activeProduct);
     } else {
-      const localData = generateAMVDataForProduct(activeProduct, {
-        documentNo,
-        validationBatchNo: batchNo,
-        standardLotNo: standardLot,
-        companyName,
-      }, overrides);
-      const recalculated = recalculateAMVData(localData);
-      setAssayData(recalculated);
-      setDocumentNo(recalculated.documentNo);
-      setBatchNo(recalculated.batchNoUsed || batchNo);
       checkAndPromptMajorChanges(recalculated, 'assay', activeProduct);
     }
   };
@@ -307,30 +303,26 @@ export function App() {
     setBatchNo(codes.validationBatchNo);
     setStandardLot(codes.standardLotNo);
 
-    if (validationMethod === 'dissolution') {
-      setDissolutionData((prev) => ({
+    setDissolutionData((prev) => ({
+      ...prev,
+      protocolNo: cleanDocNo,
+      batchNoUsed: codes.validationBatchNo,
+    }));
+    setRsData((prev) => ({
+      ...prev,
+      protocolNo: cleanDocNo,
+      batchNoUsed: codes.validationBatchNo,
+    }));
+    setAssayData((prev) =>
+      recalculateAMVData({
         ...prev,
-        protocolNo: cleanDocNo,
+        documentNo: cleanDocNo,
         batchNoUsed: codes.validationBatchNo,
-      }));
-    } else if (validationMethod === 'related_substances') {
-      setRsData((prev) => ({
-        ...prev,
-        protocolNo: cleanDocNo,
-        batchNoUsed: codes.validationBatchNo,
-      }));
-    } else {
-      setAssayData((prev) =>
-        recalculateAMVData({
-          ...prev,
-          documentNo: cleanDocNo,
-          batchNoUsed: codes.validationBatchNo,
-          reagentsAndStandards: prev.reagentsAndStandards.map((r) =>
-            r.name.includes('RS') ? { ...r, batchNo: codes.referenceStandardLot } : r
-          ),
-        })
-      );
-    }
+        reagentsAndStandards: prev.reagentsAndStandards.map((r) =>
+          r.name.includes('RS') ? { ...r, batchNo: codes.referenceStandardLot } : r
+        ),
+      })
+    );
   };
 
   // Automated diff check to prompt user for Reason for Change if major parameters altered
@@ -359,50 +351,45 @@ export function App() {
     setIsLoading(true);
 
     try {
-      if (validationMethod === 'dissolution') {
-        const localDiss = buildFullDissolutionAMVData(productName, {
-          verifiedMonograph: fpsOverrides ? {
-            ...fpsOverrides,
-            ...(fpsOverrides.diluent ? { medium: fpsOverrides.diluent } : {}),
-          } : undefined,
-          protocolNo: documentNo,
-          batchNo,
-          companyName,
-        });
-        setDissolutionData(localDiss);
-        setDocumentNo(localDiss.protocolNo);
-        setBatchNo(localDiss.batchNoUsed);
-        checkAndPromptMajorChanges(localDiss, 'dissolution', productName);
-        return;
-      }
+      const localDiss = buildFullDissolutionAMVData(productName, {
+        verifiedMonograph: fpsOverrides ? {
+          ...fpsOverrides,
+          ...(fpsOverrides.diluent ? { medium: fpsOverrides.diluent } : {}),
+        } : undefined,
+        protocolNo: documentNo,
+        batchNo,
+        companyName,
+        reportDate,
+      });
+      setDissolutionData(localDiss);
 
-      if (validationMethod === 'related_substances') {
-        const localRS = buildFullRSAMVData(productName, {
-          verifiedMonograph: fpsOverrides ? fpsOverrides : undefined,
-          protocolNo: documentNo,
-          batchNo,
-          companyName,
-        });
-        setRsData(localRS);
-        setDocumentNo(localRS.protocolNo);
-        setBatchNo(localRS.batchNoUsed);
-        checkAndPromptMajorChanges(localRS, 'related_substances', productName);
-        return;
-      }
+      const localRS = buildFullRSAMVData(productName, {
+        verifiedMonograph: fpsOverrides ? fpsOverrides : undefined,
+        protocolNo: documentNo,
+        batchNo,
+        companyName,
+        reportDate,
+      });
+      setRsData(localRS);
 
-      // Assay generation branch
       const localData = generateAMVDataForProduct(productName, {
         documentNo,
         validationBatchNo: batchNo,
         standardLotNo: standardLot,
         companyName,
+        reportDate,
+        effectiveDate: reportDate,
       }, fpsOverrides);
-      
       const recalculated = recalculateAMVData(localData);
       setAssayData(recalculated);
-      setDocumentNo(recalculated.documentNo);
-      setBatchNo(recalculated.batchNoUsed || batchNo);
-      checkAndPromptMajorChanges(recalculated, 'assay', productName);
+
+      if (validationMethod === 'dissolution') {
+        checkAndPromptMajorChanges(localDiss, 'dissolution', productName);
+      } else if (validationMethod === 'related_substances') {
+        checkAndPromptMajorChanges(localRS, 'related_substances', productName);
+      } else {
+        checkAndPromptMajorChanges(recalculated, 'assay', productName);
+      }
     } catch (err) {
       console.error('Generation failed:', err);
     } finally {
@@ -629,6 +616,8 @@ export function App() {
           onDocumentNoChange={handleDocumentNoChange}
           batchNo={batchNo}
           onBatchNoChange={handleBatchNoChange}
+          reportDate={reportDate}
+          onReportDateChange={handleReportDateChange}
           standardLot={standardLot}
           onStandardLotChange={handleStandardLotChange}
           companyName={companyName}

@@ -38,8 +38,9 @@ export function getCleanDrugDisplayName(productName: string, fallback?: string):
 
   let s = productName.trim();
 
-  // 1. Strip test parameter prefixes
+  // 1. Strip test parameter prefixes and analytical keywords
   s = s.replace(/^(?:Dissolution|Assay|Related Substances|Organic Impurities)\s+(?:of|in|for)\s+/i, '');
+  s = s.replace(/\b(?:Related\s+Substances?|Organic\s+Impurities|Impurities|Impurity|Assay|Dissolution|Uniformity\s+of\s+Dosage\s+Units)\b/gi, ' ');
 
   // 2. Strip method / detector suffixes
   s = s.replace(/\s+(?:by\s+HPLC|by\s+GC|by\s+UV|with\s+UV|with\s+UV\/Vis|with\s+FID|with\s+PDA).*$/i, '');

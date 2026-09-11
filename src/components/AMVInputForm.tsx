@@ -13,6 +13,8 @@ interface AMVInputFormProps {
   onStandardLotChange: (val: string) => void;
   companyName: string;
   onCompanyNameChange: (val: string) => void;
+  reportDate?: string;
+  onReportDateChange?: (val: string) => void;
   validationMethod: ValidationMethodType;
   onValidationMethodChange: (method: ValidationMethodType) => void;
   onGenerate: () => void;
@@ -71,6 +73,8 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
   onStandardLotChange,
   companyName,
   onCompanyNameChange,
+  reportDate,
+  onReportDateChange,
   validationMethod,
   onValidationMethodChange,
   onGenerate,
@@ -350,9 +354,9 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
           </div>
         </div>
 
-        {/* Advanced Identifiers Configuration (Company Name, Unique Document No, Batch No, Standard Lot) */}
+        {/* Advanced Identifiers Configuration (Company Name, Unique Document No, Batch No, Standard Lot, Report Date) */}
         {showAdvanced && (
-          <div className="pt-3 border-t border-zinc-200 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 bg-zinc-50/70 p-3 rounded-lg border border-zinc-200">
+          <div className="pt-3 border-t border-zinc-200 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 bg-zinc-50/70 p-3 rounded-lg border border-zinc-200">
             <div>
               <label className="block text-[11px] font-semibold text-zinc-600 uppercase tracking-wider mb-1 flex items-center gap-1">
                 <Building2 className="w-3 h-3" /> Company / Site Name
@@ -399,6 +403,19 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
                 value={standardLot}
                 onChange={(e) => onStandardLotChange(e.target.value)}
                 className="w-full px-2.5 py-1.5 text-xs bg-white border border-zinc-300 rounded font-mono font-medium text-zinc-800 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-zinc-600 uppercase tracking-wider mb-1 flex items-center gap-1">
+                <Calendar className="w-3 h-3" /> Report Date
+              </label>
+              <input
+                type="text"
+                value={reportDate || ''}
+                onChange={(e) => onReportDateChange && onReportDateChange(e.target.value)}
+                placeholder="20-Apr-2026"
+                className="w-full px-2.5 py-1.5 text-xs bg-white border border-zinc-300 rounded font-sans font-medium text-zinc-800 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 

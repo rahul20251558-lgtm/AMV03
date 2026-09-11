@@ -1189,6 +1189,8 @@ export function buildFullRSAMVData(
     protocolDate?: string;
     batchNo?: string;
     companyName?: string;
+    reportDate?: string;
+    effectiveDate?: string;
     verifiedMonograph?: Partial<RSMonographSeed>;
   }
 ): RSAMVDocumentData {
@@ -1366,12 +1368,14 @@ export function buildFullRSAMVData(
     }
   }
 
+  const platesCriteria = 'NLT 1500';
+
   // 9. Validation Parameters Table
   const validationParameters: RSValidationParameterCriteria[] = [
     {
       srNo: '5.1',
       parameter: 'System Suitability',
-      acceptanceCriteria: `Resolution between ${seed.impurityName} and main active peak NLT 2.0; %RSD of peak response NMT 2.0 %; theoretical plates NLT 1500; tailing factor NMT 1.5.`,
+      acceptanceCriteria: `Resolution between ${seed.impurityName} and main active peak NLT 2.0; %RSD of peak response NMT 2.0 %; theoretical plates ${platesCriteria}; tailing factor NMT 1.5.`,
       resultRemark: `Resolution 2.45; %RSD ${ssMath.rsdArea} %; Theoretical plates 2840; Tailing 1.15 — Complies`,
     },
     {
@@ -1419,6 +1423,7 @@ export function buildFullRSAMVData(
   ];
 
   const reportNumber = docNo.includes('/AMV/') ? docNo.replace('/AMV/', '/AMVR/') : `${docNo}/R`;
+  const safeReportDate = options?.reportDate || '17-Jul-2024';
 
   const doc: RSAMVDocumentData = {
     companyName,
@@ -1427,7 +1432,7 @@ export function buildFullRSAMVData(
     protocolNo: docNo,
     protocolDate: docDate,
     reportNo: reportNumber,
-    reportDate: '17-Jul-2024',
+    reportDate: safeReportDate,
     productName: seed.productName,
     labelClaim: dynamicLabelClaim,
     testParameter: seed.testParameter,
@@ -1441,7 +1446,7 @@ export function buildFullRSAMVData(
         signature: 'Signed',
         date: '16-Jul-2024',
         dateProtocol: '09-Jul-2024',
-        dateReport: '16-Jul-2024',
+        dateReport: safeReportDate,
       },
       checkedBy: {
         designation: 'Executive, Quality Control',
@@ -1449,23 +1454,23 @@ export function buildFullRSAMVData(
         signature: 'Signed',
         date: '16-Jul-2024',
         dateProtocol: '09-Jul-2024',
-        dateReport: '16-Jul-2024',
+        dateReport: safeReportDate,
       },
       reviewedBy: {
         designation: 'Manager, Quality Assurance',
         name: 'Anil Parmar',
         signature: 'Signed',
-        date: '17-Jul-2024',
+        date: safeReportDate,
         dateProtocol: '10-Jul-2024',
-        dateReport: '17-Jul-2024',
+        dateReport: safeReportDate,
       },
       authorisedBy: {
         designation: 'General Manager, Quality (Head QA/QC)',
         name: 'Suresh Shah',
         signature: 'Signed',
-        date: '17-Jul-2024',
+        date: safeReportDate,
         dateProtocol: '10-Jul-2024',
-        dateReport: '17-Jul-2024',
+        dateReport: safeReportDate,
       },
     },
 
@@ -1516,6 +1521,7 @@ export function buildFullRSAMVData(
         rsdArea: ssMath.rsdArea,
         tailingFactor: 1.15,
         theoreticalPlates: 2840,
+        theoreticalPlatesCriteria: platesCriteria,
         resolution: 2.45,
         conclusionProtocol: 'The system suitability parameters shall be verified prior to starting the sample analysis sequence.',
         conclusionReport: `The system suitability test complies with all acceptance criteria (%RSD of peak area = ${ssMath.rsdArea} %, Resolution = 2.45, Plates = 2840, Tailing = 1.15). The chromatographic system is verified as suitable.`,

@@ -569,7 +569,9 @@ export const RSAMVDocumentViewer: React.FC<RSAMVDocumentViewerProps> = ({
                 </td>
                 <td className="bg-zinc-50 font-bold border border-zinc-300 px-3 py-1 text-zinc-700">Theoretical Plates (N)</td>
                 <td className="border border-zinc-300 px-3 py-1 font-mono font-bold text-zinc-900">
-                  {isProtocol ? 'Limit: NLT 800' : `${data.systemSuitability.stats.theoreticalPlates} (Limit: NLT 800)`}
+                  {isProtocol
+                    ? `Limit: ${data.systemSuitability.stats.theoreticalPlatesCriteria || 'NLT 1500'}`
+                    : `${data.systemSuitability.stats.theoreticalPlates} (Limit: ${data.systemSuitability.stats.theoreticalPlatesCriteria || 'NLT 1500'})`}
                 </td>
               </tr>
               <tr>

@@ -341,6 +341,7 @@ export interface RSSystemSuitabilityStats {
   rsdArea: number;
   tailingFactor: number;
   theoreticalPlates: number;
+  theoreticalPlatesCriteria?: string;
   resolution: number;
   conclusionProtocol: string;
   conclusionReport: string;
