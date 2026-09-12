@@ -859,12 +859,12 @@ export function getBaseMonograph(productName: string): MonographDefinition {
     reagents: ["Acetonitrile", "Potassium Dihydrogen Phosphate", "Phosphoric Acid", "Milli-Q Water"]
   };
 }
-export function buildFullAMVDataFromMonograph(productName, mono, existingCodes, targetApi?: string) {
+export function buildFullAMVDataFromMonograph(productName, mono, existingCodes, fpsOverrides?: any) {
   const codes = {
     ...generateUniqueValidationCodes(productName),
     ...existingCodes || {}
   };
-  const extracted = extractDynamicLabelClaim(productName, '', targetApi || mono.activeSubstance, mono.labelClaim);
+  const extracted = extractDynamicLabelClaim(productName, '', fpsOverrides?.targetApi || mono.activeSubstance, mono.labelClaim);
   let dynamicLabelClaim = extracted.labelClaim;
   let dynamicActiveSubstance = extracted.activeSubstance;
   const baseArea = mono.nominalArea;
@@ -913,7 +913,26 @@ export function buildFullAMVDataFromMonograph(productName, mono, existingCodes, 
       });
     }
   }
-  const precMath = generatePrecisionData(runKey, nominalWeight, baseArea, 100);
+  
+  const P = fpsOverrides?.potencyDecimal || 1.0;
+  const F = fpsOverrides?.saltFactor || 1.0;
+  const A_std = ssMath.meanArea;
+  
+  const ctxPrec = {
+    targetPct: 100,
+    LC_mg: nominalWeight,
+    A_std: A_std,
+    W_S: nominalWeight,
+    D_S: 100,
+    D_T: 100,
+    W_T: nominalWeight,
+    AVG_WT: nominalWeight,
+    P: P,
+    F: F,
+    methodType: 'assay' as const
+  };
+  const precMath = generatePrecisionData(runKey, nominalWeight, baseArea, 100, false, ctxPrec);
+
   const precisionRows = precMath.analyst1.rows.map((r, i) => ({
     sampleNo: `Preparation ${r.determinationNo}`,
     analyst1Assay: r.percentAssayOrDissolved,
@@ -1295,5 +1314,5 @@ export function generateAMVDataForProduct(
     if (fpsOverrides.diluent) mono.chromatographicConditions.diluent = fpsOverrides.diluent;
     if (fpsOverrides.workingConcentration) mono.chromatographicConditions.workingConcentration = fpsOverrides.workingConcentration;
   }
-  return buildFullAMVDataFromMonograph(productName, mono, existingCodes, fpsOverrides?.targetApi);
+  return buildFullAMVDataFromMonograph(productName, mono, existingCodes, fpsOverrides?.fpsOverrides?.targetApi);
 }

@@ -705,6 +705,8 @@ export function buildFullDissolutionAMVData(
     verifiedMonograph?: Partial<DissolutionMonographInfo>;
     includeForcedDegradation?: boolean;
     targetApi?: string;
+    potencyDecimal?: number;
+    saltFactor?: number;
   }
 ): DissolutionAMVDocumentData {
   const safeProductName = (productName && productName.trim()) ? productName.trim() : 'Tibolone Tablets BP 2.5 mg';
@@ -830,6 +832,8 @@ export function buildFullDissolutionAMVData(
 
   // 2. Mathematically Sound System Suitability (6 preparations as per USP/BP standard & authentic QC report)
   const ssMath = generateSystemSuitabilityInjections(mono.productName, nominalArea, 50.0, 6, activeRt, 4850, 1.12);
+  
+  const A_std = ssMath.meanArea;
   const ssInjections: DissolutionSystemSuitabilityRow[] = ssMath.injections.map((inj) => ({
     srNo: inj.srNo,
     weightMg: inj.weightMg,
@@ -880,7 +884,23 @@ export function buildFullDissolutionAMVData(
   const rsd125 = Number(((sd125 / mean125) * 100).toFixed(2));
 
   // 5. Method Precision (Repeatability) - Content strictly scaled to strengthNum!
-  const precMath = generatePrecisionData(mono.productName, strengthNum, nominalArea, 99.8, true);
+  
+  const P = overrides?.potencyDecimal || 0.998;
+  const F = overrides?.saltFactor || 1.0;
+  
+  const ctx = {
+    targetPct: 99.8,
+    LC_mg: strengthNum,
+    A_std: ssMath.meanArea,
+    C_std: cWorkingNominal,
+    V_medium: vMedNum,
+    DF: df,
+    P: P,
+    F: F,
+    methodType: 'dissolution' as const
+  };
+  const precMath = generatePrecisionData(mono.productName, strengthNum, nominalArea, 99.8, true, ctx);
+
   const precisionRows: DissolutionPrecisionRow[] = precMath.analyst1.rows.map((r, i) => ({
     srNo: r.determinationNo,
     sampleId: `Dissolution Unit Vessel ${i + 1}`,
@@ -1088,10 +1108,10 @@ export function buildFullDissolutionAMVData(
   };
 
   // 10. Solution Stability Data (0h, 12h, 24h, 48h)
-  const randStab = createSeededRandom(`${mono.productName.toLowerCase()}_stability`);
-  const initStdArea = typeof nominalArea === 'number' ? nominalArea : 42744;
-  const initSmpArea = Math.round(initStdArea * 0.998);
-  const initialDissolved = 98.60;
+  const randStab = createSeededRandom(mono.productName.toLowerCase() + "_stability");
+  const initStdArea = A_std;
+  const initSmpArea = Math.round(initStdArea * (0.998 + (randStab() - 0.5) * 0.01));
+  const initialDissolved = Number(((initSmpArea / A_std) * cWorkingNominal * vMedNum * df * P * F * 100 / (strengthNum * 1000)).toFixed(2));
 
   const calcDiff = (curr: number, init: number): string => {
     const diff = (Math.abs(curr - init) / init) * 100;
@@ -1099,7 +1119,7 @@ export function buildFullDissolutionAMVData(
   };
 
   const calcDissolved = (smp: number, std: number): string => {
-    const val = initialDissolved * (smp / std) / (initSmpArea / initStdArea);
+    const val = (smp / std) * cWorkingNominal * vMedNum * df * P * F * 100 / (strengthNum * 1000);
     return `${val.toFixed(2)} %`;
   };
 
@@ -1220,12 +1240,12 @@ export function buildFullDissolutionAMVData(
   // 4.4 Calculation Formula & Worked Example
   const meanStdAreaVal = typeof ssMath.meanArea === 'number' ? ssMath.meanArea : 40120;
   const sampleAreaVal = Math.round(meanStdAreaVal * 0.9942);
-  const workedCalcPercent = Number(((sampleAreaVal / meanStdAreaVal) * (cWorkingNominal / 1000) * (vMedNum * df) * (100 / strengthNum)).toFixed(2));
+  const workedCalcPercent = Number(((sampleAreaVal / A_std) * (cWorkingNominal / 1000) * (vMedNum * df) * (100 / strengthNum) * P * F).toFixed(2));
   const workedCalcMg = Number(((workedCalcPercent * strengthNum) / 100).toFixed(2));
 
   const calculationFormula: DissolutionCalculationFormula = {
-    formula: '% Dissolved = (A_smp / A_std) × (C_std / 1000) × (V_medium × DF) × (100 / LC)',
-    description: 'Where: A_smp = Peak area of active analyte in sample solution; A_std = Mean peak area of active analyte in standard solution (n = 6 replicate injections); C_std = Concentration of active standard solution (µg/mL); V_medium = Volume of dissolution medium (mL); DF = Dilution factor of sample aliquot (DF = 1.0 if undiluted); LC = Declared label claim of active ingredient per dosage unit (mg); 1000 = Conversion factor (µg to mg); 100 = Percentage multiplier.',
+    formula: '% Dissolved = (A_smp / A_std) × (C_std / 1000) × (V_medium × DF) × P × F × (100 / LC)',
+    description: 'Where: A_smp = Peak area of active analyte in sample solution; A_std = Mean peak area of active analyte in standard solution (n = 6 replicate injections); C_std = Concentration of active standard solution (µg/mL); V_medium = Volume of dissolution medium (mL); DF = Dilution factor of sample aliquot (DF = 1.0 if undiluted); LC = Declared label claim of active ingredient per dosage unit (mg); P = Reference standard potency (decimal); F = Salt-to-base conversion factor; 1000 = Conversion factor (µg to mg); 100 = Percentage multiplier.',
     workedExample: {
       sampleArea: sampleAreaVal,
       standardArea: meanStdAreaVal,
@@ -1296,7 +1316,7 @@ export function buildFullDissolutionAMVData(
       name: 'Acetonitrile / Methanol',
       grade: 'HPLC Grade (Purity ≥ 99.9 %)',
       make: 'Merck Life Science / Honeywell Burdick & Jackson',
-      lotNo: 'ACN-25B02',
+      lotNo: `ACN-25B02-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
       potency: '99.98 %',
       basis: 'As-is basis',
       expiryDate: '28-Feb-2027',
@@ -1305,7 +1325,7 @@ export function buildFullDissolutionAMVData(
       name: 'Dissolution Medium Buffer Salts / Surfactant',
       grade: 'Analytical Reagent (AR Grade, Purity ≥ 99.5 %)',
       make: 'Sigma-Aldrich / Qualigens Chemicals',
-      lotNo: 'MED-25A14',
+      lotNo: `MED-25A14-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
       potency: '99.60 %',
       basis: 'As-is basis',
       expiryDate: '30-Apr-2027',
@@ -1314,7 +1334,7 @@ export function buildFullDissolutionAMVData(
       name: 'High-Purity Ultrapure Water',
       grade: 'Milli-Q Ultrapure Water (Conductivity < 0.055 µS/cm)',
       make: 'Millipore Direct-Q 3 UV Water Purification System',
-      lotNo: 'MQ-2025-W27',
+      lotNo: `MQ-2025-W27-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
       potency: '100.0 % (Resistivity 18.2 MΩ·cm)',
       basis: 'Freshly generated on date of testing',
       expiryDate: 'Freshly drawn (24 h valid)',
@@ -1382,36 +1402,29 @@ export function buildFullDissolutionAMVData(
   ];
 
   // 9. Filter Suitability (Filtered vs Centrifuged, % Difference NMT 2.0 %)
-  const filterCentrifugedArea = typeof nominalArea === 'number' ? nominalArea : 40150;
+  
+  const randFilter = createSeededRandom(mono.productName + batchNo + "filter");
+  const filterCentrifugedArea = Math.round(ssMath.meanArea * (0.995 + (randFilter() - 0.5) * 0.01));
+  
+  function getFilterRow(discard: string, pctTarget: number) {
+    const targetAreaRaw = (pctTarget / 100) * filterCentrifugedArea;
+    const area = Math.round(targetAreaRaw);
+    const pct = Number((area / filterCentrifugedArea * 100).toFixed(2));
+    const diff = Number(Math.abs(100 - pct).toFixed(2));
+    return {
+      discardVolumeMl: discard,
+      sampleArea: area,
+      percentRecovery: pct,
+      percentDiff: diff,
+      compliance: 'Complies (Diff \u2264 2.0 %)'
+    };
+  }
+  
   const filterRows: DissolutionFilterSuitabilityRow[] = [
-    {
-      discardVolumeMl: '0 mL (Initial Filtrate)',
-      sampleArea: Math.round(filterCentrifugedArea * 0.9825),
-      percentRecovery: 98.25,
-      percentDiff: 1.75,
-      compliance: 'Complies (Diff ≤ 2.0 %)',
-    },
-    {
-      discardVolumeMl: '3 mL (Discarded First 3 mL)',
-      sampleArea: Math.round(filterCentrifugedArea * 0.9985),
-      percentRecovery: 99.85,
-      percentDiff: 0.15,
-      compliance: 'Complies (Diff ≤ 2.0 %)',
-    },
-    {
-      discardVolumeMl: '5 mL (Discarded First 5 mL)',
-      sampleArea: Math.round(filterCentrifugedArea * 0.9994),
-      percentRecovery: 99.94,
-      percentDiff: 0.06,
-      compliance: 'Complies (Diff ≤ 2.0 %)',
-    },
-    {
-      discardVolumeMl: '10 mL (Discarded First 10 mL)',
-      sampleArea: Math.round(filterCentrifugedArea * 0.9998),
-      percentRecovery: 99.98,
-      percentDiff: 0.02,
-      compliance: 'Complies (Diff ≤ 2.0 %)',
-    },
+    getFilterRow('0 mL (Initial Filtrate)', 98.25 + (randFilter()-0.5)*0.5),
+    getFilterRow('3 mL (Discarded First 3 mL)', 99.85 + (randFilter()-0.5)*0.2),
+    getFilterRow('5 mL (Discarded First 5 mL)', 99.94 + (randFilter()-0.5)*0.1),
+    getFilterRow('10 mL (Discarded First 10 mL)', 99.98 + (randFilter()-0.5)*0.05)
   ];
 
   const filterSuitability: DissolutionFilterSuitabilityData = {
@@ -1715,7 +1728,7 @@ export function buildFullDissolutionAMVData(
         medium: mono.medium,
         mediumTemperature: mono.mediumTemperature,
         samplingTime: mono.samplingTime,
-        sampleTreatment: `Withdraw 10 mL of the dissolution medium from the zone midway between the surface of the medium and the top of the rotating blade/basket, filter through a 0.45 µm membrane filter, discard the first 3 mL of filtrate, and dilute with ${mono.diluent} if required.`,
+        sampleTreatment: `Withdraw 10 mL of the dissolution medium from the zone midway between the surface of the medium and the top of the Apparatus 1 = basket, Apparatus 2 = blade, filter through a 0.45 µm membrane filter, discard the first 3 mL of filtrate, and dilute with ${mono.diluent} if required.`,
         numberOfUnits: '6 units for Stage 1 (S1) testing as per pharmacopoeia',
       },
       solutionPreparation: {
@@ -1724,7 +1737,7 @@ export function buildFullDissolutionAMVData(
         blank: `Freshly prepared dissolution medium (${mono.diluent}).`,
         placeboSolution: `Transfer an accurately weighed quantity of placebo powder equivalent to one dosage unit into a vessel containing ${mono.medium}, process under identical dissolution conditions, filter, and inject.`,
         precisionStandardSolution: `Standard preparation containing active substance at working concentration (${cWorkingNominal} µg/mL), prepared in duplicate from distinct standard weighings to confirm relative response factor repeatability.`,
-        precisionSampleSolution: `Six individual tablet/capsule units tested simultaneously in dissolution apparatus vessels 1 through 6, sampled at ${mono.samplingTime}, filtered and analysed.`,
+        precisionSampleSolution: `Six individual dosage units tested simultaneously in dissolution apparatus vessels 1 through 6, sampled at ${mono.samplingTime}, filtered and analysed.`,
         linearitySolutions: `Prepare 5 calibrated solutions spanning 50 %, 75 %, 100 %, 125 %, and 150 % of nominal working concentration (${cWorkingNominal} µg/mL) by serial dilution of the stock standard with ${mono.diluent}.`,
         handlingNote: `Degas the dissolution medium prior to use to prevent bubble formation. Equilibrate vessels at 37 °C ± 0.5 °C. Analyse filtered samples immediately or within established solution stability periods.`,
       },
@@ -1864,7 +1877,7 @@ export function buildFullDissolutionAMVData(
     ],
 
     abbreviations: [
-      { abbreviation: 'AMVer', expansion: 'Analytical Method Verification' },
+      { abbreviation: 'AMV', expansion: 'Analytical Method Verification' },
       { abbreviation: 'HPLC', expansion: 'High Performance Liquid Chromatography' },
       { abbreviation: 'LA', expansion: 'Label Amount / Claim' },
       { abbreviation: 'ICH', expansion: 'International Council for Harmonisation' },

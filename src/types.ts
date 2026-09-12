@@ -196,6 +196,9 @@ export interface RevisionHistoryItem {
 }
 
 export interface AMVDocumentData {
+  potencyDecimal?: number;
+  saltFactor?: number;
+
   companyName: string;
   companyAddress: string;
   documentNo: string;
@@ -486,6 +489,9 @@ export interface RSCompletionRecordItem {
 }
 
 export interface RSAMVDocumentData {
+  potencyDecimal?: number;
+  saltFactor?: number;
+
   companyName: string;
   documentTitle: string; // e.g. "ANALYTICAL METHOD VALIDATION PROTOCOL" or "REPORT"
   subTitle: string; // e.g. "(Organic Impurity by Gas Chromatography)" or "(Related Substances by HPLC)"
@@ -918,6 +924,9 @@ export interface DissolutionAnnexureItem {
 }
 
 export interface DissolutionAMVDocumentData {
+  potencyDecimal?: number;
+  saltFactor?: number;
+
   companyName: string;
   documentTitle: string; // "ANALYTICAL METHOD VERIFICATION PROTOCOL" or "REPORT"
   subTitle: string; // "(For DISSOLUTION Method)"

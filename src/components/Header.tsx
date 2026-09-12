@@ -264,17 +264,13 @@ export const Header: React.FC<HeaderProps> = ({
             )}
 
             {/* Quick Export Actions */}
-            <button
-              type="button"
-              onClick={onDownloadDocx}
+            <button type="button" onClick={onDownloadDocx}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-white bg-blue-700 hover:bg-blue-800 transition-colors shadow-xs"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Download .docx</span>
             </button>
-            <button
-              type="button"
-              onClick={onPrint}
+            <button type="button" onClick={onPrint}
               className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg text-zinc-700 bg-white border border-zinc-300 hover:bg-zinc-50 transition-colors"
               title="Print Document or Save as PDF"
             >

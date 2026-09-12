@@ -31,6 +31,8 @@ import {
 } from './pharmaMathEngine';
 
 export interface RSMonographSeed {
+  potencyDecimal?: number;
+  saltFactor?: number;
   productName: string;
   activeSubstance?: string;
   labelClaim: string;
@@ -1205,6 +1207,8 @@ export function buildFullRSAMVData(
   productName: string,
   options?: {
     targetApi?: string;
+    potencyDecimal?: number;
+    saltFactor?: number;
     protocolNo?: string;
     protocolDate?: string;
     batchNo?: string;
@@ -1360,7 +1364,22 @@ export function buildFullRSAMVData(
   const rsd125 = Number(((sd125 / m125) * 100).toFixed(2));
 
   // 5. Precision (Repeatability) - Content percentage around nominal
-  const precMath = generatePrecisionData(seed.productName, strengthNum, nominalArea, 99.85);
+  
+  const P = seed.potencyDecimal || 1.0;
+  const F = seed.saltFactor || 1.0;
+  const A_std = ssMath.meanArea;
+  
+  const ctxPrec = {
+    targetPct: 99.85,
+    LC_mg: strengthNum,
+    A_std: A_std,
+    C_std: nomPpm,
+    C_smp: nomPpm,
+    RRF: 1.0,
+    methodType: 'related_substances' as const
+  };
+  const precMath = generatePrecisionData(seed.productName, strengthNum, nominalArea, 99.85, false, ctxPrec);
+
   const precisionRows: RSPrecisionRow[] = precMath.analyst1.rows.map((r, i) => ({
     srNo: r.determinationNo,
     sampleId: `Finished Product Prep ${i + 1}`,

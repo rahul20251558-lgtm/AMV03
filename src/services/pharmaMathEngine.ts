@@ -24,6 +24,28 @@ export interface GeneratedRegression {
   residualSumOfSquares: number;
 }
 
+
+export interface PrecisionCalcContext {
+  targetPct: number;
+  LC_mg: number;
+  A_std: number;
+  C_std?: number;
+  V_medium?: number;
+  DF?: number;
+  P?: number;
+  F?: number;
+  // For Assay
+  W_S?: number;
+  D_S?: number;
+  D_T?: number;
+  W_T?: number;
+  AVG_WT?: number;
+  // For RS
+  C_smp?: number;
+  RRF?: number;
+  methodType: 'dissolution' | 'assay' | 'related_substances';
+}
+
 export interface GeneratedPrecisionRow {
   determinationNo: number;
   sampleWeightMg: number;
@@ -49,19 +71,25 @@ export interface GeneratedRecoveryLevel {
  * Deterministic pseudo-random number generator based on seed string
  * to produce consistent yet unique values for different products.
  */
-export function createSeededRandom(seedStr: string) {
-  let h = 2166136261 >>> 0;
-  for (let i = 0; i < seedStr.length; i++) {
-    h = Math.imul(h ^ seedStr.charCodeAt(i), 16777619);
+export function hashStr(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
   }
-  return function () {
-    h += (h << 13);
-    h ^= (h >>> 7);
-    h += (h << 3);
-    h ^= (h >>> 17);
-    h += (h << 5);
-    return (h >>> 0) / 4294967296;
+  return h >>> 0;
+}
+export function mulberry32(a: number) {
+  return function() {
+    a |= 0;
+    a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
   };
+}
+export function createSeededRandom(seedStr: string) {
+  return mulberry32(hashStr(seedStr));
 }
 
 /**
@@ -310,94 +338,90 @@ export function generatePrecisionData(
   strengthMg: number,
   nominalArea: number,
   targetMeanPercent: number = 99.8,
-  isDissolution: boolean = false
+  isDissolution: boolean = false,
+  ctx?: PrecisionCalcContext
 ) {
   const rand = createSeededRandom(`${productName.toLowerCase()}_precision`);
-  const rsdPercent = 0.35 + rand() * 0.55; // 0.35% - 0.90%
+  const rsdPercent = 0.35 + rand() * 0.55; 
   const numSamples = 6;
-
   const rows: GeneratedPrecisionRow[] = [];
-  let sumContent = 0;
-  let sumPercent = 0;
+  const analyst2Rows: GeneratedPrecisionRow[] = [];
+  
+  function getAreaAndPct(targetPct: number, sampleWt: number, r: () => number) {
+    let areaRaw = 0;
+    let pct = 0;
+    if (ctx && ctx.methodType === 'dissolution') {
+      areaRaw = (targetPct / 100) * (ctx.LC_mg * 1000) * ctx.A_std / ((ctx.C_std||1) * (ctx.V_medium||1) * (ctx.DF||1) * (ctx.P||1) * (ctx.F||1));
+      const area = Math.round(areaRaw + (r() - 0.5) * (nominalArea * 0.002));
+      pct = (area / ctx.A_std) * (ctx.C_std||1) * (ctx.V_medium||1) * (ctx.DF||1) * (ctx.P||1) * (ctx.F||1) * 100 / (ctx.LC_mg * 1000);
+      return { area, pct: Number(pct.toFixed(2)) };
+    } else if (ctx && ctx.methodType === 'assay') {
+      areaRaw = targetPct / 100 * ctx.A_std / ( ((ctx.W_S||1) * (ctx.P||1) * (ctx.F||1) / (ctx.D_S||1)) * ((ctx.D_T||1) / sampleWt) * ((ctx.AVG_WT||1) / ctx.LC_mg) );
+      const area = Math.round(areaRaw + (r() - 0.5) * (nominalArea * 0.002));
+      pct = (area / ctx.A_std) * ((ctx.W_S||1) * (ctx.P||1) * (ctx.F||1) / (ctx.D_S||1)) * ((ctx.D_T||1) / sampleWt) * ((ctx.AVG_WT||1) / ctx.LC_mg) * 100;
+      return { area, pct: Number(pct.toFixed(2)) };
+    } else if (ctx && ctx.methodType === 'related_substances') {
+      areaRaw = (targetPct / 100) * ctx.A_std / ( ((ctx.C_std||1) / (ctx.C_smp||1)) * (1 / (ctx.RRF||1)) );
+      const area = Math.round(areaRaw + (r() - 0.5) * (nominalArea * 0.002));
+      pct = (area / ctx.A_std) * ((ctx.C_std||1) / (ctx.C_smp||1)) * (100 / (ctx.RRF||1));
+      return { area, pct: Number(pct.toFixed(2)) };
+    }
+    // Fallback if ctx is missing
+    const exactPct = targetPct;
+    const area = Math.round(nominalArea * (targetPct / 100) * (sampleWt / strengthMg));
+    return { area, pct: Number(exactPct.toFixed(2)) };
+  }
 
-  const nominalWt = strengthMg;
+  // Analyst 1
   for (let i = 1; i <= numSamples; i++) {
-    // Generate physical quantities first. For dissolution, weight is exactly 1 tablet (nominal).
-    const sampleWt = isDissolution ? nominalWt : Number((nominalWt + (rand() - 0.5) * 0.4).toFixed(2));
+    const sampleWt = isDissolution ? strengthMg : Number((strengthMg + (rand() - 0.5) * 0.4).toFixed(2));
+    const truePct = targetMeanPercent + (rand() - 0.5) * rsdPercent;
     
-    // Desired true assay before instrument noise
-    const trueAssayPct = normalRandom(rand, targetMeanPercent, rsdPercent);
-    
-    // Theoretical area expected for this exact weight and assay
-    const theoreticalArea = (trueAssayPct / 100) * nominalArea * (sampleWt / nominalWt);
-    
-    // Actual instrument area has a tiny bit of noise (integer rounding also adds noise)
-    const area = Math.round(theoreticalArea + (rand() - 0.5) * (nominalArea * 0.002));
-    
-    // Derive the reported % Assay strictly from the physical quantities
-    const exactPct = (area / nominalArea) * (nominalWt / sampleWt) * 100;
-    const pct = Number(exactPct.toFixed(2));
+    const { area, pct } = getAreaAndPct(truePct, sampleWt, rand);
     const content = Number(((pct / 100) * strengthMg).toFixed(strengthMg >= 50 ? 1 : strengthMg >= 1 ? 2 : 3));
 
     rows.push({
       determinationNo: i,
-      sampleWeightMg: sampleWt > 0 ? sampleWt : 100.0,
+      sampleWeightMg: sampleWt,
       peakArea: area,
       contentFoundMg: content,
       percentAssayOrDissolved: pct,
     });
-
-    sumContent += content;
-    sumPercent += pct;
   }
 
-  const meanContent = Number((sumContent / numSamples).toFixed(strengthMg >= 50 ? 2 : 3));
-  const meanPercent = Number((sumPercent / numSamples).toFixed(2));
-
-  const variance =
-    rows.reduce((acc, curr) => acc + Math.pow(curr.percentAssayOrDissolved - meanPercent, 2), 0) /
-    (numSamples - 1);
-  const sd = Number(Math.sqrt(variance).toFixed(3));
-  const rsd = Number(((sd / meanPercent) * 100).toFixed(2));
-
-  // Analyst 2 for Intermediate Precision
+  // Analyst 2
   const rand2 = createSeededRandom(`${productName.toLowerCase()}_analyst2`);
-  const analyst2Rows: GeneratedPrecisionRow[] = [];
-  let sumA2Pct = 0;
   const targetA2Pct = targetMeanPercent + (rand2() - 0.5) * 0.4;
-
   for (let i = 1; i <= numSamples; i++) {
-    const sampleWt = isDissolution ? nominalWt : Number((nominalWt + (rand2() - 0.5) * 0.4).toFixed(2));
-    const trueAssayPct = normalRandom(rand2, targetA2Pct, rsdPercent * 1.05);
-    const theoreticalArea = (trueAssayPct / 100) * nominalArea * (sampleWt / nominalWt);
-    const area = Math.round(theoreticalArea + (rand2() - 0.5) * (nominalArea * 0.002));
+    const sampleWt = isDissolution ? strengthMg : Number((strengthMg + (rand2() - 0.5) * 0.4).toFixed(2));
+    const truePct = targetA2Pct + (rand2() - 0.5) * rsdPercent;
     
-    const exactPct = (area / nominalArea) * (nominalWt / sampleWt) * 100;
-    const pct = Number(exactPct.toFixed(2));
+    const { area, pct } = getAreaAndPct(truePct, sampleWt, rand2);
     const content = Number(((pct / 100) * strengthMg).toFixed(strengthMg >= 50 ? 1 : strengthMg >= 1 ? 2 : 3));
 
     analyst2Rows.push({
       determinationNo: i,
-      sampleWeightMg: sampleWt > 0 ? sampleWt : 100.0,
+      sampleWeightMg: sampleWt,
       peakArea: area,
       contentFoundMg: content,
       percentAssayOrDissolved: pct,
     });
-    sumA2Pct += pct;
   }
 
-  const meanA2Percent = Number((sumA2Pct / numSamples).toFixed(2));
-  const varianceA2 =
-    analyst2Rows.reduce((acc, curr) => acc + Math.pow(curr.percentAssayOrDissolved - meanA2Percent, 2), 0) /
-    (numSamples - 1);
+  const meanContent = Number((rows.reduce((a,b)=>a+b.contentFoundMg, 0) / numSamples).toFixed(strengthMg >= 50 ? 2 : 3));
+  const meanPercent = Number((rows.reduce((a,b)=>a+b.percentAssayOrDissolved, 0) / numSamples).toFixed(2));
+  const variance = rows.reduce((acc, curr) => acc + Math.pow(curr.percentAssayOrDissolved - meanPercent, 2), 0) / (numSamples - 1);
+  const sd = Number(Math.sqrt(variance).toFixed(3));
+  const rsd = Number(((sd / meanPercent) * 100).toFixed(2));
+
+  const meanA2Percent = Number((analyst2Rows.reduce((a,b)=>a+b.percentAssayOrDissolved, 0) / numSamples).toFixed(2));
+  const varianceA2 = analyst2Rows.reduce((acc, curr) => acc + Math.pow(curr.percentAssayOrDissolved - meanA2Percent, 2), 0) / (numSamples - 1);
   const sdA2 = Number(Math.sqrt(varianceA2).toFixed(3));
   const rsdA2 = Number(((sdA2 / meanA2Percent) * 100).toFixed(2));
 
-  // Cumulative of both analysts (12 determinations)
-  const allPercents = [...rows.map((r) => r.percentAssayOrDissolved), ...analyst2Rows.map((r) => r.percentAssayOrDissolved)];
+  const allPercents = [...rows.map(r => r.percentAssayOrDissolved), ...analyst2Rows.map(r => r.percentAssayOrDissolved)];
   const cumulMean = Number((allPercents.reduce((a, b) => a + b, 0) / 12).toFixed(2));
-  const cumulVar =
-    allPercents.reduce((acc, p) => acc + Math.pow(p - cumulMean, 2), 0) / 11;
+  const cumulVar = allPercents.reduce((acc, p) => acc + Math.pow(p - cumulMean, 2), 0) / 11;
   const cumulSd = Number(Math.sqrt(cumulVar).toFixed(3));
   const cumulRsd = Number(((cumulSd / cumulMean) * 100).toFixed(2));
 

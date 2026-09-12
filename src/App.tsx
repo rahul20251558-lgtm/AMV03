@@ -17,7 +17,7 @@ import {
 } from './services/pharmaDatabase';
 import { buildFullRSAMVData } from './services/rsPharmaDatabase';
 import { buildFullDissolutionAMVData } from './services/dissolutionPharmaDatabase';
-import { recalculateAMVData } from './services/mathUtils';
+import { computePctDissolved, computeAssayPct, computeImpPct, SALT_FACTORS, recalculateAMVData } from './services/mathUtils';
 import { extractDynamicLabelClaim } from './services/pharmaMathEngine';
 import { generateAndDownloadAMVDocx } from './services/amvDocxGenerator';
 import { generateAndDownloadRSAMVDocx } from './services/rsDocxGenerator';
@@ -62,8 +62,15 @@ export function App() {
   const [fontFamily, setFontFamily] = useState<FontFamilyType>('Times New Roman'); // Matches authentic monograph
   const [fontSize, setFontSize] = useState<FontSizePt>(12); // Standard 12pt pharma standard
   const [dataMode, setDataMode] = useState<DataMode>('DEMO'); // 'TEMPLATE' (default blank raw data) or 'DEMO' (verified analytical demonstration with watermark)
+  
+    const [validationResults, setValidationResults] = useState<string[]>([]);
+  const [selfTestResults, setSelfTestResults] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerationSuccess, setIsGenerationSuccess] = useState(false);
+
+  const [potencyDecimal, setPotencyDecimal] = useState(0.9982);
+  const [saltFactor, setSaltFactor] = useState(1.0000);
+
   const [loadingStepText, setLoadingStepText] = useState('');
   const [newAMVReadyInfo, setNewAMVReadyInfo] = useState<{
     productName: string;
@@ -557,8 +564,7 @@ Do you want to automatically switch to the suggested Report No.?`;
   return (
     <div className="min-h-screen bg-zinc-100/70 text-zinc-900 pb-16">
       {/* Header */}
-      <Header
-        theme={theme}
+      <Header  theme={theme}
         onThemeChange={setTheme}
         activeDocType={docType}
         onDocTypeChange={setDocType}
@@ -725,7 +731,7 @@ Do you want to automatically switch to the suggested Report No.?`;
 
           {/* Live Document Viewer & Exporter: Dissolution vs AMV (RS Format) vs Assay Format */}
           {validationMethod === 'dissolution' ? (
-            <DissolutionDocumentViewer
+            <DissolutionDocumentViewer seed={productName+batchNo} 
               data={dissolutionData}
               docType={docType}
               theme={theme}
@@ -742,7 +748,7 @@ Do you want to automatically switch to the suggested Report No.?`;
               onUpdateData={handleUpdateDissolutionData}
             />
           ) : validationMethod === 'related_substances' ? (
-            <RSAMVDocumentViewer
+            <RSAMVDocumentViewer seed={productName+batchNo} 
               data={rsData}
               docType={docType}
               theme={theme}
@@ -759,7 +765,7 @@ Do you want to automatically switch to the suggested Report No.?`;
               onUpdateData={handleUpdateRSData}
             />
           ) : (
-            <AMVDocumentViewer
+            <AMVDocumentViewer seed={productName+batchNo} 
               data={assayData}
               docType={docType}
               theme={theme}
