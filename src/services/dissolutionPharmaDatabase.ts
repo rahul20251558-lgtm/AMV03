@@ -572,7 +572,7 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
   },
 };
 
-export function getDissolutionMonograph(productName: string): DissolutionMonographInfo {
+export function getDissolutionMonograph(productName: string, targetApi?: string): DissolutionMonographInfo {
   if (!productName || !productName.trim()) {
     return DISSOLUTION_COMPENDIUM['tibolone tablets bp 2.5 mg'];
   }
@@ -590,7 +590,7 @@ export function getDissolutionMonograph(productName: string): DissolutionMonogra
       (prodClean && keyClean && (prodClean === keyClean || prodClean.includes(keyClean) || keyClean.includes(prodClean))) ||
       (prodPrimary.length >= 4 && keyPrimary.length >= 4 && (prodClean.includes(keyPrimary) || keyClean.includes(prodPrimary)))
     ) {
-      const { strengthNum, unit } = parseProductStrength(productName);
+      const { strengthNum, unit } = parseProductStrength(productName, targetApi);
       if (strengthNum > 0) {
         const monoStrength = parseProductStrength(mono.productName);
         if (monoStrength.strengthNum > 0 && monoStrength.strengthNum !== strengthNum) {
@@ -611,7 +611,7 @@ export function getDissolutionMonograph(productName: string): DissolutionMonogra
   // Dynamic scientific compendial synthesizer for custom / newly entered drugs
   const safeName = productName.trim() || 'Tibolone Tablets BP 2.5 mg';
   const cleanDrugName = getCleanDrugDisplayName(safeName);
-  const { strengthNum, unit } = parseProductStrength(safeName);
+  const { strengthNum, unit } = parseProductStrength(safeName, targetApi);
   const isCapsule = clean.includes('capsule');
   const isGastro = clean.includes('gastro') || clean.includes('enteric') || clean.includes('delayed');
 
@@ -704,10 +704,11 @@ export function buildFullDissolutionAMVData(
     supersedes?: string;
     verifiedMonograph?: Partial<DissolutionMonographInfo>;
     includeForcedDegradation?: boolean;
+    targetApi?: string;
   }
 ): DissolutionAMVDocumentData {
   const safeProductName = (productName && productName.trim()) ? productName.trim() : 'Tibolone Tablets BP 2.5 mg';
-  let mono = getDissolutionMonograph(safeProductName);
+  let mono = getDissolutionMonograph(safeProductName, overrides?.targetApi);
   if (overrides?.verifiedMonograph) {
     const cleanMonograph: Partial<DissolutionMonographInfo> = {};
     for (const [k, v] of Object.entries(overrides.verifiedMonograph)) {
@@ -726,7 +727,7 @@ export function buildFullDissolutionAMVData(
 
   const extracted = extractDynamicLabelClaim(
     safeProductName,
-    '',
+    overrides?.targetApi || '',
     (mono as any).activeSubstance || (mono as any).activePharmaceuticalIngredient || mono.productName,
     mono.labelClaim
   );
@@ -767,11 +768,11 @@ export function buildFullDissolutionAMVData(
   d21.setDate(d21.getDate() - 21);
   const protocolPrepDate = formatPharmaDate(d21);
 
-  const { strengthNum, unit } = parseProductStrength(mono.productName || productName);
+  const { strengthNum, unit } = parseProductStrength(mono.productName || productName, overrides?.targetApi);
   const nominalArea = computeNominalDissolutionPeakArea(mono.productName || productName, mono.wavelengthNum || 240);
 
   // 1. Reagents & Reference Standards specific to this drug
-  const referenceStandardDisplayName = getCleanDrugDisplayName(mono.productName || productName, dynamicActiveSubstance);
+  const referenceStandardDisplayName = overrides?.targetApi || getCleanDrugDisplayName(mono.productName || productName, dynamicActiveSubstance);
   const drugKeyName = referenceStandardDisplayName;
   const drugCode = (referenceStandardDisplayName.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase()) || 'ACT';
   const requirements: DissolutionRequirementItem[] = [
@@ -879,7 +880,7 @@ export function buildFullDissolutionAMVData(
   const rsd125 = Number(((sd125 / mean125) * 100).toFixed(2));
 
   // 5. Method Precision (Repeatability) - Content strictly scaled to strengthNum!
-  const precMath = generatePrecisionData(mono.productName, strengthNum, nominalArea, 99.8);
+  const precMath = generatePrecisionData(mono.productName, strengthNum, nominalArea, 99.8, true);
   const precisionRows: DissolutionPrecisionRow[] = precMath.analyst1.rows.map((r, i) => ({
     srNo: r.determinationNo,
     sampleId: `Dissolution Unit Vessel ${i + 1}`,

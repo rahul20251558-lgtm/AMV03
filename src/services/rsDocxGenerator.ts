@@ -281,7 +281,7 @@ export async function generateAndDownloadRSAMVDocx(
     ]),
     createRow([
       createDataCell(isProtocol ? 'Protocol Date' : 'Report Date', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
-      createDataCell(isProtocol ? data.protocolDate : (data.reportDate || '17-Jul-2024'), AlignmentType.LEFT, false, undefined, 7106),
+      createDataCell(isProtocol ? data.protocolDate : data.reportDate, AlignmentType.LEFT, false, undefined, 7106),
     ]),
     createRow([
       createDataCell('Product Name', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
@@ -320,25 +320,25 @@ export async function generateAndDownloadRSAMVDocx(
       createDataCell('Prepared By', AlignmentType.LEFT, true, undefined, 2200),
       createDataCell(data.signOffs.preparedBy.designation, AlignmentType.LEFT, false, undefined, 2600),
       createDataCell(data.signOffs.preparedBy.name, AlignmentType.LEFT, false, undefined, 2600),
-      createDataCell(isProtocol ? `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.dateProtocol || '09-Jul-2024'}` : `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.dateReport || data.signOffs.preparedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
+      createDataCell(isProtocol ? `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.dateProtocol || data.protocolDate}` : `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.dateReport || data.signOffs.preparedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
     ]),
     createRow([
       createDataCell('Checked By', AlignmentType.LEFT, true, undefined, 2200),
       createDataCell(data.signOffs.checkedBy.designation, AlignmentType.LEFT, false, undefined, 2600),
       createDataCell(data.signOffs.checkedBy.name, AlignmentType.LEFT, false, undefined, 2600),
-      createDataCell(isProtocol ? `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.dateProtocol || '09-Jul-2024'}` : `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.dateReport || data.signOffs.checkedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
+      createDataCell(isProtocol ? `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.dateProtocol || data.protocolDate}` : `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.dateReport || data.signOffs.checkedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
     ]),
     createRow([
       createDataCell('Reviewed By', AlignmentType.LEFT, true, undefined, 2200),
       createDataCell(data.signOffs.reviewedBy.designation, AlignmentType.LEFT, false, undefined, 2600),
       createDataCell(data.signOffs.reviewedBy.name, AlignmentType.LEFT, false, undefined, 2600),
-      createDataCell(isProtocol ? `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.dateProtocol || '10-Jul-2024'}` : `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.dateReport || data.signOffs.reviewedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
+      createDataCell(isProtocol ? `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.dateProtocol || data.protocolDate}` : `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.dateReport || data.signOffs.reviewedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
     ]),
     createRow([
       createDataCell('Authorised By', AlignmentType.LEFT, true, undefined, 2200),
       createDataCell(data.signOffs.authorisedBy.designation, AlignmentType.LEFT, false, undefined, 2600),
       createDataCell(data.signOffs.authorisedBy.name, AlignmentType.LEFT, false, undefined, 2600),
-      createDataCell(isProtocol ? `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.dateProtocol || '10-Jul-2024'}` : `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.dateReport || data.signOffs.authorisedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
+      createDataCell(isProtocol ? `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.dateProtocol || data.protocolDate}` : `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.dateReport || data.signOffs.authorisedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
     ]),
   ];
   docElements.push(createDocxTable(signColWidths, signRows));

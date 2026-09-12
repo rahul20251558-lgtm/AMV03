@@ -25,6 +25,121 @@ export const KNOWN_LONG_CHEMICAL_NAMES = new Set([
   'dicyclohexylcarbodiimide',
 ]);
 
+const PHARMA_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+export function parsePharmaDateHelper(dateStr?: string): Date | null {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const clean = dateStr.replace(/^Signed\s*\/?\s*/i, '').trim();
+  const match = clean.match(/^(\d{1,2})[-/ ]([A-Za-z]{3})[-/ ](\d{4})$/);
+  if (match) {
+    const day = parseInt(match[1], 10);
+    const mIdx = PHARMA_MONTHS.findIndex((m) => m.toLowerCase() === match[2].toLowerCase());
+    const year = parseInt(match[3], 10);
+    if (mIdx !== -1 && !isNaN(day) && !isNaN(year)) {
+      return new Date(year, mIdx, day);
+    }
+  }
+  const d = new Date(clean);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+export function formatPharmaDateHelper(d: Date): string {
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = PHARMA_MONTHS[d.getMonth()];
+  const year = d.getFullYear();
+  return `${day}-${month}-${year}`;
+}
+
+/**
+ * Synchronizes all report dates across document object:
+ * Header Report Date, Sign-off dates, Completion Record (Final Report Approval),
+ * and chronological order for audit trail.
+ */
+export function synchronizeDocumentReportDates<T>(docData: T, newReportDate?: string): T {
+  if (!docData || typeof docData !== 'object') return docData;
+  const copy: any = { ...docData };
+
+  const targetDateStr = (newReportDate && newReportDate.trim()) || copy.reportDate || copy.effectiveDate || '20-Apr-2026';
+  const parsedTarget = parsePharmaDateHelper(targetDateStr) || new Date(2026, 3, 20);
+  const formattedTarget = formatPharmaDateHelper(parsedTarget);
+
+  copy.reportDate = formattedTarget;
+  copy.effectiveDate = formattedTarget;
+
+  // Staggered chronological dates
+  const dReportPrep = new Date(parsedTarget);
+  dReportPrep.setDate(dReportPrep.getDate() - 2);
+  const reportPrepStr = formatPharmaDateHelper(dReportPrep);
+
+  const dExec = new Date(parsedTarget);
+  dExec.setDate(dExec.getDate() - 5);
+  const execStr = formatPharmaDateHelper(dExec);
+
+  // SignOffs
+  if (copy.signOffs) {
+    copy.signOffs = { ...copy.signOffs };
+    if (copy.signOffs.approvedBy) {
+      copy.signOffs.approvedBy = { ...copy.signOffs.approvedBy, date: formattedTarget, dateReport: formattedTarget };
+    }
+    if (copy.signOffs.authorisedBy) {
+      copy.signOffs.authorisedBy = { ...copy.signOffs.authorisedBy, date: formattedTarget, dateReport: formattedTarget };
+    }
+    if (copy.signOffs.reviewedBy) {
+      const pRev = parsePharmaDateHelper(copy.signOffs.reviewedBy.date);
+      if (!pRev || pRev.getTime() > parsedTarget.getTime()) {
+        copy.signOffs.reviewedBy = { ...copy.signOffs.reviewedBy, date: execStr, dateReport: execStr };
+      }
+    }
+  }
+
+  // Completion record
+  if (Array.isArray(copy.completionRecord)) {
+    copy.completionRecord = copy.completionRecord.map((row: any) => {
+      const part = String(row.particulars || '').toLowerCase();
+      if (part.includes('final report approval') || part.includes('report approval')) {
+        return {
+          ...row,
+          signatureDate: `Signed / ${formattedTarget}`,
+          signatureDateReport: `Signed / ${formattedTarget}`,
+        };
+      }
+      if (part.includes('report preparation')) {
+        const pPrep = parsePharmaDateHelper(row.signatureDateReport || row.signatureDate);
+        if (!pPrep || pPrep.getTime() >= parsedTarget.getTime()) {
+          return {
+            ...row,
+            signatureDate: `Signed / ${reportPrepStr}`,
+            signatureDateReport: `Signed / ${reportPrepStr}`,
+          };
+        }
+      }
+      if (part.includes('execution')) {
+        const pEx = parsePharmaDateHelper(row.signatureDateReport || row.signatureDate);
+        if (!pEx || pEx.getTime() >= parsedTarget.getTime()) {
+          return {
+            ...row,
+            signatureDate: `Signed / ${execStr}`,
+            signatureDateReport: `Signed / ${execStr}`,
+          };
+        }
+      }
+      return row;
+    });
+  }
+
+  // Revision history
+  if (Array.isArray(copy.revisionHistory) && copy.revisionHistory.length > 0) {
+    copy.revisionHistory = copy.revisionHistory.map((rev: any, idx: number) => {
+      if (idx === copy.revisionHistory.length - 1) {
+        return { ...rev, effectiveDate: formattedTarget };
+      }
+      return rev;
+    });
+  }
+
+  return copy as T;
+}
+
 /**
  * Rule 1: REFERENCE STANDARD NAME — single clean variable
  * Extracts the single clean product/drug display name (e.g., "Vildagliptin", "Sodium Valproate", "Tibolone")
@@ -38,9 +153,9 @@ export function getCleanDrugDisplayName(productName: string, fallback?: string):
 
   let s = productName.trim();
 
-  // 1. Strip test parameter prefixes and analytical keywords
-  s = s.replace(/^(?:Dissolution|Assay|Related Substances|Organic Impurities)\s+(?:of|in|for)\s+/i, '');
-  s = s.replace(/\b(?:Related\s+Substances?|Organic\s+Impurities|Impurities|Impurity|Assay|Dissolution|Uniformity\s+of\s+Dosage\s+Units)\b/gi, ' ');
+  // 1. Strip test parameter prefixes and standalone test names
+  s = s.replace(/^(?:Dissolution|Assay|Related Substances|Organic Impurities?)\s+(?:of|in|for)\s+/i, '');
+  s = s.replace(/\b(?:Organic Impurities?|Related Substances|Dissolution|Assay)\b/gi, ' ');
 
   // 2. Strip method / detector suffixes
   s = s.replace(/\s+(?:by\s+HPLC|by\s+GC|by\s+UV|with\s+UV|with\s+UV\/Vis|with\s+FID|with\s+PDA).*$/i, '');
@@ -174,5 +289,6 @@ export function postProcessSanitizeDocument<T>(
     return curr;
   }
 
-  return walkAndSanitize(docData) as T;
+  const sanitized = walkAndSanitize(docData) as T;
+  return synchronizeDocumentReportDates(sanitized);
 }

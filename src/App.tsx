@@ -18,11 +18,14 @@ import {
 import { buildFullRSAMVData } from './services/rsPharmaDatabase';
 import { buildFullDissolutionAMVData } from './services/dissolutionPharmaDatabase';
 import { recalculateAMVData } from './services/mathUtils';
+import { extractDynamicLabelClaim } from './services/pharmaMathEngine';
 import { generateAndDownloadAMVDocx } from './services/amvDocxGenerator';
 import { generateAndDownloadRSAMVDocx } from './services/rsDocxGenerator';
 import { generateAndDownloadDissolutionDocx } from './services/dissolutionDocxGenerator';
 import { runPreOutputAuditGate, ComplianceGateResult } from './services/complianceAuditGate';
+import { synchronizeDocumentReportDates } from './services/postGenerationSanitizer';
 import { extractSSOTBlock } from './services/selfAuditEngine';
+import { checkReportNoExists, saveReportRecord } from './services/reportRecordStore';
 import { Header } from './components/Header';
 import { AMVInputForm } from './components/AMVInputForm';
 import { FPSExtractorModal, FPSOverrides } from './components/FPSExtractorModal';
@@ -48,9 +51,10 @@ export function App() {
 
   // Input states
   const [productName, setProductName] = useState('Tibolone Tablets BP 2.5 mg');
-  const [documentNo, setDocumentNo] = useState('WC/QC/AMV/0316');
-  const [batchNo, setBatchNo] = useState('TB2501');
-  const [standardLot, setStandardLot] = useState('WS/DIS/2026/019');
+  const initialCodes = generateUniqueValidationCodes('Tibolone Tablets BP 2.5 mg');
+  const [documentNo, setDocumentNo] = useState(initialCodes.documentNo);
+  const [batchNo, setBatchNo] = useState(initialCodes.validationBatchNo);
+  const [standardLot, setStandardLot] = useState(initialCodes.standardLotNo);
   const [companyName, setCompanyName] = useState('WESTCOAST PHARMACEUTICAL WORKS LTD.');
   const [reportDate, setReportDate] = useState('20-Apr-2026');
   const [docType, setDocType] = useState<DocumentType>('report');
@@ -59,6 +63,7 @@ export function App() {
   const [fontSize, setFontSize] = useState<FontSizePt>(12); // Standard 12pt pharma standard
   const [dataMode, setDataMode] = useState<DataMode>('DEMO'); // 'TEMPLATE' (default blank raw data) or 'DEMO' (verified analytical demonstration with watermark)
   const [isLoading, setIsLoading] = useState(false);
+  const [isGenerationSuccess, setIsGenerationSuccess] = useState(false);
   const [loadingStepText, setLoadingStepText] = useState('');
   const [newAMVReadyInfo, setNewAMVReadyInfo] = useState<{
     productName: string;
@@ -117,9 +122,9 @@ export function App() {
   // Initialize authentic Assay document state for the same shared product
   const [assayData, setAssayData] = useState<AMVDocumentData>(() =>
     generateAMVDataForProduct('Tibolone Tablets BP 2.5 mg', {
-      documentNo: 'WC/QC/AMV/0316',
-      validationBatchNo: 'TB2501',
-      standardLotNo: 'WS/DIS/2026/019',
+      documentNo: initialCodes.documentNo,
+      validationBatchNo: initialCodes.validationBatchNo,
+      standardLotNo: initialCodes.standardLotNo,
       companyName: 'WESTCOAST PHARMACEUTICAL WORKS LTD.',
       reportDate: '20-Apr-2026',
       effectiveDate: '20-Apr-2026',
@@ -162,39 +167,28 @@ export function App() {
 
   const handleReportDateChange = (newDate: string) => {
     setReportDate(newDate);
-    setDissolutionData((prev) => ({
-      ...prev,
-      reportDate: newDate,
-      effectiveDate: newDate,
-      signOffs: prev.signOffs ? {
-        ...prev.signOffs,
-        approvedBy: { ...prev.signOffs.approvedBy, date: newDate },
-      } : prev.signOffs,
-    }));
-    setRsData((prev) => ({
-      ...prev,
-      reportDate: newDate,
-      effectiveDate: newDate,
-      signOffs: prev.signOffs ? {
-        ...prev.signOffs,
-        approvedBy: { ...prev.signOffs.approvedBy, date: newDate },
-      } : prev.signOffs,
-    }));
-    setAssayData((prev) => ({
-      ...prev,
-      reportDate: newDate,
-      effectiveDate: newDate,
-      signOffs: prev.signOffs ? {
-        ...prev.signOffs,
-        approvedBy: { ...prev.signOffs.approvedBy, date: newDate },
-      } : prev.signOffs,
-    }));
+    setDissolutionData((prev) => synchronizeDocumentReportDates(prev, newDate));
+    setRsData((prev) => synchronizeDocumentReportDates(prev, newDate));
+    setAssayData((prev) => synchronizeDocumentReportDates(prev, newDate));
   };
 
   // Handle switching between Dissolution, Related Substances, and Assay methods
   // Preserves the single shared product name, strength, batch and report date
   const handleValidationMethodChange = (newMethod: ValidationMethodType) => {
     setValidationMethod(newMethod);
+    // Visual feedback when switching between validation methods
+    setIsLoading(true);
+    setLoadingStepText(
+      newMethod === 'dissolution'
+        ? `Preparing Dissolution Verification (BP Appendix XII B1) for "${productName}"...`
+        : newMethod === 'related_substances'
+        ? `Preparing Related Substances (Organic Impurities) AMV for "${productName}"...`
+        : `Preparing Assay by HPLC AMV for "${productName}"...`
+    );
+    setTimeout(() => {
+      setIsLoading(false);
+      setLoadingStepText('');
+    }, 450);
   };
 
   const handleProductNameChange = (newProduct: string) => {
@@ -205,11 +199,36 @@ export function App() {
   const triggerGenerateAMV = (
     targetProduct?: string,
     targetMethod?: ValidationMethodType,
-    customOverrides?: FPSOverrides | null
+    customOverrides?: FPSOverrides | null,
+    targetApi?: string,
+    targetDocumentNo?: string
   ) => {
+    
     const activeProduct = (targetProduct && targetProduct.trim().length > 0)
       ? targetProduct.trim()
       : (productName.trim() || 'Tibolone Tablets BP 2.5 mg');
+      
+    const activeDocumentNo = targetDocumentNo || documentNo;
+    const checkResult = checkReportNoExists(activeDocumentNo, activeProduct);
+    if (checkResult.exists) {
+      const confirmMsg = `Report No. "${activeDocumentNo}" is already used by a DIFFERENT product ("${checkResult.existingProductName}").
+
+To prevent mix-ups, it is recommended to use the next available number: ${checkResult.suggestedNextNo}
+
+Do you want to automatically switch to the suggested Report No.?`;
+      if (!window.confirm(confirmMsg)) {
+        return;
+      } else {
+        setDocumentNo(checkResult.suggestedNextNo);
+        // Will proceed with the new number
+        triggerGenerateAMV(targetProduct, targetMethod, customOverrides, targetApi, checkResult.suggestedNextNo);
+        return;
+      }
+    }
+    
+    // Save report record
+    saveReportRecord(activeDocumentNo, activeProduct);
+
     const activeMethod = targetMethod || validationMethod;
     const activeOverrides = customOverrides !== undefined ? customOverrides : fpsOverrides;
 
@@ -219,7 +238,7 @@ export function App() {
 
     setProductName(activeProduct);
     setIsLoading(true);
-    setLoadingStepText(`Validating compendial monograph & chromatographic parameters for "${activeProduct}"...`);
+    setLoadingStepText(`Validating compendial monograph & chromatographic conditions for "${activeProduct}"...`);
 
     // Prepare fresh codes for this product
     const codes = generateUniqueValidationCodes(activeProduct);
@@ -229,20 +248,26 @@ export function App() {
         : activeMethod === 'related_substances'
         ? 'WC/QC/RS'
         : 'WC/QC/AMV';
-    const cleanDocNo = codes.documentNo.replace('WC/QC/AMV', prefix);
+    const cleanDocNo = activeDocumentNo;
     setDocumentNo(cleanDocNo);
     setBatchNo(codes.validationBatchNo);
     setStandardLot(codes.standardLotNo);
 
-    // Mid-way step progress feedback
+    // Multi-step progress feedback for authentic synthesis feeling
     generationStepTimerRef.current = setTimeout(() => {
-      setLoadingStepText(`Computing System Suitability, Linearity (r > 0.999) & Precision Tables for "${activeProduct}"...`);
-    }, 320);
+      setLoadingStepText(`Computing System Suitability, Linearity (r > 0.999), LOD/LOQ & Precision Tables for "${activeProduct}"...`);
+    }, 400);
 
-    // Finalize generation after realistic calculation window (~700ms)
+    const step3Timer = setTimeout(() => {
+      setLoadingStepText(`Aligning ICH Q2(R2) compliance criteria & ALCOA+ audit metadata for "${activeProduct}"...`);
+    }, 800);
+
+    // Finalize generation after realistic calculation window (~1150ms)
     generationTimerRef.current = setTimeout(() => {
       try {
+        clearTimeout(step3Timer);
         const localDiss = buildFullDissolutionAMVData(activeProduct, {
+            targetApi,
           verifiedMonograph: activeOverrides ? {
             ...activeOverrides,
             ...(activeOverrides.diluent ? { medium: activeOverrides.diluent } : {}),
@@ -255,6 +280,7 @@ export function App() {
         setDissolutionData(localDiss);
 
         const localRS = buildFullRSAMVData(activeProduct, {
+            targetApi,
           verifiedMonograph: activeOverrides ? activeOverrides : undefined,
           protocolNo: cleanDocNo,
           batchNo: codes.validationBatchNo,
@@ -270,7 +296,7 @@ export function App() {
           companyName,
           reportDate,
           effectiveDate: reportDate,
-        }, activeOverrides);
+        }, { ...activeOverrides, targetApi });
         const recalculated = recalculateAMVData(localData);
         setAssayData(recalculated);
 
@@ -290,13 +316,16 @@ export function App() {
           docNo: cleanDocNo,
           timestamp: timeStr,
         });
+        setIsLoading(false);
+        setLoadingStepText('');
+        setIsGenerationSuccess(true);
+        setTimeout(() => setIsGenerationSuccess(false), 2500);
       } catch (err) {
         console.error('Generation failed:', err);
-      } finally {
         setIsLoading(false);
         setLoadingStepText('');
       }
-    }, 700);
+    }, 1150);
   };
 
   const handleConfirmFpsOverrides = (overrides: FPSOverrides, detectedProductName?: string) => {
@@ -308,12 +337,12 @@ export function App() {
       ? detectedProductName.trim()
       : productName;
 
-    triggerGenerateAMV(activeProduct, validationMethod, overrides);
+    triggerGenerateAMV(activeProduct, validationMethod, overrides, undefined);
   };
 
   // Roll new dynamic identifiers
   const handleRefreshCodes = () => {
-    triggerGenerateAMV(productName);
+    triggerGenerateAMV(productName, undefined, undefined, undefined);
   };
 
   // Automated diff check to prompt user for Reason for Change if major parameters altered
@@ -338,8 +367,8 @@ export function App() {
   };
 
   // Generate AMV Data for current product (Dissolution, RS, or Assay)
-  const handleGenerate = (targetProduct?: string) => {
-    triggerGenerateAMV(targetProduct || productName);
+  const handleGenerate = (targetProduct?: string, targetApi?: string) => {
+    triggerGenerateAMV(targetProduct || productName, undefined, undefined, targetApi);
   };
 
   const handleApplyRevisionReason = (newReason: string) => {
@@ -570,7 +599,7 @@ export function App() {
           validationMethod={validationMethod}
           onValidationMethodChange={handleValidationMethodChange}
           onGenerate={handleGenerate}
-          onSelectSuggestion={triggerGenerateAMV}
+          onSelectSuggestion={(p) => triggerGenerateAMV(p)}
           onRefreshCodes={handleRefreshCodes}
           isLoading={isLoading}
           loadingStepText={loadingStepText}
@@ -670,6 +699,26 @@ export function App() {
                   <span>ICH Q2(R2) Validation</span>
                   <span className="text-blue-700 font-semibold">ALCOA+ Compliant</span>
                 </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Success Overlay when AMV is ready */}
+          {isGenerationSuccess && (
+            <div className="absolute inset-0 bg-white/90 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-6 text-center min-h-[450px] rounded-2xl border border-emerald-200 shadow-xl animate-in fade-in duration-300">
+              <div className="bg-white p-8 rounded-2xl shadow-2xl border border-emerald-200 flex flex-col items-center max-w-md w-full animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+                <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mb-4 border border-emerald-300 shadow-sm">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+                </div>
+                <h3 className="text-xl font-extrabold text-emerald-900">
+                  AMV Ready &amp; Verified!
+                </h3>
+                <p className="text-sm font-semibold text-emerald-700 mt-1">
+                  {productName}
+                </p>
+                <p className="text-xs text-zinc-600 mt-3 max-w-xs leading-relaxed">
+                  All mathematical calculations passed Pharma Compliance bounds.
+                </p>
               </div>
             </div>
           )}

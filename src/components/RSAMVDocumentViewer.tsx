@@ -237,7 +237,7 @@ export const RSAMVDocumentViewer: React.FC<RSAMVDocumentViewerProps> = ({
                   {isProtocol ? 'Protocol Date' : 'Report Date'}
                 </td>
                 <td className="border border-zinc-300 px-3 py-1.5 text-zinc-800">
-                  {isProtocol ? data.protocolDate : (data.reportDate || '17-Jul-2024')}
+                  {isProtocol ? data.protocolDate : data.reportDate}
                 </td>
               </tr>
               <tr>
@@ -284,22 +284,22 @@ export const RSAMVDocumentViewer: React.FC<RSAMVDocumentViewerProps> = ({
                 <td className="p-2 border border-zinc-300 text-xs align-top space-y-1">
                   <div><span className="font-bold">Designation:</span> {data.signOffs.preparedBy.designation}</div>
                   <div><span className="font-bold">Name:</span> {data.signOffs.preparedBy.name}</div>
-                  <div><span className="font-bold">Sign/Date:</span> {isProtocol ? `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.dateProtocol || '09-Jul-2024'}` : `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.dateReport || data.signOffs.preparedBy.date}`}</div>
+                  <div><span className="font-bold">Sign/Date:</span> {isProtocol ? `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.dateProtocol || data.protocolDate}` : `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.dateReport || data.signOffs.preparedBy.date}`}</div>
                 </td>
                 <td className="p-2 border border-zinc-300 text-xs align-top space-y-1">
                   <div><span className="font-bold">Designation:</span> {data.signOffs.checkedBy.designation}</div>
                   <div><span className="font-bold">Name:</span> {data.signOffs.checkedBy.name}</div>
-                  <div><span className="font-bold">Sign/Date:</span> {isProtocol ? `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.dateProtocol || '09-Jul-2024'}` : `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.dateReport || data.signOffs.checkedBy.date}`}</div>
+                  <div><span className="font-bold">Sign/Date:</span> {isProtocol ? `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.dateProtocol || data.protocolDate}` : `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.dateReport || data.signOffs.checkedBy.date}`}</div>
                 </td>
                 <td className="p-2 border border-zinc-300 text-xs align-top space-y-1">
                   <div><span className="font-bold">Designation:</span> {data.signOffs.reviewedBy.designation}</div>
                   <div><span className="font-bold">Name:</span> {data.signOffs.reviewedBy.name}</div>
-                  <div><span className="font-bold">Sign/Date:</span> {isProtocol ? `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.dateProtocol || '10-Jul-2024'}` : `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.dateReport || data.signOffs.reviewedBy.date}`}</div>
+                  <div><span className="font-bold">Sign/Date:</span> {isProtocol ? `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.dateProtocol || data.protocolDate}` : `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.dateReport || data.signOffs.reviewedBy.date}`}</div>
                 </td>
                 <td className="p-2 border border-zinc-300 text-xs align-top space-y-1">
                   <div><span className="font-bold">Designation:</span> {data.signOffs.authorisedBy.designation}</div>
                   <div><span className="font-bold">Name:</span> {data.signOffs.authorisedBy.name}</div>
-                  <div><span className="font-bold">Sign/Date:</span> {isProtocol ? `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.dateProtocol || '10-Jul-2024'}` : `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.dateReport || data.signOffs.authorisedBy.date}`}</div>
+                  <div><span className="font-bold">Sign/Date:</span> {isProtocol ? `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.dateProtocol || data.protocolDate}` : `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.dateReport || data.signOffs.authorisedBy.date}`}</div>
                 </td>
               </tr>
             </tbody>

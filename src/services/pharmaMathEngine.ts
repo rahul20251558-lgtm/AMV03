@@ -79,12 +79,19 @@ export function normalRandom(rand: () => number, mean: number, stdDev: number): 
 /**
  * Parses dosage strength and unit from product name (e.g. "Paracetamol Tablets 500 mg" -> 500, "Tibolone 2.5 mg" -> 2.5)
  */
-export function parseProductStrength(productName: string): { strengthNum: number; unit: string } {
+export function parseProductStrength(productName: string, targetApi?: string): { strengthNum: number; unit: string } {
+
+  const extracted = extractDynamicLabelClaim(productName, targetApi || '', '', '');
+  if (extracted.numericStrength) {
+    const matchUnit = productName.match(/(mg|g|mcg|µg|%|iu|u)/i);
+    return { strengthNum: extracted.numericStrength, unit: (matchUnit ? matchUnit[1].toLowerCase() : 'mg') };
+  }
   const match = productName.match(/(\d+(?:\.\d+)?)\s*(mg|g|mcg|µg|%|iu|u)/i);
   if (match) {
     return { strengthNum: parseFloat(match[1]), unit: match[2].toLowerCase() };
   }
   return { strengthNum: 50.0, unit: 'mg' };
+
 }
 
 /**
@@ -302,7 +309,8 @@ export function generatePrecisionData(
   productName: string,
   strengthMg: number,
   nominalArea: number,
-  targetMeanPercent: number = 99.8
+  targetMeanPercent: number = 99.8,
+  isDissolution: boolean = false
 ) {
   const rand = createSeededRandom(`${productName.toLowerCase()}_precision`);
   const rsdPercent = 0.35 + rand() * 0.55; // 0.35% - 0.90%
@@ -312,12 +320,24 @@ export function generatePrecisionData(
   let sumContent = 0;
   let sumPercent = 0;
 
+  const nominalWt = strengthMg;
   for (let i = 1; i <= numSamples; i++) {
-    // Percent assay around targetMeanPercent
-    const pct = Number(normalRandom(rand, targetMeanPercent, rsdPercent).toFixed(2));
+    // Generate physical quantities first. For dissolution, weight is exactly 1 tablet (nominal).
+    const sampleWt = isDissolution ? nominalWt : Number((nominalWt + (rand() - 0.5) * 0.4).toFixed(2));
+    
+    // Desired true assay before instrument noise
+    const trueAssayPct = normalRandom(rand, targetMeanPercent, rsdPercent);
+    
+    // Theoretical area expected for this exact weight and assay
+    const theoreticalArea = (trueAssayPct / 100) * nominalArea * (sampleWt / nominalWt);
+    
+    // Actual instrument area has a tiny bit of noise (integer rounding also adds noise)
+    const area = Math.round(theoreticalArea + (rand() - 0.5) * (nominalArea * 0.002));
+    
+    // Derive the reported % Assay strictly from the physical quantities
+    const exactPct = (area / nominalArea) * (nominalWt / sampleWt) * 100;
+    const pct = Number(exactPct.toFixed(2));
     const content = Number(((pct / 100) * strengthMg).toFixed(strengthMg >= 50 ? 1 : strengthMg >= 1 ? 2 : 3));
-    const area = Math.round((pct / 100) * nominalArea + (rand() - 0.5) * (nominalArea * 0.006));
-    const sampleWt = Number((strengthMg * 1.5 + (rand() - 0.5) * 0.4).toFixed(2));
 
     rows.push({
       determinationNo: i,
@@ -347,10 +367,14 @@ export function generatePrecisionData(
   const targetA2Pct = targetMeanPercent + (rand2() - 0.5) * 0.4;
 
   for (let i = 1; i <= numSamples; i++) {
-    const pct = Number(normalRandom(rand2, targetA2Pct, rsdPercent * 1.05).toFixed(2));
+    const sampleWt = isDissolution ? nominalWt : Number((nominalWt + (rand2() - 0.5) * 0.4).toFixed(2));
+    const trueAssayPct = normalRandom(rand2, targetA2Pct, rsdPercent * 1.05);
+    const theoreticalArea = (trueAssayPct / 100) * nominalArea * (sampleWt / nominalWt);
+    const area = Math.round(theoreticalArea + (rand2() - 0.5) * (nominalArea * 0.002));
+    
+    const exactPct = (area / nominalArea) * (nominalWt / sampleWt) * 100;
+    const pct = Number(exactPct.toFixed(2));
     const content = Number(((pct / 100) * strengthMg).toFixed(strengthMg >= 50 ? 1 : strengthMg >= 1 ? 2 : 3));
-    const area = Math.round((pct / 100) * nominalArea + (rand2() - 0.5) * (nominalArea * 0.007));
-    const sampleWt = Number((strengthMg * 1.5 + (rand2() - 0.5) * 0.4).toFixed(2));
 
     analyst2Rows.push({
       determinationNo: i,
@@ -471,7 +495,7 @@ export function generateAccuracyRecoveryData(
 /**
  * Extracts a strictly matching Label Claim for FDC or single-active products based on the test parameter.
  */
-export function extractDynamicLabelClaim(productName: string, testParameter: string, fallbackActive: string, fallbackLabelClaim: string): { activeSubstance: string, labelClaim: string } {
+export function extractDynamicLabelClaim(productName: string, testParameter: string, fallbackActive: string, fallbackLabelClaim: string): { activeSubstance: string, labelClaim: string, numericStrength?: number } {
   if (!productName) return { activeSubstance: fallbackActive, labelClaim: fallbackLabelClaim };
 
   let name = productName.replace(/Tablets|Capsules|Injection|Oral Solution|Syrup|Suspension|BP|USP|EP/ig, '');
@@ -505,23 +529,25 @@ export function extractDynamicLabelClaim(productName: string, testParameter: str
          const formattedActive = targetActiveObj.active.charAt(0).toUpperCase() + targetActiveObj.active.slice(1).toLowerCase();
          return {
            activeSubstance: formattedActive,
-           labelClaim: `Each tablet contains ${formattedActive} ${targetActiveObj.strength} mg`
+           labelClaim: `Each tablet contains ${formattedActive} ${targetActiveObj.strength} mg`,
+           numericStrength: targetActiveObj.strength
          };
       }
     }
   } else if (singleStrengthMatch) {
-    const strength = singleStrengthMatch[1];
+    const strength = parseFloat(singleStrengthMatch[1]);
     const unit = singleStrengthMatch[2].toLowerCase();
     
-    // Find active name cleanly from test parameter, product name, or fallback
+    // Find active name cleanly from product name, test parameter, or fallback
     let derivedActive = fallbackActive;
-    const activeFromParam = getCleanDrugDisplayName(targetActive, '');
+    const isGenericParam = /^(?:Organic Impurities?|Related Substances|Dissolution|Assay)(?:\s*\([^)]*\))?$/i.test(targetActive.trim());
+    const activeFromParam = !isGenericParam ? getCleanDrugDisplayName(targetActive, '') : '';
     const activeFromName = getCleanDrugDisplayName(name, '');
 
-    if (activeFromParam && activeFromParam !== 'Active' && activeFromParam.length >= 3) {
-      derivedActive = activeFromParam;
-    } else if (activeFromName && activeFromName !== 'Active' && activeFromName.length >= 3) {
+    if (activeFromName && activeFromName !== 'Active' && activeFromName.length >= 3) {
       derivedActive = activeFromName;
+    } else if (activeFromParam && activeFromParam !== 'Active' && activeFromParam.length >= 3) {
+      derivedActive = activeFromParam;
     } else {
       const activesPart = name.substring(0, singleStrengthMatch.index).trim();
       if (activesPart) derivedActive = getCleanDrugDisplayName(activesPart, fallbackActive);
@@ -531,12 +557,20 @@ export function extractDynamicLabelClaim(productName: string, testParameter: str
     
     return {
       activeSubstance: formattedActive,
-      labelClaim: `Each tablet contains ${formattedActive} ${strength} ${unit}`
+      labelClaim: `Each tablet contains ${formattedActive} ${strength} ${unit}`,
+      numericStrength: strength
     };
   }
   
   const fallbackClean = getCleanDrugDisplayName(fallbackActive, 'Active');
-  return { activeSubstance: fallbackClean, labelClaim: fallbackLabelClaim };
+  
+  let fallbackNumeric: number | undefined = undefined;
+  const match = fallbackLabelClaim.match(/(\d+(?:\.\d+)?)\s*(mg|g|mcg|µg|ml|\%)/i);
+  if (match) {
+    fallbackNumeric = parseFloat(match[1]);
+  }
+  
+  return { activeSubstance: fallbackClean, labelClaim: fallbackLabelClaim, numericStrength: fallbackNumeric };
 }
 
 const PHARMA_MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

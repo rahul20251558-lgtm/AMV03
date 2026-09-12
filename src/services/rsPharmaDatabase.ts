@@ -1067,35 +1067,52 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
   },
 };
 
-export function getRSMonograph(productName: string): RSMonographSeed {
+function adaptMonographToProduct(baseSeed: RSMonographSeed, targetName: string, targetApi?: string): RSMonographSeed {
+  const cloned: RSMonographSeed = JSON.parse(JSON.stringify(baseSeed));
+  const { strengthNum, unit } = parseProductStrength(targetName, targetApi);
+  cloned.productName = targetName;
+  if (strengthNum) {
+    const cleanDrug = getCleanDrugDisplayName(targetName, cloned.activeSubstance || '');
+    cloned.labelClaim = `Each tablet contains ${cleanDrug} ${strengthNum} ${unit}`;
+    if (cloned.solutionPreparation && cloned.solutionPreparation.testSolution) {
+      cloned.solutionPreparation.testSolution = cloned.solutionPreparation.testSolution.replace(
+        /(?:equivalent to|containing)\s*\d+(?:\.\d+)?\s*(?:mg|g)\s+([A-Za-z]+)/gi,
+        `equivalent to ${strengthNum}.0 mg $1`
+      );
+    }
+  }
+  return cloned;
+}
+
+export function getRSMonograph(productName: string, targetApi?: string): RSMonographSeed {
   if (!productName || !productName.trim()) {
     return RS_MONOGRAPH_LIBRARY.valproate;
   }
   const norm = productName.trim().toLowerCase();
 
   if (norm.includes('valproate') || norm.includes('valproic')) {
-    return RS_MONOGRAPH_LIBRARY.valproate;
+    return adaptMonographToProduct(RS_MONOGRAPH_LIBRARY.valproate, productName);
   }
   if (norm.includes('paracetamol') || norm.includes('acetaminophen')) {
-    return RS_MONOGRAPH_LIBRARY.paracetamol;
+    return adaptMonographToProduct(RS_MONOGRAPH_LIBRARY.paracetamol, productName);
   }
   if (norm.includes('metformin')) {
-    return RS_MONOGRAPH_LIBRARY.metformin;
+    return adaptMonographToProduct(RS_MONOGRAPH_LIBRARY.metformin, productName);
   }
   if (norm.includes('ciprofloxacin')) {
-    return RS_MONOGRAPH_LIBRARY.ciprofloxacin;
+    return adaptMonographToProduct(RS_MONOGRAPH_LIBRARY.ciprofloxacin, productName);
   }
   if (norm.includes('atorvastatin')) {
-    return RS_MONOGRAPH_LIBRARY.atorvastatin;
+    return adaptMonographToProduct(RS_MONOGRAPH_LIBRARY.atorvastatin, productName);
   }
   if (norm.includes('ibuprofen')) {
-    return RS_MONOGRAPH_LIBRARY.ibuprofen;
+    return adaptMonographToProduct(RS_MONOGRAPH_LIBRARY.ibuprofen, productName);
   }
   if (norm.includes('rosuvastatin')) {
     const is10mg = norm.includes('10');
     const base = RS_MONOGRAPH_LIBRARY.rosuvastatin;
     if (is10mg) {
-      return {
+      return adaptMonographToProduct({
         ...base,
         productName: 'Rosuvastatin Tablets 10 mg',
         labelClaim: 'Each tablet contains Rosuvastatin Calcium eq. to Rosuvastatin 10 mg',
@@ -1103,22 +1120,22 @@ export function getRSMonograph(productName: string): RSMonographSeed {
           ...base.solutionPreparation,
           testSolution: 'Powder 20 tablets. Disperse powder containing 10 mg Rosuvastatin in 50 mL diluent, sonicate 20 min, filter through 0.45 µm PVDF.',
         },
-      };
+      }, productName);
     }
-    return base;
+    return adaptMonographToProduct(base, productName);
   }
 
   // Check other keys
   for (const [k, v] of Object.entries(RS_MONOGRAPH_LIBRARY)) {
     if (norm.includes(k) || k.includes(norm)) {
-      return v;
+      return adaptMonographToProduct(v, productName);
     }
   }
 
   // Procedural scientific compendial generation for any new drug
   const hash = hashString(productName);
   const rand = createSeededRandom(productName.toLowerCase());
-  const { strengthNum, unit } = parseProductStrength(productName);
+  const { strengthNum, unit } = parseProductStrength(productName, targetApi);
 
   const isGC = false;
   const cleanDrug = getCleanDrugDisplayName(productName, 'Active Pharmaceutical Ingredient');
@@ -1187,6 +1204,7 @@ export function getRSMonograph(productName: string): RSMonographSeed {
 export function buildFullRSAMVData(
   productName: string,
   options?: {
+    targetApi?: string;
     protocolNo?: string;
     protocolDate?: string;
     batchNo?: string;
@@ -1197,7 +1215,7 @@ export function buildFullRSAMVData(
   }
 ): RSAMVDocumentData {
   const safeProductName = (productName && productName.trim()) ? productName.trim() : 'Sodium Valproate Oral Solution BP';
-  let seed = getRSMonograph(safeProductName);
+  let seed = getRSMonograph(safeProductName, options?.targetApi);
   if (options?.verifiedMonograph) {
     const cleanMonograph: Partial<RSMonographSeed> = {};
     for (const [k, v] of Object.entries(options.verifiedMonograph)) {
@@ -1214,14 +1232,19 @@ export function buildFullRSAMVData(
 
   seed.productName = safeProductName;
 
-  const extracted = extractDynamicLabelClaim(safeProductName, seed.testParameter, seed.activeSubstance || safeProductName.split(' ')[0], seed.labelClaim);
+  const extracted = extractDynamicLabelClaim(safeProductName, seed.testParameter, options?.targetApi || seed.activeSubstance || safeProductName.split(' ')[0], seed.labelClaim);
   let dynamicLabelClaim = extracted.labelClaim;
   let dynamicActiveSubstance = extracted.activeSubstance;
 
   const rawCompanyName = options?.companyName || 'WESTCOAST PHARMACEUTICAL WORKS LTD.';
   const companyName = rawCompanyName.replace(/\.+$/, '');
 
-  const { strengthNum, unit } = parseProductStrength(safeProductName);
+  const { strengthNum, unit } = parseProductStrength(safeProductName, options?.targetApi);
+  if (strengthNum && (!dynamicLabelClaim || !dynamicLabelClaim.includes(`${strengthNum}`))) {
+    dynamicLabelClaim = `Each tablet contains ${dynamicActiveSubstance} ${strengthNum} ${unit}`;
+  }
+  seed.labelClaim = dynamicLabelClaim;
+
   const nomPpm = seed.nominalPpm || (strengthNum ? strengthNum * 5 : 250);
   const p50 = Math.round(nomPpm * 0.5);
   const p75 = Math.round(nomPpm * 0.75);
@@ -1232,7 +1255,7 @@ export function buildFullRSAMVData(
   const solPrep = { ...seed.solutionPreparation };
   if (solPrep.testSolution && strengthNum) {
     solPrep.testSolution = solPrep.testSolution.replace(
-      /equivalent to \d+(?:\.\d+)?\s*(?:mg|g)\s+([A-Za-z]+)/i,
+      /(?:equivalent to|containing)\s*\d+(?:\.\d+)?\s*(?:mg|g)\s+([A-Za-z]+)/gi,
       `equivalent to ${strengthNum}.0 mg $1`
     );
   }
@@ -1381,7 +1404,7 @@ export function buildFullRSAMVData(
   });
 
   // 8. Accuracy & Recovery (Triplicate across 3 levels)
-  const accMath = generateAccuracyRecoveryData(seed.productName, nomPpm, [75, 100, 125]);
+  const accMath = generateAccuracyRecoveryData(seed.productName, nomPpm, [75, 100, 125], nominalArea);
   let accSr = 1;
   const accuracyRecoveryRows: RSAccuracyRecoveryRow[] = [];
   for (const lvl of accMath.levels) {

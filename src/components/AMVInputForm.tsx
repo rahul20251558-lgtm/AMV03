@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { pharmaMasterDB, detectMultiApiSignals } from '../services/pharmaMasterRegistry';
 import { Search, Sparkles, RefreshCw, Layers, Calendar, FileCode2, FlaskConical, Beaker, Building2, UploadCloud, FileText, CheckCircle2 } from 'lucide-react';
 import { ThemeFormat, ValidationMethodType } from '../types';
 
@@ -17,7 +18,7 @@ interface AMVInputFormProps {
   onReportDateChange?: (val: string) => void;
   validationMethod: ValidationMethodType;
   onValidationMethodChange: (method: ValidationMethodType) => void;
-  onGenerate: (targetProduct?: string) => void;
+  onGenerate: (targetProduct: string, targetApi?: string) => void;
   onSelectSuggestion?: (item: string) => void;
   onRefreshCodes: () => void;
   isLoading: boolean;
@@ -101,13 +102,34 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
   onOpenFpsModal,
 }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [selectedApi, setSelectedApi] = useState<string>('');
   const isRS = validationMethod === 'related_substances';
+  
   const isDissolution = validationMethod === 'dissolution';
+
+  // Multi-API Detection
+  const matchedProduct = pharmaMasterDB.findProductByName(productName);
+  const signals = detectMultiApiSignals(productName);
+  const isMultiApi = (matchedProduct && matchedProduct.apiCount > 1) || (!matchedProduct && signals.hasCombinationSignal);
+  
+  const availableApis = matchedProduct 
+    ? matchedProduct.apiList.map(a => a.apiName)
+    : signals.candidateApiNames;
+
+  // Auto-select first API if none selected and it's a multi-API product
+  React.useEffect(() => {
+    if (isMultiApi && availableApis.length > 0 && (!selectedApi || !availableApis.includes(selectedApi))) {
+      setSelectedApi(availableApis[0]);
+    } else if (!isMultiApi && selectedApi) {
+      setSelectedApi('');
+    }
+  }, [productName, isMultiApi, availableApis, selectedApi]);
+
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!productName.trim() || isLoading) return;
-    onGenerate(productName);
+    onGenerate(productName, selectedApi);
   };
 
   const handleSuggestionClick = (item: string) => {
@@ -116,7 +138,8 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
       onSelectSuggestion(item);
     } else {
       onProductNameChange(item);
-      onGenerate(item);
+      setSelectedApi('');
+      onGenerate(item, '');
     }
   };
 
@@ -252,19 +275,56 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-4 h-4" />
-                  <span>
-                    {isDissolution
-                      ? 'Generate Dissolution Protocol & Report'
-                      : isRS
-                      ? 'Generate RS Protocol & Report'
-                      : 'Generate Full AMV'}
-                  </span>
+                  {(!isLoading && newAMVReadyInfo) ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>✓ Ready! Generate Again</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      <span>
+                        {isDissolution
+                          ? 'Generate Dissolution Protocol & Report'
+                          : isRS
+                          ? 'Generate RS Protocol & Report'
+                          : 'Generate Full AMV'}
+                      </span>
+                    </>
+                  )}
                 </>
               )}
             </button>
           </div>
         </div>
+
+        
+          {isMultiApi && (
+            <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg animate-in fade-in duration-200">
+              <label className="block text-xs font-semibold text-amber-900 uppercase tracking-wider mb-1.5">
+                Target Active Ingredient (Multi-API Detected)
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {availableApis.map(api => (
+                  <button
+                    key={api}
+                    type="button"
+                    onClick={() => setSelectedApi(api)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                      selectedApi === api
+                        ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
+                        : 'bg-white text-amber-800 border-amber-300 hover:bg-amber-100'
+                    }`}
+                  >
+                    {api}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-amber-700 mt-1.5">
+                Select the specific active ingredient this report will validate. Label Claim and calculations will automatically isolate to the selected API.
+              </p>
+            </div>
+          )}
 
         {/* Real-time Synthesis Progress Indicator */}
         {isLoading && (

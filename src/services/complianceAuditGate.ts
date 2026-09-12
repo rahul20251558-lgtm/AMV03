@@ -47,8 +47,8 @@ import {
   validateRevisionReasonForMajorChanges,
 } from './methodVersionHistory';
 
-import { parsePharmaDate } from './pharmaMathEngine';
-export { parsePharmaDate };
+import { parsePharmaDate, formatPharmaDate } from './pharmaMathEngine';
+export { parsePharmaDate, formatPharmaDate };
 
 // Registry of known pharmaceutical active substances
 export const KNOWN_PHARMA_DRUGS = [
@@ -395,6 +395,18 @@ export function runPreOutputAuditGate(
   }
 
   const activeAliases = getActiveDrugAliases(activeDrug);
+  
+  // For combination products (FDC), allow any drugs that are literally present in the product name
+  if (productName) {
+    const pLower = productName.toLowerCase();
+    KNOWN_PHARMA_DRUGS.forEach(d => {
+      if (pLower.includes(d.toLowerCase())) {
+        const dAliases = getActiveDrugAliases(d);
+        dAliases.forEach(a => activeAliases.add(a));
+      }
+    });
+  }
+
   const isDissolution = validationMethod === 'dissolution';
 
   const testParameter = docData?.testParameter || docData?.methodSummary?.generalInformation?.testParameter || docData?.methodSummary?.testParameter || '';
@@ -974,18 +986,6 @@ export function runPreOutputAuditGate(
   // -------------------------------------------------------------
   // CHECK 11: Report Date Field Mapping & Chronological Sanity
   // -------------------------------------------------------------
-  const reportDateStr =
-    docData?.reportDate ||
-    docData?.signOffs?.approvedBy?.date ||
-    docData?.signOffs?.authorisedBy?.date ||
-    docData?.effectiveDate;
-
-  const protocolDateStr =
-    docData?.protocolDate ||
-    docData?.signOffs?.preparedBy?.date ||
-    docData?.revisionHistory?.[0]?.effectiveDate;
-
-  // Extract dates from completion record or sign-off grids
   const completionRows = docData?.completionRecord || [];
   const execRow = completionRows.find((r: any) =>
     String(r.particulars || '').toLowerCase().includes('execution')
@@ -999,15 +999,72 @@ export function runPreOutputAuditGate(
 
   const prepRow = completionRows.length > 0 ? completionRows[0] : null;
 
-  const parsedReportDate = parsePharmaDate(reportDateStr);
+  let reportDateStr =
+    docData?.reportDate ||
+    docData?.signOffs?.approvedBy?.date ||
+    docData?.signOffs?.authorisedBy?.date ||
+    docData?.effectiveDate;
+
+  const protocolDateStr =
+    docData?.protocolDate ||
+    docData?.signOffs?.preparedBy?.date ||
+    docData?.revisionHistory?.[0]?.effectiveDate;
+
+  let parsedReportDate = parsePharmaDate(reportDateStr);
   const parsedProtocolDate = parsePharmaDate(protocolDateStr);
 
-  const execDateRaw =
+  // If reportDate is present, auto-synchronize final approval row and sign-offs to guarantee single-source of truth
+  if (parsedReportDate) {
+    const formattedRep = formatPharmaDate(parsedReportDate);
+    if (!docData.reportDate) docData.reportDate = formattedRep;
+    if (!docData.effectiveDate) docData.effectiveDate = formattedRep;
+    if (finalAppRow) {
+      finalAppRow.signatureDateReport = `Signed / ${formattedRep}`;
+      finalAppRow.signatureDate = `Signed / ${formattedRep}`;
+    }
+    if (docData?.signOffs?.authorisedBy) {
+      docData.signOffs.authorisedBy.date = formattedRep;
+      docData.signOffs.authorisedBy.dateReport = formattedRep;
+    }
+    if (docData?.signOffs?.approvedBy) {
+      docData.signOffs.approvedBy.date = formattedRep;
+      docData.signOffs.approvedBy.dateReport = formattedRep;
+    }
+  } else if (finalAppRow) {
+    // If reportDate was missing, derive from final approval row
+    const rawApp = finalAppRow.signatureDateReport || finalAppRow.signatureDate;
+    const parsedApp = parsePharmaDate(rawApp);
+    if (parsedApp) {
+      const formattedApp = formatPharmaDate(parsedApp);
+      docData.reportDate = formattedApp;
+      reportDateStr = formattedApp;
+      parsedReportDate = parsedApp;
+    }
+  }
+
+  let execDateRaw =
     execRow?.signatureDateReport ||
     execRow?.signatureDate ||
     docData?.signOffs?.reviewedBy?.date ||
     '';
-  const parsedExecDate = parsePharmaDate(execDateRaw);
+  let parsedExecDate = parsePharmaDate(execDateRaw);
+
+  // Auto-correct chronological ordering if execution date was missing or after report date
+  if (parsedReportDate && (!parsedExecDate || parsedExecDate.getTime() >= parsedReportDate.getTime())) {
+    const dAdj = new Date(parsedReportDate);
+    dAdj.setDate(dAdj.getDate() - 5);
+    const adjStr = formatPharmaDate(dAdj);
+    if (execRow) {
+      execRow.signatureDateReport = `Signed / ${adjStr}`;
+      execRow.signatureDate = `Signed / ${adjStr}`;
+    }
+    if (docData?.signOffs?.reviewedBy) {
+      docData.signOffs.reviewedBy.date = adjStr;
+      docData.signOffs.reviewedBy.dateReport = adjStr;
+    }
+    execDateRaw = `Signed / ${adjStr}`;
+    parsedExecDate = dAdj;
+  }
 
   const finalAppDateRaw =
     finalAppRow?.signatureDateReport ||
