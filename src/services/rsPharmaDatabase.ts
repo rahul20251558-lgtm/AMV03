@@ -29,6 +29,7 @@ import {
   formatPharmaDate,
   parsePharmaDate,
 } from './pharmaMathEngine';
+import { recalculateRSData, regress } from './calculations';
 
 export interface RSMonographSeed {
   potencyDecimal?: number;
@@ -96,7 +97,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     detectorTempOrWavelength: 'UV at 210 nm',
     injectionVolume: '20 µL',
     splitRatio: 'N/A (HPLC)',
-    ovenProgrammeOrGradient: 'Isocratic for 35 minutes at 30 °C',
+    ovenProgrammeOrGradient: 'Isocratic for 35 minutes at 30 \xB0C',
     totalRunTime: '35 minutes',
     diluent: 'Phosphate Buffer pH 6.8 : Acetonitrile (82 : 18 v/v)',
     internalStandard: 'N/A (External Standardisation)',
@@ -108,7 +109,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     internalStandardRtMin: undefined,
     nominalArea: 4850000,
     ovenProgramme: [
-      { timeRange: '0 — 35 min', temperature: '30 °C (Column Oven)', comment: 'Isocratic HPLC elution' },
+      { timeRange: '0 — 35 min', temperature: '30 \xB0C (Column Oven)', comment: 'Isocratic HPLC elution' },
     ],
     solutionPreparation: {
       internalStandard: 'N/A',
@@ -146,7 +147,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     detectorTempOrWavelength: 'UV at 210 nm',
     injectionVolume: '20 µL',
     splitRatio: 'N/A',
-    ovenProgrammeOrGradient: 'Isocratic for 30 minutes; column temperature 30 °C',
+    ovenProgrammeOrGradient: 'Isocratic for 30 minutes; column temperature 30 \xB0C',
     totalRunTime: '30 minutes',
     diluent: 'Mobile Phase',
     internalStandard: 'N/A (External Reference Standard method)',
@@ -158,7 +159,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     internalStandardRtMin: undefined,
     nominalArea: 512400,
     ovenProgramme: [
-      { timeRange: '0 — 30', temperature: '30 °C (Isocratic)', comment: 'Phosphate Buffer pH 3.0 : Acetonitrile (55:45 v/v)' },
+      { timeRange: '0 — 30', temperature: '30 \xB0C (Isocratic)', comment: 'Phosphate Buffer pH 3.0 : Acetonitrile (55:45 v/v)' },
     ],
     solutionPreparation: {
       internalStandard: 'N/A (External standard method).',
@@ -202,7 +203,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     detectorTempOrWavelength: 'UV at 245 nm',
     injectionVolume: '20 µL',
     splitRatio: 'N/A',
-    ovenProgrammeOrGradient: 'Isocratic run for 25 minutes; ambient temperature (25 °C)',
+    ovenProgrammeOrGradient: 'Isocratic run for 25 minutes; ambient temperature (25 \xB0C)',
     totalRunTime: '25 minutes',
     diluent: 'Mobile Phase',
     internalStandard: 'N/A (External Reference Standard method)',
@@ -210,10 +211,10 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     nominalPpm: 250,
     activeRtMin: 5.42,
     impurityName: '4-Aminophenol (Impurity K)',
-    impurityRtMin: 2.45,
-    nominalArea: 1420500,
+    impurityRtMin: 20,
+    nominalArea: 1420.00,
     ovenProgramme: [
-      { timeRange: '0 — 25', temperature: '25 °C (Isocratic)', comment: 'Buffer : Methanol (85:15 v/v)' },
+      { timeRange: '0 — 25', temperature: '25 \xB0C (Isocratic)', comment: 'Buffer : Methanol (85:15 v/v)' },
     ],
     solutionPreparation: {
       internalStandard: 'N/A',
@@ -255,7 +256,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     detectorTempOrWavelength: 'UV at 218 nm',
     injectionVolume: '10 µL',
     splitRatio: 'N/A',
-    ovenProgrammeOrGradient: 'Isocratic for 20 minutes at 30 °C',
+    ovenProgrammeOrGradient: 'Isocratic for 20 minutes at 30 \xB0C',
     totalRunTime: '20 minutes',
     diluent: 'Milli-Q Water',
     internalStandard: 'N/A (External Reference Standard)',
@@ -266,7 +267,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     impurityRtMin: 2.88,
     nominalArea: 1680400,
     ovenProgramme: [
-      { timeRange: '0 — 20', temperature: '30 °C (Isocratic)', comment: 'Ion-pair buffer : ACN (90:10 v/v)' },
+      { timeRange: '0 — 20', temperature: '30 \xB0C (Isocratic)', comment: 'Ion-pair buffer : ACN (90:10 v/v)' },
     ],
     solutionPreparation: {
       internalStandard: 'N/A',
@@ -306,7 +307,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     detectorTempOrWavelength: 'UV at 278 nm',
     injectionVolume: '10 µL',
     splitRatio: 'N/A',
-    ovenProgrammeOrGradient: 'Isocratic for 30 minutes at 30 °C',
+    ovenProgrammeOrGradient: 'Isocratic for 30 minutes at 30 \xB0C',
     totalRunTime: '30 minutes',
     diluent: 'Mobile Phase',
     internalStandard: 'N/A (External Reference Standard)',
@@ -317,7 +318,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     impurityRtMin: 3.62,
     nominalArea: 2120000,
     ovenProgramme: [
-      { timeRange: '0 — 30', temperature: '30 °C (Isocratic)', comment: 'Phosphate buffer pH 3.0 : ACN (87:13 v/v)' },
+      { timeRange: '0 — 30', temperature: '30 \xB0C (Isocratic)', comment: 'Phosphate buffer pH 3.0 : ACN (87:13 v/v)' },
     ],
     solutionPreparation: {
       internalStandard: 'N/A',
@@ -357,7 +358,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     detectorTempOrWavelength: 'UV at 246 nm',
     injectionVolume: '20 µL',
     splitRatio: 'N/A',
-    ovenProgrammeOrGradient: 'Gradient elution over 35 minutes at 35 °C',
+    ovenProgrammeOrGradient: 'Gradient elution over 35 minutes at 35 \xB0C',
     totalRunTime: '35 minutes',
     diluent: 'Methanol : Water (80:20 v/v)',
     internalStandard: 'N/A (External Reference Standard)',
@@ -368,7 +369,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     impurityRtMin: 16.30,
     nominalArea: 1845000,
     ovenProgramme: [
-      { timeRange: '0 — 35', temperature: '35 °C (Linear Gradient)', comment: 'Acetonitrile / Ammonium Acetate / THF' },
+      { timeRange: '0 — 35', temperature: '35 \xB0C (Linear Gradient)', comment: 'Acetonitrile / Ammonium Acetate / THF' },
     ],
     solutionPreparation: {
       internalStandard: 'N/A',
@@ -405,7 +406,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     detectorTempOrWavelength: 'UV at 254 nm',
     injectionVolume: '20 µL',
     splitRatio: 'N/A',
-    ovenProgrammeOrGradient: 'Isocratic for 30 minutes at 30 °C',
+    ovenProgrammeOrGradient: 'Isocratic for 30 minutes at 30 \xB0C',
     totalRunTime: '30 minutes',
     diluent: 'Acetonitrile : Water (60:40 v/v)',
     internalStandard: 'N/A',
@@ -416,7 +417,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     impurityRtMin: 11.12,
     nominalArea: 1950000,
     ovenProgramme: [
-      { timeRange: '0 — 30', temperature: '30 °C (Isocratic)', comment: 'Chloroacetic acid : ACN (40:60 v/v)' },
+      { timeRange: '0 — 30', temperature: '30 \xB0C (Isocratic)', comment: 'Chloroacetic acid : ACN (40:60 v/v)' },
     ],
     solutionPreparation: {
       internalStandard: 'N/A',
@@ -453,7 +454,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     detectorTempOrWavelength: 'UV at 285 nm',
     injectionVolume: '10 µL',
     splitRatio: 'N/A',
-    ovenProgrammeOrGradient: 'Gradient elution over 30 minutes at 30 °C',
+    ovenProgrammeOrGradient: 'Gradient elution over 30 minutes at 30 \xB0C',
     totalRunTime: '30 minutes',
     diluent: '0.01 M Sodium Hydroxide in Water',
     internalStandard: 'N/A (External Reference Standard)',
@@ -464,7 +465,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     impurityRtMin: 10.15,
     nominalArea: 2100000,
     ovenProgramme: [
-      { timeRange: '0 — 30', temperature: '30 °C (Gradient)', comment: 'Phosphate buffer pH 7.0 : Acetonitrile' },
+      { timeRange: '0 — 30', temperature: '30 \xB0C (Gradient)', comment: 'Phosphate buffer pH 7.0 : Acetonitrile' },
     ],
     solutionPreparation: {
       internalStandard: 'N/A',
@@ -502,7 +503,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     detectorTempOrWavelength: 'UV at 280 nm',
     injectionVolume: '10 µL',
     splitRatio: 'N/A',
-    ovenProgrammeOrGradient: 'Isocratic for 25 minutes at 30 °C',
+    ovenProgrammeOrGradient: 'Isocratic for 25 minutes at 30 \xB0C',
     totalRunTime: '25 minutes',
     diluent: '0.01 M Sodium Hydroxide in Water : Acetonitrile (80:20 v/v)',
     internalStandard: 'N/A',
@@ -513,7 +514,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     impurityRtMin: 11.67,
     nominalArea: 1980000,
     ovenProgramme: [
-      { timeRange: '0 — 25', temperature: '30 °C (Isocratic)', comment: 'Phosphate buffer pH 7.6 : ACN (75:25 v/v)' },
+      { timeRange: '0 — 25', temperature: '30 \xB0C (Isocratic)', comment: 'Phosphate buffer pH 7.6 : ACN (75:25 v/v)' },
     ],
     solutionPreparation: {
       internalStandard: 'N/A',
@@ -550,7 +551,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     detectorTempOrWavelength: 'UV at 237 nm',
     injectionVolume: '20 µL',
     splitRatio: 'N/A',
-    ovenProgrammeOrGradient: 'Isocratic for 30 minutes at 30 °C',
+    ovenProgrammeOrGradient: 'Isocratic for 30 minutes at 30 \xB0C',
     totalRunTime: '30 minutes',
     diluent: 'Mobile Phase',
     internalStandard: 'N/A',
@@ -561,7 +562,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     impurityRtMin: 4.72,
     nominalArea: 1750000,
     ovenProgramme: [
-      { timeRange: '0 — 30', temperature: '30 °C (Isocratic)', comment: 'Methanol : ACN : TEA buffer pH 3.0' },
+      { timeRange: '0 — 30', temperature: '30 \xB0C (Isocratic)', comment: 'Methanol : ACN : TEA buffer pH 3.0' },
     ],
     solutionPreparation: {
       internalStandard: 'N/A',
@@ -599,7 +600,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     detectorTempOrWavelength: 'UV at 250 nm',
     injectionVolume: '10 µL',
     splitRatio: 'N/A',
-    ovenProgrammeOrGradient: 'Gradient elution over 25 minutes at 25 °C',
+    ovenProgrammeOrGradient: 'Gradient elution over 25 minutes at 25 \xB0C',
     totalRunTime: '25 minutes',
     diluent: 'Acetonitrile : Water (50:50 v/v)',
     internalStandard: 'N/A',
@@ -610,7 +611,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     impurityRtMin: 11.73,
     nominalArea: 2240000,
     ovenProgramme: [
-      { timeRange: '0 — 25', temperature: '25 °C (Gradient)', comment: 'Acetonitrile : 0.1% H3PO4 aqueous' },
+      { timeRange: '0 — 25', temperature: '25 \xB0C (Gradient)', comment: 'Acetonitrile : 0.1% H3PO4 aqueous' },
     ],
     solutionPreparation: {
       internalStandard: 'N/A',
@@ -647,7 +648,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     detectorTempOrWavelength: 'UV at 242 nm',
     injectionVolume: '10 µL',
     splitRatio: 'N/A',
-    ovenProgrammeOrGradient: 'Gradient elution over 30 minutes at 35 °C',
+    ovenProgrammeOrGradient: 'Gradient elution over 30 minutes at 35 \xB0C',
     totalRunTime: '30 minutes',
     diluent: 'Acetonitrile : Water (50:50 v/v)',
     internalStandard: 'N/A',
@@ -658,7 +659,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     impurityRtMin: 12.50,
     nominalArea: 1950000,
     ovenProgramme: [
-      { timeRange: '0 — 30', temperature: '35 °C (Gradient)', comment: 'Acetonitrile / Ammonium Acetate / THF' },
+      { timeRange: '0 — 30', temperature: '35 \xB0C (Gradient)', comment: 'Acetonitrile / Ammonium Acetate / THF' },
     ],
     solutionPreparation: {
       internalStandard: 'N/A',
@@ -695,18 +696,18 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     detectorTempOrWavelength: 'UV at 238 nm',
     injectionVolume: '20 µL',
     splitRatio: 'N/A',
-    ovenProgrammeOrGradient: 'Gradient elution over 30 minutes at 40 °C',
+    ovenProgrammeOrGradient: 'Gradient elution over 30 minutes at 40 \xB0C',
     totalRunTime: '30 minutes',
     diluent: 'Methanol : Water (80:20 v/v)',
     internalStandard: 'N/A',
-    relativeRetention: 'With reference to Montelukast (RT ~ 8.2 min): Montelukast Sulfoxide (Impurity B) ~ 0.85; Montelukast Cis-isomer ~ 1.15',
+    relativeRetention: 'With reference to Montelukast (RT ~ 8.2 min): Montelukast Sulfoxide (Impurity B) ~ 0.85; Montelukast Cis-isomer ~ 20',
     nominalPpm: 200,
     activeRtMin: 8.22,
     impurityName: 'Montelukast Sulfoxide (Impurity B)',
     impurityRtMin: 6.98,
     nominalArea: 2150000,
     ovenProgramme: [
-      { timeRange: '0 — 30', temperature: '40 °C (Gradient)', comment: 'Phosphate buffer pH 3.7 : Acetonitrile' },
+      { timeRange: '0 — 30', temperature: '40 \xB0C (Gradient)', comment: 'Phosphate buffer pH 3.7 : Acetonitrile' },
     ],
     solutionPreparation: {
       internalStandard: 'N/A',
@@ -744,7 +745,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     detectorTempOrWavelength: 'UV at 220 nm',
     injectionVolume: '10 µL',
     splitRatio: 'N/A',
-    ovenProgrammeOrGradient: 'Isocratic for 25 minutes at 30 °C',
+    ovenProgrammeOrGradient: 'Isocratic for 25 minutes at 30 \xB0C',
     totalRunTime: '25 minutes',
     diluent: 'Methanol : Water (75:25 v/v)',
     internalStandard: 'N/A',
@@ -755,7 +756,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     impurityRtMin: 4.85,
     nominalArea: 2580000,
     ovenProgramme: [
-      { timeRange: '0 — 25', temperature: '30 °C (Isocratic)', comment: 'Phosphate buffer pH 2.5 : ACN (25:75 v/v)' },
+      { timeRange: '0 — 25', temperature: '30 \xB0C (Isocratic)', comment: 'Phosphate buffer pH 2.5 : ACN (25:75 v/v)' },
     ],
     solutionPreparation: {
       internalStandard: 'N/A',
@@ -792,7 +793,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     detectorTempOrWavelength: 'UV at 210 nm',
     injectionVolume: '10 µL',
     splitRatio: 'N/A',
-    ovenProgrammeOrGradient: 'Isocratic for 25 minutes at 35 °C',
+    ovenProgrammeOrGradient: 'Isocratic for 25 minutes at 35 \xB0C',
     totalRunTime: '25 minutes',
     diluent: 'Mobile Phase',
     internalStandard: 'N/A',
@@ -803,7 +804,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     impurityRtMin: 6.13,
     nominalArea: 2420000,
     ovenProgramme: [
-      { timeRange: '0 — 25', temperature: '35 °C (Isocratic)', comment: 'Phosphate buffer pH 6.0 : ACN (25:75 v/v)' },
+      { timeRange: '0 — 25', temperature: '35 \xB0C (Isocratic)', comment: 'Phosphate buffer pH 6.0 : ACN (25:75 v/v)' },
     ],
     solutionPreparation: {
       internalStandard: 'N/A',
@@ -812,7 +813,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
       systemSuitabilitySolution: 'Standard containing Acarbose and Acarbose Impurity A RS.',
       blank: 'Diluent.',
       placeboSolution: 'Placebo matrix processed identically.',
-      handlingNote: 'Maintain column temperature at 35 °C for reproducible amino phase retention.',
+      handlingNote: 'Maintain column temperature at 35 \xB0C for reproducible amino phase retention.',
     },
     monographLimits: [
       { criterion: 'Acarbose Impurity A', limit: 'NMT 0.20 %' },
@@ -840,7 +841,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     detectorTempOrWavelength: 'UV at 294 nm',
     injectionVolume: '10 µL',
     splitRatio: 'N/A',
-    ovenProgrammeOrGradient: 'Gradient elution over 30 minutes at 35 °C',
+    ovenProgrammeOrGradient: 'Gradient elution over 30 minutes at 35 \xB0C',
     totalRunTime: '30 minutes',
     diluent: 'Water : Acetonitrile (80:20 v/v)',
     internalStandard: 'N/A',
@@ -851,7 +852,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     impurityRtMin: 4.04,
     nominalArea: 2850000,
     ovenProgramme: [
-      { timeRange: '0 — 30', temperature: '35 °C (Gradient)', comment: '0.1% TFA aqueous : ACN' },
+      { timeRange: '0 — 30', temperature: '35 \xB0C (Gradient)', comment: '0.1% TFA aqueous : ACN' },
     ],
     solutionPreparation: {
       internalStandard: 'N/A',
@@ -888,7 +889,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     detectorTempOrWavelength: 'UV at 230 nm',
     injectionVolume: '10 µL',
     splitRatio: 'N/A',
-    ovenProgrammeOrGradient: 'Isocratic for 25 minutes at 25 °C',
+    ovenProgrammeOrGradient: 'Isocratic for 25 minutes at 25 \xB0C',
     totalRunTime: '25 minutes',
     diluent: 'Acetonitrile : Water (40:60 v/v)',
     internalStandard: 'N/A',
@@ -899,7 +900,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     impurityRtMin: 3.03,
     nominalArea: 1920000,
     ovenProgramme: [
-      { timeRange: '0 — 25', temperature: '25 °C (Isocratic)', comment: 'Phosphate buffer pH 6.0 : ACN (60:40 v/v)' },
+      { timeRange: '0 — 25', temperature: '25 \xB0C (Isocratic)', comment: 'Phosphate buffer pH 6.0 : ACN (60:40 v/v)' },
     ],
     solutionPreparation: {
       internalStandard: 'N/A',
@@ -936,7 +937,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     detectorTempOrWavelength: 'UV at 254 nm',
     injectionVolume: '10 µL',
     splitRatio: 'N/A',
-    ovenProgrammeOrGradient: 'Isocratic for 30 minutes at 30 °C',
+    ovenProgrammeOrGradient: 'Isocratic for 30 minutes at 30 \xB0C',
     totalRunTime: '30 minutes',
     diluent: 'Methanol : Water (70:30 v/v)',
     internalStandard: 'N/A',
@@ -947,7 +948,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     impurityRtMin: 3.71,
     nominalArea: 3100000,
     ovenProgramme: [
-      { timeRange: '0 — 30', temperature: '30 °C (Isocratic)', comment: 'Phosphate buffer pH 2.5 : Methanol (30:70 v/v)' },
+      { timeRange: '0 — 30', temperature: '30 \xB0C (Isocratic)', comment: 'Phosphate buffer pH 2.5 : Methanol (30:70 v/v)' },
     ],
     solutionPreparation: {
       internalStandard: 'N/A',
@@ -984,18 +985,18 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     detectorTempOrWavelength: 'UV at 210 nm',
     injectionVolume: '20 µL',
     splitRatio: 'N/A',
-    ovenProgrammeOrGradient: 'Isocratic for 25 minutes at 25 °C',
+    ovenProgrammeOrGradient: 'Isocratic for 25 minutes at 25 \xB0C',
     totalRunTime: '25 minutes',
     diluent: 'Mobile Phase',
     internalStandard: 'N/A',
-    relativeRetention: 'With reference to Gabapentin (RT ~ 5.4 min): Gabapentin Related Compound A (Lactam) ~ 2.45',
+    relativeRetention: 'With reference to Gabapentin (RT ~ 5.4 min): Gabapentin Related Compound A (Lactam) ~ 20',
     nominalPpm: 250,
     activeRtMin: 5.42,
     impurityName: 'Gabapentin Related Compound A (Gabapentin Lactam)',
     impurityRtMin: 13.28,
     nominalArea: 1720000,
     ovenProgramme: [
-      { timeRange: '0 — 25', temperature: '25 °C (Isocratic)', comment: 'Phosphate buffer pH 6.2 : Methanol (90:10 v/v)' },
+      { timeRange: '0 — 25', temperature: '25 \xB0C (Isocratic)', comment: 'Phosphate buffer pH 6.2 : Methanol (90:10 v/v)' },
     ],
     solutionPreparation: {
       internalStandard: 'N/A',
@@ -1032,7 +1033,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     detectorTempOrWavelength: 'UV at 205 nm',
     injectionVolume: '20 µL',
     splitRatio: 'N/A',
-    ovenProgrammeOrGradient: 'Isocratic for 30 minutes at 40 °C',
+    ovenProgrammeOrGradient: 'Isocratic for 30 minutes at 40 \xB0C',
     totalRunTime: '30 minutes',
     diluent: 'Methanol : Water (77:23 v/v)',
     internalStandard: 'N/A',
@@ -1043,7 +1044,7 @@ export const RS_MONOGRAPH_LIBRARY: Record<string, RSMonographSeed> = {
     impurityRtMin: 9.02,
     nominalArea: 1840000,
     ovenProgramme: [
-      { timeRange: '0 — 30', temperature: '40 °C (Isocratic)', comment: 'Methanol : Water (77:23 v/v)' },
+      { timeRange: '0 — 30', temperature: '40 \xB0C (Isocratic)', comment: 'Methanol : Water (77:23 v/v)' },
     ],
     solutionPreparation: {
       internalStandard: 'N/A',
@@ -1077,10 +1078,7 @@ function adaptMonographToProduct(baseSeed: RSMonographSeed, targetName: string, 
     const cleanDrug = getCleanDrugDisplayName(targetName, cloned.activeSubstance || '');
     cloned.labelClaim = `Each tablet contains ${cleanDrug} ${strengthNum} ${unit}`;
     if (cloned.solutionPreparation && cloned.solutionPreparation.testSolution) {
-      cloned.solutionPreparation.testSolution = cloned.solutionPreparation.testSolution.replace(
-        /(?:equivalent to|containing)\s*\d+(?:\.\d+)?\s*(?:mg|g)\s+([A-Za-z]+)/gi,
-        `equivalent to ${strengthNum}.0 mg $1`
-      );
+      // Do NOT replace the weight in RS monographs. The working concentration is fixed.
     }
   }
   return cloned;
@@ -1139,20 +1137,9 @@ export function getRSMonograph(productName: string, targetApi?: string): RSMonog
   const rand = createSeededRandom(productName.toLowerCase());
   const { strengthNum, unit } = parseProductStrength(productName, targetApi);
 
-  const isGC = false;
-  const cleanDrug = getCleanDrugDisplayName(productName, 'Active Pharmaceutical Ingredient');
-  const cleanDrugCode = (cleanDrug.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase()) || 'ACT';
-
-  const wavelengths = [215, 225, 238, 245, 254, 268, 275, 282];
-  const chosenWavelength = wavelengths[Math.floor(rand() * wavelengths.length)];
-  const nominalArea = computeNominalPeakArea(productName, chosenWavelength);
-
-  const activeRt = Number((6.0 + rand() * 8.0).toFixed(2)); // 6.0 to 14.0 min
-  const impurityRt = Number((activeRt * (0.45 + rand() * 0.35)).toFixed(2));
-  const nominalPpm = 200 + Math.floor(rand() * 4) * 50; // 200, 250, 300, 350 ppm
-
-  const impurityName = `${cleanDrug} Degradation Product (Impurity A)`;
-
+  
+  const cleanDrug = productName.replace(/tablets?|capsules?|injections?|gastro-resistant|delayed-release|\d+\s*mg|\d+\s*g/gi, '').trim() || "Active Pharmaceutical Ingredient";
+  const blankField = "__________ [ENTER RAW DATA]";
   return {
     productName,
     labelClaim: `Each unit contains ${cleanDrug} ${strengthNum} ${unit}`,
@@ -1160,616 +1147,89 @@ export function getRSMonograph(productName: string, targetApi?: string): RSMonog
     reference: `BP / USP Monograph — ${productName}; ICH Q2(R2); USP <1226>`,
     technique: 'HPLC',
     detector: 'High Performance Liquid Chromatograph with UV Detector',
-    column: 'USP L1 C18 stationary phase (250 mm × 4.6 mm, 5 µm)',
-    carrierGasOrMobilePhase: '0.02 M Phosphate Buffer pH 3.2 : Acetonitrile (70:30 v/v)',
-    injectionTempOrFlowRate: '1.0 mL per minute',
-    detectorTempOrWavelength: `UV at ${chosenWavelength} nm`,
-    injectionVolume: '10 µL',
+    column: blankField,
+    carrierGasOrMobilePhase: blankField,
+    injectionTempOrFlowRate: blankField,
+    detectorTempOrWavelength: blankField,
+    injectionVolume: blankField,
     splitRatio: 'N/A',
-    ovenProgrammeOrGradient: 'Isocratic for 30 minutes at 30 °C',
-    totalRunTime: '30 minutes',
-    diluent: 'Mobile Phase',
+    ovenProgrammeOrGradient: blankField,
+    totalRunTime: blankField,
+    diluent: blankField,
     internalStandard: 'N/A (External Standard)',
-    relativeRetention: `With reference to ${cleanDrug} (RT ~ ${activeRt} min): ${impurityName} about ${(impurityRt / activeRt).toFixed(2)}`,
-    nominalPpm,
-    activeRtMin: activeRt,
-    impurityName,
-    impurityRtMin: impurityRt,
-    internalStandardRtMin: undefined,
-    nominalArea,
-    ovenProgramme: [
-      { timeRange: '0 — 30', temperature: '30 °C (Isocratic)', comment: 'Monograph validated condition' },
-    ],
+    relativeRetention: blankField,
+    nominalPpm: 100, // Placeholder to allow engine to run
+    activeRtMin: 5.0, // Placeholder
+    impurityName: blankField,
+    impurityRtMin: 6.0, // Placeholder
+    nominalArea: 1000000,
+    ovenProgramme: [],
     solutionPreparation: {
       internalStandard: 'N/A',
-      testSolution: `Weigh sample equivalent to ${nominalPpm} ppm active substance, dissolve in diluent, sonicate 15 min, filter.`,
-      referenceSolution: `Dilute 1.0 mL test solution to 100.0 mL with diluent. Further dilute 1.0 mL to 10.0 mL (0.1 % level).`,
-      systemSuitabilitySolution: `Standard solution containing ${cleanDrug} Reference Standard and ${impurityName}.`,
-      blank: 'Mobile Phase.',
-      placeboSolution: 'Placebo matrix processed under identical conditions.',
-      handlingNote: 'Prepare solutions fresh on day of use; protect from direct light.',
+      testSolution: blankField,
+      referenceSolution: blankField,
+      systemSuitabilitySolution: blankField,
+      blank: blankField,
+      placeboSolution: blankField,
+      handlingNote: blankField,
     },
     monographLimits: [
-      { criterion: impurityName, limit: 'NMT 0.20 %' },
-      { criterion: 'Any other individual impurity', limit: 'NMT 0.15 %' },
-      { criterion: 'Total impurities', limit: 'NMT 0.50 %' },
-      { criterion: 'Disregard limit', limit: '0.05 %' },
+      { criterion: blankField, limit: blankField },
+      { criterion: 'Total impurities', limit: blankField },
+      { criterion: 'Disregard limit', limit: blankField },
     ],
     requirements: [
-      { name: `${cleanDrug} Working Standard`, grade: 'Characterised WS', make: 'USP / In-house', batchNo: `WS/${cleanDrugCode}/2401` },
-      { name: `${impurityName} Reference Standard`, grade: 'Official CRS', make: 'EDQM / USP', batchNo: `CRS-${cleanDrugCode}-01` },
-      { name: 'HPLC Grade Solvents & Reagents', grade: 'HPLC / Spectroscopy grade', make: 'Merck / Honeywell', batchNo: 'SOLV-8821' },
+      { name: `${cleanDrug} Reference Standard`, grade: 'Characterised WS', make: 'USP / In-house', batchNo: blankField },
+      { name: blankField, grade: 'Ph. Eur. CRS', make: 'EDQM', batchNo: blankField },
     ],
   };
 }
 
-export function buildFullRSAMVData(
-  productName: string,
-  options?: {
-    targetApi?: string;
-    potencyDecimal?: number;
-    saltFactor?: number;
-    protocolNo?: string;
-    protocolDate?: string;
-    batchNo?: string;
-    companyName?: string;
-    reportDate?: string;
-    effectiveDate?: string;
-    verifiedMonograph?: Partial<RSMonographSeed>;
-  }
-): RSAMVDocumentData {
-  const safeProductName = (productName && productName.trim()) ? productName.trim() : 'Sodium Valproate Oral Solution BP';
-  let seed = getRSMonograph(safeProductName, options?.targetApi);
-  if (options?.verifiedMonograph) {
-    const cleanMonograph: Partial<RSMonographSeed> = {};
-    for (const [k, v] of Object.entries(options.verifiedMonograph)) {
-      if (v !== undefined && v !== null) {
-        if (typeof v === 'string' && v.trim() !== '') {
-          (cleanMonograph as any)[k] = v.trim();
-        } else if (typeof v === 'number' && !isNaN(v)) {
-          (cleanMonograph as any)[k] = v;
-        }
-      }
-    }
-    seed = { ...seed, ...cleanMonograph };
-  }
+export function buildFullRSAMVData(productName: string, options?: any): any {
+  const seed = getRSMonograph(productName);
+  const blankField = "__________ [ENTER RAW DATA]";
+  return {
+    documentNo: options?.protocolNo || blankField,
+    reportNo: options?.reportNo || blankField,
+    productName: productName,
+    labelClaim: seed.labelClaim,
+    batchNo: options?.batchNo || blankField,
+    validationBatchNo: options?.batchNo || blankField,
+    standardLotNo: options?.standardLotNo || blankField,
+    companyName: options?.companyName || blankField,
+    reportDate: options?.reportDate || blankField,
+    effectiveDate: options?.effectiveDate || blankField,
+    protocolNo: options?.protocolNo || blankField,
+    preparedDate: options?.preparedDate || blankField,
+    reviewedDate: options?.reviewedDate || blankField,
+    approvedDate: options?.approvedDate || blankField,
 
-  seed.productName = safeProductName;
-
-  const extracted = extractDynamicLabelClaim(safeProductName, seed.testParameter, options?.targetApi || seed.activeSubstance || safeProductName.split(' ')[0], seed.labelClaim);
-  let dynamicLabelClaim = extracted.labelClaim;
-  let dynamicActiveSubstance = extracted.activeSubstance;
-
-  const rawCompanyName = options?.companyName || 'WESTCOAST PHARMACEUTICAL WORKS LTD.';
-  const companyName = rawCompanyName.replace(/\.+$/, '');
-
-  const { strengthNum, unit } = parseProductStrength(safeProductName, options?.targetApi);
-  if (strengthNum && (!dynamicLabelClaim || !dynamicLabelClaim.includes(`${strengthNum}`))) {
-    dynamicLabelClaim = `Each tablet contains ${dynamicActiveSubstance} ${strengthNum} ${unit}`;
-  }
-  seed.labelClaim = dynamicLabelClaim;
-
-  const nomPpm = seed.nominalPpm || (strengthNum ? strengthNum * 5 : 250);
-  const p50 = Math.round(nomPpm * 0.5);
-  const p75 = Math.round(nomPpm * 0.75);
-  const p100 = nomPpm;
-  const p125 = Math.round(nomPpm * 1.25);
-  const p150 = Math.round(nomPpm * 1.5);
-
-  const solPrep = { ...seed.solutionPreparation };
-  if (solPrep.testSolution && strengthNum) {
-    solPrep.testSolution = solPrep.testSolution.replace(
-      /(?:equivalent to|containing)\s*\d+(?:\.\d+)?\s*(?:mg|g)\s+([A-Za-z]+)/gi,
-      `equivalent to ${strengthNum}.0 mg $1`
-    );
-  }
-
-  const rawReportDate = options?.reportDate || '20-Apr-2026';
-  const parsedReport = parsePharmaDate(rawReportDate) || new Date(2026, 3, 20);
-  const finalApprovalDate = formatPharmaDate(parsedReport);
-  const reportDate = finalApprovalDate; // Header Report Date ALWAYS equals final approval date!
-
-  const d1 = new Date(parsedReport);
-  d1.setDate(d1.getDate() - 1);
-  const reportPrepDate = formatPharmaDate(d1);
-
-  const d2 = new Date(parsedReport);
-  d2.setDate(d2.getDate() - 2);
-  const executionDate = formatPharmaDate(d2);
-
-  const d7 = new Date(parsedReport);
-  d7.setDate(d7.getDate() - 7);
-  const parsedProtocol = options?.protocolDate ? (parsePharmaDate(options.protocolDate) || d7) : d7;
-  const protocolApprovalDate = formatPharmaDate(parsedProtocol);
-  const protocolDate = protocolApprovalDate;
-
-  const d8 = new Date(parsedProtocol);
-  d8.setDate(d8.getDate() - 1);
-  const protocolPrepDate = formatPharmaDate(d8);
-
-  const docNo = options?.protocolNo || 'WC/QC/AMV/0285';
-  const batchNo = options?.batchNo || `WC-${safeProductName.substring(0, 3).toUpperCase()}-2401`;
-
-  const nominalArea = seed.nominalArea || computeNominalPeakArea(productName, 245);
-
-  // 1. System Suitability Injections
-  const ssMath = generateSystemSuitabilityInjections(seed.productName, nominalArea, 50.0, 5, seed.activeRtMin, 4850, 1.12);
-  const ssInjections: RSSystemSuitabilityRow[] = ssMath.injections.map((inj) => ({
-    srNo: inj.srNo,
-    weightMg: inj.weightMg,
-    retentionTime: inj.retentionTime,
-    peakArea: inj.peakArea,
-    tailingFactor: inj.tailingFactor,
-    theoreticalPlates: inj.theoreticalPlates,
-    remark: `Standard reference injection complies with system criteria`,
-  }));
-
-  // 2. Specificity
-  const referenceStandardDisplayName = getCleanDrugDisplayName(seed.productName || productName, dynamicActiveSubstance);
-  const specificityRows: RSSpecificityRow[] = [
-    { solution: 'Blank Solution', retentionTime: '—', peakArea: 'No peak observed', interferenceObserved: 'Nil' },
-    { solution: 'Placebo Solution', retentionTime: '—', peakArea: 'No peak observed at analyte retention window', interferenceObserved: 'Nil' },
-    {
-      solution: `Reference Standard (${referenceStandardDisplayName})`,
-      retentionTime: `${seed.activeRtMin} min`,
-      peakArea: '3,842,500',
-      interferenceObserved: 'Nil — Baseline resolved',
-    },
-    {
-      solution: `System Suitability (${seed.impurityName})`,
-      retentionTime: `${seed.impurityRtMin} min`,
-      peakArea: '148,200',
-      interferenceObserved: 'Resolution = 2.45 (NLT 2.0)',
-    },
-    {
-      solution: 'Finished Product Test Solution',
-      retentionTime: `${seed.activeRtMin} min`,
-      peakArea: '3,845,100',
-      interferenceObserved: 'Complies',
-    },
-  ];
-
-  // 3. Linearity Data (50% to 150%)
-  const linMath = generateLinearityData(seed.productName, nomPpm, nominalArea, [50, 75, 100, 125, 150]);
-  const linearityLevels: RSLinearityLevelRow[] = linMath.levels.map((lvl) => ({
-    levelName: lvl.levelName,
-    nominalPpm: lvl.concentrationPpm,
-    weightTakenMg: lvl.nominalWeightMg,
-    finalDilution: `${lvl.dilutionVolumeMl} mL`,
-    meanArea: lvl.peakArea,
-  }));
-
-  // 4. Range (75% and 125%)
-  const randRange = createSeededRandom(`${seed.productName.toLowerCase()}_rs_range`);
-  const area75 = linearityLevels[1]?.meanArea || Math.round(nominalArea * 0.75);
-  const area125 = linearityLevels[3]?.meanArea || Math.round(nominalArea * 1.25);
-
-  const rangeRows: RSRangeRow[] = [
-    { srNo: 1, levelPpm: p75, sampleId: 'Level II (75 %) — Inj 1', peakArea: Math.round(Number(area75) * (1 + (randRange() - 0.5) * 0.004)) },
-    { srNo: 2, levelPpm: p75, sampleId: 'Level II (75 %) — Inj 2', peakArea: Math.round(Number(area75) * (1 + (randRange() - 0.5) * 0.004)) },
-    { srNo: 3, levelPpm: p75, sampleId: 'Level II (75 %) — Inj 3', peakArea: Math.round(Number(area75) * (1 + (randRange() - 0.5) * 0.004)) },
-    { srNo: 4, levelPpm: p125, sampleId: 'Level IV (125 %) — Inj 1', peakArea: Math.round(Number(area125) * (1 + (randRange() - 0.5) * 0.004)) },
-    { srNo: 5, levelPpm: p125, sampleId: 'Level IV (125 %) — Inj 2', peakArea: Math.round(Number(area125) * (1 + (randRange() - 0.5) * 0.004)) },
-    { srNo: 6, levelPpm: p125, sampleId: 'Level IV (125 %) — Inj 3', peakArea: Math.round(Number(area125) * (1 + (randRange() - 0.5) * 0.004)) },
-  ];
-
-  const a75 = rangeRows.slice(0, 3).map((r) => Number(r.peakArea));
-  const m75 = Math.round(a75.reduce((a, b) => a + b, 0) / 3);
-  const sd75 = Number(Math.sqrt(a75.reduce((acc, a) => acc + Math.pow(a - m75, 2), 0) / 2).toFixed(1));
-  const rsd75 = Number(((sd75 / m75) * 100).toFixed(2));
-
-  const a125 = rangeRows.slice(3, 6).map((r) => Number(r.peakArea));
-  const m125 = Math.round(a125.reduce((a, b) => a + b, 0) / 3);
-  const sd125 = Number(Math.sqrt(a125.reduce((acc, a) => acc + Math.pow(a - m125, 2), 0) / 2).toFixed(1));
-  const rsd125 = Number(((sd125 / m125) * 100).toFixed(2));
-
-  // 5. Precision (Repeatability) - Content percentage around nominal
-  
-  const P = seed.potencyDecimal || 1.0;
-  const F = seed.saltFactor || 1.0;
-  const A_std = ssMath.meanArea;
-  
-  const ctxPrec = {
-    targetPct: 99.85,
-    LC_mg: strengthNum,
-    A_std: A_std,
-    C_std: nomPpm,
-    C_smp: nomPpm,
-    RRF: 1.0,
-    methodType: 'related_substances' as const
-  };
-  const precMath = generatePrecisionData(seed.productName, strengthNum, nominalArea, 99.85, false, ctxPrec);
-
-  const precisionRows: RSPrecisionRow[] = precMath.analyst1.rows.map((r, i) => ({
-    srNo: r.determinationNo,
-    sampleId: `Finished Product Prep ${i + 1}`,
-    volumeUsed: '10.0 mL',
-    peakArea: r.peakArea,
-    contentPercentLa: r.percentAssayOrDissolved,
-  }));
-
-  // 6. LOD & LOQ
-  const lodLoqConfirmationRows: RSLodLoqConfirmationRow[] = [
-    { srNo: 1, level: 'Limit of Detection (LOD)', concentrationPpm: Number((nomPpm * 0.033).toFixed(2)), peakArea: Math.round(nominalArea * 0.033), snRatio: '4.8 : 1 (NLT 3:1)' },
-    { srNo: 2, level: 'Limit of Quantification (LOQ)', concentrationPpm: Number((nomPpm * 0.10).toFixed(2)), peakArea: Math.round(nominalArea * 0.10), snRatio: '14.2 : 1 (NLT 10:1)' },
-  ];
-
-  const randLoq = createSeededRandom(`${seed.productName.toLowerCase()}_loq`);
-  const loqBaseArea = Math.round(nominalArea * 0.10);
-  const loqPrecisionRows: RSLoqPrecisionRow[] = [1, 2, 3, 4, 5, 6].map((i) => ({
-    srNo: i,
-    peakArea: Math.round(loqBaseArea * (1 + (randLoq() - 0.5) * 0.025)),
-    contentPercentLa: 0.10,
-    remark: 'Complies',
-  }));
-
-  const loqAreas = loqPrecisionRows.map((r) => Number(r.peakArea));
-  const loqMean = Math.round(loqAreas.reduce((a, b) => a + b, 0) / 6);
-  const loqSd = Number(Math.sqrt(loqAreas.reduce((acc, a) => acc + Math.pow(a - loqMean, 2), 0) / 5).toFixed(1));
-  const loqRsd = Number(((loqSd / loqMean) * 100).toFixed(2));
-
-  // 7. Intermediate Precision
-  const intermediatePrecisionRows: RSIntermediatePrecisionRow[] = precMath.analyst1.rows.map((r1, i) => {
-    const r2 = precMath.analyst2.rows[i];
-    return {
-      srNo: r1.determinationNo,
-      analyst1Volume: '10.0 mL',
-      analyst1Area: r1.peakArea,
-      analyst1Content: r1.percentAssayOrDissolved,
-      analyst2Volume: '10.0 mL',
-      analyst2Area: r2.peakArea,
-      analyst2Content: r2.percentAssayOrDissolved,
-    };
-  });
-
-  // 8. Accuracy & Recovery (Triplicate across 3 levels)
-  const accMath = generateAccuracyRecoveryData(seed.productName, nomPpm, [75, 100, 125], nominalArea);
-  let accSr = 1;
-  const accuracyRecoveryRows: RSAccuracyRecoveryRow[] = [];
-  for (const lvl of accMath.levels) {
-    for (const rep of lvl.replicates) {
-      const repArea = Math.round((lvl.levelPercent / 100) * nominalArea * (rep.percentRecovery / 100));
-      accuracyRecoveryRows.push({
-        srNo: accSr++,
-        levelPpm: lvl.levelPercent,
-        standardSpikedMg: rep.amountAddedMg,
-        sampleArea: repArea,
-        amountRecoveredMg: rep.amountRecoveredMg,
-        percentRecovery: rep.percentRecovery,
-      });
-    }
-  }
-
-  const platesCriteria = 'NLT 1500';
-
-  // 9. Validation Parameters Table
-  const validationParameters: RSValidationParameterCriteria[] = [
-    {
-      srNo: '5.1',
-      parameter: 'System Suitability',
-      acceptanceCriteria: `Resolution between ${seed.impurityName} and main active peak NLT 2.0; %RSD of peak response NMT 2.0 %; theoretical plates ${platesCriteria}; tailing factor NMT 1.5.`,
-      resultRemark: `Resolution 2.45; %RSD ${ssMath.rsdArea} %; Theoretical plates 2840; Tailing 1.15 — Complies`,
-    },
-    {
-      srNo: '5.2',
-      parameter: 'Specificity',
-      acceptanceCriteria: 'No interference from blank or placebo matrix at retention times of active drug and specified impurities.',
-      resultRemark: 'No interfering peaks observed at critical retention times — Complies',
-    },
-    {
-      srNo: '5.3',
-      parameter: 'Linearity',
-      acceptanceCriteria: `Correlation coefficient (r²) ≥ 0.995 over ${p50} ppm to ${p150} ppm; slope and y-intercept to be reported.`,
-      resultRemark: `r² = ${linMath.regression.rSquared} over ${p50} ppm to ${p150} ppm — Complies`,
-    },
-    {
-      srNo: '5.4',
-      parameter: 'Range',
-      acceptanceCriteria: `%RSD of peak response ≤ 2.0 % at ${p75} ppm and ${p125} ppm.`,
-      resultRemark: `%RSD at ${p75} ppm: ${rsd75} %; %RSD at ${p125} ppm: ${rsd125} % — Complies`,
-    },
-    {
-      srNo: '5.5',
-      parameter: 'Precision (Repeatability)',
-      acceptanceCriteria: '%RSD of content for six determinations NMT 2.0 %.',
-      resultRemark: `%RSD of six determinations: ${precMath.analyst1.rsd} % — Complies`,
-    },
-    {
-      srNo: '5.6',
-      parameter: 'LOD and LOQ',
-      acceptanceCriteria: 'Signal-to-noise (S/N) ratio at LOD NLT 3:1; at LOQ NLT 10:1; %RSD at LOQ NMT 5.0 %.',
-      resultRemark: `LOD S/N = 4.8; LOQ S/N = 14.2; %RSD at LOQ = ${loqRsd} % — Complies`,
-    },
-    {
-      srNo: '5.7',
-      parameter: 'Intermediate Precision',
-      acceptanceCriteria: '%RSD of content NMT 2.0 % for each analyst; cumulative %RSD for twelve results NMT 2.0 %.',
-      resultRemark: `Analyst 1 %RSD ${precMath.analyst1.rsd} %; Analyst 2 %RSD ${precMath.analyst2.rsd} %; Cumulative %RSD ${precMath.cumulative.rsd} % — Complies`,
-    },
-    {
-      srNo: '5.8',
-      parameter: 'Accuracy (Recovery)',
-      acceptanceCriteria: `Mean recovery at ${p75} ppm, ${p100} ppm and ${p125} ppm between 98.0 % and 102.0 %; %RSD ≤ 2.0 %.`,
-      resultRemark: `Overall mean recovery = ${accMath.overallMean} %; %RSD = ${accMath.overallRsd} % — Complies`,
-    },
-  ];
-
-  const reportNumber = docNo.includes('/AMV/') ? docNo.replace('/AMV/', '/AMVR/') : `${docNo}/R`;
-
-  const doc: RSAMVDocumentData = {
-    companyName,
-    documentTitle: `ANALYTICAL METHOD VALIDATION PROTOCOL / REPORT FOR ORGANIC IMPURITY (RELATED SUBSTANCES) BY ${seed.technique}`,
-    subTitle: `(${seed.technique === 'GC' ? 'Organic Impurity by Gas Chromatography' : 'Related Substances by HPLC'})`,
-    protocolNo: docNo,
-    protocolDate: protocolDate,
-    reportNo: reportNumber,
-    reportDate: reportDate,
-    productName: safeProductName,
-    labelClaim: dynamicLabelClaim,
     testParameter: seed.testParameter,
     reference: seed.reference,
-    batchNoUsed: batchNo,
+    technique: seed.technique,
+    detector: seed.detector,
+    column: seed.column,
+    mobilePhase: seed.carrierGasOrMobilePhase,
+    flowRate: seed.injectionTempOrFlowRate,
+    detectionWavelength: seed.detectorTempOrWavelength,
+    injectionVolume: seed.injectionVolume,
+    columnTemperature: seed.ovenProgrammeOrGradient,
+    runTime: seed.totalRunTime,
+    diluent: seed.diluent,
+    workingConcentration: blankField,
+    approxRetentionTime: blankField,
 
-    signOffs: {
-      preparedBy: {
-        designation: 'Chemist, Quality Control',
-        name: 'Riya Patel',
-        signature: 'Signed',
-        date: reportPrepDate,
-        dateProtocol: protocolPrepDate,
-        dateReport: reportPrepDate,
-      },
-      checkedBy: {
-        designation: 'Executive, Quality Control',
-        name: 'Jeel Patel',
-        signature: 'Signed',
-        date: reportPrepDate,
-        dateProtocol: protocolPrepDate,
-        dateReport: reportPrepDate,
-      },
-      reviewedBy: {
-        designation: 'Manager, Quality Assurance',
-        name: 'Anil Parmar',
-        signature: 'Signed',
-        date: reportDate,
-        dateProtocol: protocolApprovalDate,
-        dateReport: reportDate,
-      },
-      authorisedBy: {
-        designation: 'General Manager, Quality (Head QA/QC)',
-        name: 'Suresh Shah',
-        signature: 'Signed',
-        date: reportDate,
-        dateProtocol: protocolApprovalDate,
-        dateReport: reportDate,
-      },
-    },
+    solutionPreparation: seed.solutionPreparation,
+    monographLimits: seed.monographLimits,
+    requirements: seed.requirements,
 
-    objective: `To validate the analytical method for the determination of Organic Impurity (Related Substances) in ${seed.productName} by ${
-      seed.technique === 'GC' ? 'gas chromatography' : 'high performance liquid chromatography'
-    }, and to demonstrate that the procedure is suitable for its intended purpose and gives specific, linear, accurate, and precise results under standard laboratory operating conditions as per ${seed.reference}.`,
-
-    scope: `This document is applicable to the validation of the ${
-      seed.technique === 'GC' ? 'gas chromatographic' : 'liquid chromatographic'
-    } method for Organic Impurities of ${seed.productName} in the Quality Control laboratory of ${companyName}.`,
-
-    referenceDetails: {
-      reference: seed.reference,
-      typeOfStudy: `Method Validation of Organic Impurities as per ICH Q2(R2) and ${seed.reference.split(';')[0]}`,
-      testToBeValidated: seed.testParameter,
-      validationTeam: 'Analyst 1 — Riya Patel (Chemist, QC); Analyst 2 — Jeel Patel (Executive, QC); under supervision of Anil Parmar (Manager, QC)',
-      experimentalDetails: `System suitability, specificity, linearity (${p50} ppm to ${p150} ppm), range (${p75} ppm and ${p125} ppm), repeatability, LOD/LOQ confirmation, intermediate precision, and accuracy across 3 levels in triplicate.`,
-    },
-
-    methodSummary: {
-      chromatographicConditions: {
-        instrumentDetector: seed.technique === 'GC' ? 'Gas Chromatograph with FID Detector and Headspace / Split Autosampler' : 'High Performance Liquid Chromatograph with UV/Vis Detector',
-        column: seed.column,
-        carrierGasOrMobilePhase: seed.carrierGasOrMobilePhase,
-        injectionTempOrFlowRate: seed.injectionTempOrFlowRate,
-        detectorTempOrWavelength: seed.detectorTempOrWavelength,
-        injectionVolume: seed.injectionVolume,
-        splitRatio: seed.splitRatio,
-        ovenProgrammeOrGradient: seed.ovenProgrammeOrGradient,
-        totalRunTime: seed.totalRunTime,
-        diluent: seed.diluent,
-        internalStandard: seed.internalStandard,
-        relativeRetention: seed.relativeRetention,
-      },
-      ovenProgramme: seed.ovenProgramme,
-      solutionPreparation: solPrep,
-      monographLimits: seed.monographLimits,
-      requirements: seed.requirements,
-    },
-
-    validationParameters,
-
-    systemSuitability: {
-      injections: ssInjections,
-      stats: {
-        meanArea: ssMath.meanArea,
-        sdArea: ssMath.sdArea,
-        rsdArea: ssMath.rsdArea,
-        tailingFactor: 1.15,
-        theoreticalPlates: 2840,
-        theoreticalPlatesCriteria: platesCriteria,
-        resolution: 2.45,
-        conclusionProtocol: 'The system suitability parameters shall be verified prior to starting the sample analysis sequence.',
-        conclusionReport: `The system suitability test complies with all acceptance criteria (%RSD of peak area = ${ssMath.rsdArea} %, Resolution = 2.45, Plates = 2840, Tailing = 1.15). The chromatographic system is verified as suitable.`,
-      },
-    },
-
-    specificity: {
-      rows: specificityRows,
-      conclusionProtocol: 'Specificity shall be demonstrated by establishing the absence of interfering peaks at the retention windows of the analyte and impurities.',
-      conclusionReport: 'No interfering peaks were observed in blank or placebo chromatograms at the retention windows of the active drug and specified impurities. The method is specific.',
-    },
-
-    linearityAndRange: {
-      linearityLevels,
-      regression: {
-        rSquared: linMath.regression.rSquared,
-        slope: linMath.regression.slope,
-        yIntercept: linMath.regression.yIntercept,
-        sdYIntercepts: Number(((Number((nomPpm * 0.10).toFixed(2)) * linMath.regression.slope) / 10).toFixed(1)),
-        conclusionProtocol: `Linearity will be evaluated from ${p50} ppm to ${p150} ppm with acceptance criteria r² ≥ 0.995.`,
-        conclusionReport: `The linear regression analysis yielded a correlation coefficient (r²) of ${linMath.regression.rSquared}, exceeding the threshold of 0.995. Excellent linearity is confirmed across ${p50} ppm to ${p150} ppm.`,
-      },
-      rangeRows,
-      rangeStats: [
-        { levelPpm: p75, mean: m75, sd: sd75, rsd: rsd75 },
-        { levelPpm: p125, mean: m125, sd: sd125, rsd: rsd125 },
-      ],
-      rangeConclusionProtocol: `Range will be verified at ${p75} ppm and ${p125} ppm with %RSD ≤ 2.0 %.`,
-      rangeConclusionReport: `%RSD at ${p75} ppm is ${rsd75} % and at ${p125} ppm is ${rsd125} % (both ≤ 2.0 %). The analytical range is validated.`,
-    },
-
-    precision: {
-      rows: precisionRows,
-      stats: {
-        meanContent: precMath.analyst1.meanPercent,
-        sd: precMath.analyst1.sd,
-        rsd: precMath.analyst1.rsd,
-        conclusionProtocol: 'Six independent preparations of the finished product will be tested. %RSD must be NMT 2.0 %.',
-        conclusionReport: `The %RSD of six determinations is ${precMath.analyst1.rsd} % (NMT 2.0 %). Repeatability is confirmed.`,
-      },
-    },
-
-    lodLoq: {
-      confirmationRows: lodLoqConfirmationRows,
-      loqPrecisionRows,
-      loqStats: {
-        meanArea: loqMean,
-        sdArea: loqSd,
-        rsdArea: loqRsd,
-        meanContent: 0.10,
-        rsdContent: loqRsd,
-        conclusionProtocol: 'Six replicate injections of the LOQ solution shall show %RSD NMT 5.0 %.',
-        conclusionReport: `Six replicate injections of the LOQ solution yielded %RSD of ${loqRsd} % (NMT 5.0 %). The limit of quantitation is verified.`,
-      },
-      conclusionProtocol: 'LOD and LOQ will be established based on signal-to-noise ratio and verified by precision at LOQ.',
-      conclusionReport: `LOD S/N is 4.8:1 and LOQ S/N is 14.2:1. Six replicate injections at LOQ yielded %RSD of ${loqRsd} % (NMT 5.0 %). LOD and LOQ are validated.`,
-    },
-
-    intermediatePrecision: {
-      rows: intermediatePrecisionRows,
-      stats: {
-        analyst1Mean: precMath.analyst1.meanPercent,
-        analyst1Sd: precMath.analyst1.sd,
-        analyst1Rsd: precMath.analyst1.rsd,
-        analyst2Mean: precMath.analyst2.meanPercent,
-        analyst2Sd: precMath.analyst2.sd,
-        analyst2Rsd: precMath.analyst2.rsd,
-        cumulativeMean: precMath.cumulative.meanPercent,
-        cumulativeSd: precMath.cumulative.sd,
-        cumulativeRsd: precMath.cumulative.rsd,
-        diffBetweenMeans: Number(Math.abs(precMath.analyst1.meanPercent - precMath.analyst2.meanPercent).toFixed(2)),
-        conclusionProtocol: 'Two analysts will perform independent precision testing on different days. Cumulative %RSD must be NMT 2.0 %.',
-        conclusionReport: `Analyst 1 %RSD is ${precMath.analyst1.rsd} %, Analyst 2 %RSD is ${precMath.analyst2.rsd} %, and cumulative %RSD for twelve determinations is ${precMath.cumulative.rsd} % (NMT 2.0 %). Intermediate precision is established.`,
-      },
-    },
-
-    accuracy: {
-      rows: accuracyRecoveryRows,
-      stats: {
-        levelStats: [
-          { levelPpm: p75, meanRecovery: accMath.levels[0]?.meanRecovery || 99.8, sdRecovery: 0.4, rsdRecovery: 0.4 },
-          { levelPpm: p100, meanRecovery: accMath.levels[1]?.meanRecovery || 99.9, sdRecovery: 0.35, rsdRecovery: 0.35 },
-          { levelPpm: p125, meanRecovery: accMath.levels[2]?.meanRecovery || 100.1, sdRecovery: 0.38, rsdRecovery: 0.38 },
-        ],
-        overallMeanRecovery: accMath.overallMean,
-        overallRsd: accMath.overallRsd,
-        conclusionProtocol: `Recovery will be assessed at ${p75} ppm, ${p100} ppm, and ${p125} ppm in triplicate. Mean recovery must be 98.0 % – 102.0 % with %RSD ≤ 2.0 %.`,
-        conclusionReport: `Mean recoveries are: 75 % level = ${accMath.levels[0]?.meanRecovery} %, 100 % level = ${accMath.levels[1]?.meanRecovery} %, 125 % level = ${accMath.levels[2]?.meanRecovery} %. Overall %RSD is ${accMath.overallRsd} % (NMT 2.0 %). Method accuracy is validated.`,
-      },
-    },
-
-    overallConclusionProtocol: `To validate the analytical method for the determination of Organic Impurity (Related Substances) in ${seed.productName} by ${
-      seed.technique === 'GC' ? 'gas chromatography' : 'high performance liquid chromatography'
-    }, and to demonstrate that the procedure is suitable for its intended purpose and gives specific, linear, accurate, and precise results under standard laboratory operating conditions as per ${seed.reference}.`,
-
-    overallConclusionReport: `The analytical method for the determination of Organic Impurities (Related Substances) in ${seed.productName} has been validated in accordance with ${
-      seed.reference.includes('ICH Q2(R2)') ? seed.reference : `${seed.reference} and ICH Q2(R2)`
-    }. All validation parameters meet predefined acceptance criteria. The method is declared validated for routine QC testing.`,
-
-    completionRecord: [
-      {
-        particulars: 'Protocol Preparation',
-        details: 'Prepared by Chemist QC',
-        signatureDate: `Signed / ${protocolPrepDate}`,
-        detailsProtocol: 'Prepared by Chemist QC',
-        signatureDateProtocol: `Signed / ${protocolPrepDate}`,
-        detailsReport: 'Prepared by Chemist QC',
-        signatureDateReport: `Signed / ${protocolPrepDate}`,
-      },
-      {
-        particulars: 'Protocol Approval',
-        details: 'Approved by Head QA/QC',
-        signatureDate: `Signed / ${protocolApprovalDate}`,
-        detailsProtocol: 'Approved by Head QA/QC',
-        signatureDateProtocol: `Signed / ${protocolApprovalDate}`,
-        detailsReport: 'Approved by Head QA/QC',
-        signatureDateReport: `Signed / ${protocolApprovalDate}`,
-      },
-      {
-        particulars: 'Verification Execution',
-        details: `Executed by Analytical Team (${executionDate})`,
-        signatureDate: `Signed / ${executionDate}`,
-        detailsProtocol: 'To be executed as per approved protocol',
-        signatureDateProtocol: '—',
-        detailsReport: 'Executed by Analytical Team',
-        signatureDateReport: `Signed / ${executionDate}`,
-      },
-      {
-        particulars: 'Report Preparation',
-        details: 'Compiled with all chromatographic data and integration reports',
-        signatureDate: `Signed / ${reportPrepDate}`,
-        detailsProtocol: 'To be compiled with chromatograms upon execution',
-        signatureDateProtocol: '—',
-        detailsReport: 'Compiled with all chromatographic data and integration reports',
-        signatureDateReport: `Signed / ${reportPrepDate}`,
-      },
-      {
-        particulars: 'Final Report Approval',
-        details: 'Authorised by Head QA/QC',
-        signatureDate: `Signed / ${finalApprovalDate}`,
-        detailsProtocol: 'To be authorised upon completion',
-        signatureDateProtocol: '—',
-        detailsReport: 'Authorised by Head QA/QC',
-        signatureDateReport: `Signed / ${finalApprovalDate}`,
-      },
-    ],
-
-    abbreviations: [
-      { abbreviation: 'AMV', expansion: 'Analytical Method Validation' },
-      { abbreviation: 'RS', expansion: 'Related Substances' },
-      { abbreviation: 'HPLC', expansion: 'High Performance Liquid Chromatography' },
-      { abbreviation: 'UV', expansion: 'Ultraviolet Detector' },
-      { abbreviation: 'LA', expansion: 'Label Amount / Claim' },
-      { abbreviation: 'LOD', expansion: 'Limit of Detection' },
-      { abbreviation: 'LOQ', expansion: 'Limit of Quantification' },
-      { abbreviation: 'RSD', expansion: 'Relative Standard Deviation' },
-      { abbreviation: 'SD', expansion: 'Standard Deviation' },
-      { abbreviation: 'S/N', expansion: 'Signal-to-Noise Ratio' },
-      { abbreviation: 'BP', expansion: 'British Pharmacopoeia' },
-      { abbreviation: 'USP', expansion: 'United States Pharmacopeia' },
-      { abbreviation: 'ICH', expansion: 'International Council for Harmonisation' },
-    ],
-
-    revisionHistory: [
-      {
-        version: '00',
-        effectiveDate: reportDate,
-        docNumber: reportNumber,
-        reason: `Analytical Method Validation study report issued as ${reportNumber} for Organic Impurities in ${safeProductName} by ${seed.technique}. Validates chromatographic system parameters (Stationary phase ${seed.column}, mobile phase ${seed.carrierGasOrMobilePhase}, detector ${seed.detectorTempOrWavelength}, flow rate ${seed.injectionTempOrFlowRate}) with complete system suitability, LOQ, LOD, linearity, precision, and accuracy under ICH Q2(R2).`,
-      },
-    ],
-  };
-
-  // Rule 6: Filter abbreviations so only terms actually appearing in the document text are listed
-  const docText = JSON.stringify({ ...doc, abbreviations: [] });
-  const isVerif = (doc.referenceDetails.reference || '').includes('1226') || (doc.referenceDetails.typeOfStudy || '').toLowerCase().includes('verification');
-  doc.abbreviations = filterUsedAbbreviations(doc.abbreviations || [], docText, isVerif);
-
-  return postProcessSanitizeDocument(doc, 'related_substances');
+    systemSuitability: { rows: [], acceptanceTextProtocol: blankField, conclusionReport: blankField },
+    specificity: { rows: [], acceptanceTextProtocol: blankField, conclusionReport: blankField },
+    linearityAndRange: { linearityLevels: [], loqRow: {}, lodRow: {}, regression: { correlationR: 0.999, rSquared: 0.999, slope: 1, yIntercept: 0, yInterceptBiasPercent: 0, residualSumOfSquares: 0 }, acceptanceTextProtocol: blankField, conclusionReport: blankField },
+    accuracy: { levels: [], acceptanceTextProtocol: blankField, conclusionReport: blankField },
+    precision: { repeatibilityRows: [], acceptanceTextProtocol: blankField, conclusionReport: blankField },
+    intermediatePrecision: { repeatibilityRows: [], analyst1TotalMean: 0, analyst2TotalMean: 0, difference: 0, acceptanceTextProtocol: blankField, conclusionReport: blankField },
+    robustness: { conditions: [], acceptanceTextProtocol: blankField, conclusionReport: blankField },
+    solutionStability: { timepoints: [], acceptanceTextProtocol: blankField, conclusionReport: blankField }
+  } as any;
 }

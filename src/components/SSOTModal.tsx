@@ -129,7 +129,7 @@ SITE_ADDRESS: ${ssot.siteAddress}`;
                 </tr>
               </thead>
               <tbody>
-                {fields.map((f, i) => (
+                {(fields || []).map((f, i) => (
                   <tr key={f.key} className={i % 2 === 1 ? 'bg-zinc-50' : 'bg-white'}>
                     <td className="p-2 border-b border-zinc-200 font-mono font-bold text-zinc-800">
                       {f.label}

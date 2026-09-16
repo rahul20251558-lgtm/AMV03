@@ -15,8 +15,10 @@ import {
   PageBreak,
 } from 'docx';
 import { saveAs } from 'file-saver';
-import { AMVDocumentData, DocumentType, ThemeFormat } from '../types';
-import { formatNum, formatInt } from './mathUtils';
+import { AMVDocumentData, DocumentType, ThemeFormat, FooterSignOffData } from '../types';
+import { formatNum, formatInt, formatAmountByMagnitude } from './mathUtils';
+import { createDocxSignOffFooter } from './docxSignOffFooter';
+import { getWestCoastStampUint8Array } from '../utils/stampUtils';
 
 export interface DocxOptions {
   docType: DocumentType;
@@ -24,6 +26,7 @@ export interface DocxOptions {
   fontFamily?: string;
   fontSize?: number;
   dataMode?: 'TEMPLATE' | 'DEMO';
+  footerSignOffData?: FooterSignOffData;
 }
 
 export async function generateAndDownloadAMVDocx(
@@ -33,6 +36,7 @@ export async function generateAndDownloadAMVDocx(
   const { docType, theme } = options;
   const isProtocol = docType === 'protocol';
   const isBlue = theme === 'blue';
+  const isWestcoast = theme === 'westcoast';
 
   // Times New Roman (12pt default) matching authentic regulatory monograph
   const FONT_FAMILY = options.fontFamily || 'Times New Roman';
@@ -240,10 +244,11 @@ export async function generateAndDownloadAMVDocx(
     spacing: { before: 0, after: 60 },
     children: [
       new TextRun({
-        text: data.companyAddress,
-        size: 20, // 10pt (increased from 9pt)
+        text: isWestcoast ? data.companyName : data.companyAddress,
+        size: isWestcoast ? 24 : 20,
+        bold: isWestcoast,
         font: FONT_FAMILY,
-        color: '4B5563',
+        color: isWestcoast ? '000000' : '4B5563',
       }),
     ],
   });
@@ -251,13 +256,13 @@ export async function generateAndDownloadAMVDocx(
   const page1DocTitle = new Paragraph({
     alignment: AlignmentType.CENTER,
     spacing: { before: 40, after: 100 },
-    children: [
+    children: isWestcoast ? [] : [
       new TextRun({
         text: isProtocol
-          ? 'ANALYTICAL METHOD VALIDATION PROTOCOL (Assay by HPLC)'
-          : 'ANALYTICAL METHOD VALIDATION REPORT (Assay by HPLC)',
+          ? 'ANALYTICAL METHOD VALIDATION PROTOCOL'
+          : 'ANALYTICAL METHOD VALIDATION REPORT',
         bold: true,
-        size: 24, // 12pt (increased from 11pt)
+        size: 24,
         font: FONT_FAMILY,
         color: navyTextColor,
       }),
@@ -321,9 +326,9 @@ export async function generateAndDownloadAMVDocx(
   // 3-Column Sign-Off Table matching Reference PDF exactly
   // Widths: 3302, 3302, 3302 = 9906 dxa
   const colSign3 = [3302, 3302, 3302];
-  const prepDate = isProtocol ? '25-Mar-2026' : (data.signOffs.preparedBy.date || '15-Apr-2026');
-  const revDate = isProtocol ? '28-Mar-2026' : (data.signOffs.reviewedBy.date || '18-Apr-2026');
-  const appDate = isProtocol ? '31-Mar-2026' : (data.signOffs.approvedBy.date || '20-Apr-2026');
+  const prepDate = isProtocol ? '25-Mar-2026' : (data.signOffs?.preparedBy?.date || '15-Apr-2026');
+  const revDate = isProtocol ? '28-Mar-2026' : (data.signOffs?.reviewedBy?.date || '18-Apr-2026');
+  const appDate = isProtocol ? '31-Mar-2026' : (data.signOffs?.approvedBy?.date || '20-Apr-2026');
 
   const createSignCell = (
     name: string,
@@ -371,11 +376,46 @@ export async function generateAndDownloadAMVDocx(
       true
     ),
     createRow([
-      createSignCell(data.signOffs.preparedBy.name, data.signOffs.preparedBy.designation, prepDate, colSign3[0]),
-      createSignCell(data.signOffs.reviewedBy.name, data.signOffs.reviewedBy.designation, revDate, colSign3[1]),
-      createSignCell(data.signOffs.approvedBy.name, data.signOffs.approvedBy.designation, appDate, colSign3[2]),
+      createSignCell(data.signOffs?.preparedBy?.name, data.signOffs?.preparedBy?.designation, prepDate, colSign3[0]),
+      createSignCell(data.signOffs?.reviewedBy?.name, data.signOffs?.reviewedBy?.designation, revDate, colSign3[1]),
+      createSignCell(data.signOffs?.approvedBy?.name, data.signOffs?.approvedBy?.designation, appDate, colSign3[2]),
     ]),
   ]);
+
+  // TABLE OF CONTENTS (Assay by HPLC)
+  const colTOC = [1200, 7206, 1500];
+  const tocRows = [
+    createRow([
+      createHeaderCell('Sr. No.', colTOC[0]),
+      createHeaderCell('Contents / Section Title', colTOC[1], AlignmentType.LEFT),
+      createHeaderCell('Page No.', colTOC[2]),
+    ], true),
+    ...[
+      { srNo: '1.0', title: 'Objective', pageNo: 'Page 1' },
+      { srNo: '2.0', title: 'Scope', pageNo: 'Page 1' },
+      { srNo: '3.0', title: 'Reference Documents & Verification Details', pageNo: 'Page 1' },
+      { srNo: '4.0', title: 'Analytical Method Summary (4.1 Conditions, 4.2 Preparations, 4.3 Formulae)', pageNo: 'Page 2' },
+      { srNo: '4.4', title: 'Reagents, Reference Standards & Analytical Equipment', pageNo: 'Page 3' },
+      { srNo: '5.0', title: 'Validation Parameters and Acceptance Criteria', pageNo: 'Page 3' },
+      { srNo: '6.0', title: 'System Suitability Test (SST)', pageNo: 'Page 4' },
+      { srNo: '7.0', title: 'Specificity / Placebo Interference & Forced Degradation', pageNo: 'Page 4' },
+      { srNo: '8.0', title: 'Linearity and Range (50 % to 150 % of nominal conc.)', pageNo: 'Page 5' },
+      { srNo: '9.0', title: 'Accuracy / Recovery (50 %, 100 %, 150 % Levels)', pageNo: 'Page 5' },
+      { srNo: '10.0', title: 'Method Precision (Repeatability, n = 6)', pageNo: 'Page 6' },
+      { srNo: '11.0', title: 'Intermediate Precision / Ruggedness (Analyst-to-Analyst)', pageNo: 'Page 6' },
+      { srNo: '12.0', title: 'Robustness & Stability of Analytical Solutions', pageNo: 'Page 7' },
+      { srNo: '13.0', title: 'Overall Conclusion', pageNo: 'Page 7' },
+      { srNo: '14.0', title: 'Review Checklist & Completion Record', pageNo: 'Page 7' },
+      { srNo: '15.0', title: 'List of Abbreviations & Document Revision History', pageNo: 'Page 8' },
+    ].map((item, idx) =>
+      createRow([
+        createDataCell(item.srNo, AlignmentType.CENTER, false, idx % 2 === 1 ? altRowBgColor : undefined, colTOC[0]),
+        createDataCell(item.title, AlignmentType.LEFT, false, idx % 2 === 1 ? altRowBgColor : undefined, colTOC[1]),
+        createDataCell(item.pageNo, AlignmentType.CENTER, true, idx % 2 === 1 ? altRowBgColor : undefined, colTOC[2]),
+      ])
+    )
+  ];
+  const page1TocTable = createDocxTable(colTOC, tocRows);
 
   // Section 3: Reference Documents & Verification Details Table
   const colSec3 = [2706, 7200];
@@ -403,24 +443,60 @@ export async function generateAndDownloadAMVDocx(
   ]);
 
   // =========================================================================
-  // PAGE 2: SEC 4.1 TABLE, NOTE, SEC 4.2 TABLE, SEC 4.3 CALCULATION FORMULAE
+  // PAGE 2: SEC 4.1 NARRATIVE CONDITIONS, NOTE, SEC 4.2 TABLE, SEC 4.3 CALCULATION FORMULAE
   // =========================================================================
 
-  // 4.1 Chromatographic Conditions Table (3406, 6500 dxa)
-  const colChrom = [3406, 6500];
-  const chromTable = createDocxTable(colChrom, [
-    createRow([createHeaderCell('Parameter', colChrom[0], AlignmentType.LEFT), createHeaderCell('Condition', colChrom[1], AlignmentType.LEFT)], true),
-    createRow([createDataCell('Column', AlignmentType.LEFT, true, metaLabelBgColor, colChrom[0]), createDataCell(c.column, AlignmentType.LEFT, false, undefined, colChrom[1])]),
-    createRow([createDataCell('Mobile Phase', AlignmentType.LEFT, true, metaLabelBgColor, colChrom[0]), createDataCell(c.mobilePhase, AlignmentType.LEFT, false, undefined, colChrom[1])]),
-    createRow([createDataCell('Flow Rate', AlignmentType.LEFT, true, metaLabelBgColor, colChrom[0]), createDataCell(c.flowRate, AlignmentType.LEFT, false, undefined, colChrom[1])]),
-    createRow([createDataCell('Detection Wavelength', AlignmentType.LEFT, true, metaLabelBgColor, colChrom[0]), createDataCell(c.detectionWavelength, AlignmentType.LEFT, false, undefined, colChrom[1])]),
-    createRow([createDataCell('Injection Volume', AlignmentType.LEFT, true, metaLabelBgColor, colChrom[0]), createDataCell(c.injectionVolume, AlignmentType.LEFT, false, undefined, colChrom[1])]),
-    createRow([createDataCell('Column Temperature', AlignmentType.LEFT, true, metaLabelBgColor, colChrom[0]), createDataCell(c.columnTemperature, AlignmentType.LEFT, false, undefined, colChrom[1])]),
-    createRow([createDataCell('Run Time', AlignmentType.LEFT, true, metaLabelBgColor, colChrom[0]), createDataCell(c.runTime, AlignmentType.LEFT, false, undefined, colChrom[1])]),
-    createRow([createDataCell('Diluent', AlignmentType.LEFT, true, metaLabelBgColor, colChrom[0]), createDataCell(c.diluent, AlignmentType.LEFT, false, undefined, colChrom[1])]),
-    createRow([createDataCell('Working Concentration', AlignmentType.LEFT, true, metaLabelBgColor, colChrom[0]), createDataCell(c.workingConcentration, AlignmentType.LEFT, false, undefined, colChrom[1])]),
-    createRow([createDataCell('Approx. Retention Time', AlignmentType.LEFT, true, metaLabelBgColor, colChrom[0]), createDataCell(c.approxRetentionTime || '6.5 min', AlignmentType.LEFT, false, undefined, colChrom[1])]),
-  ]);
+  // 4.1 Chromatographic Conditions - Narrative Paragraph Format (No Table)
+  const chromConditionsParagraph1 = new Paragraph({
+    children: [
+      new TextRun({ text: "The high-performance liquid chromatographic (HPLC) separation is executed using a stationary phase consisting of ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Column: ", bold: true, size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: c.column + ". ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "The mobile phase system employed is ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Mobile Phase: ", bold: true, size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: c.mobilePhase + ". ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "The chromatographic system is operated isocratically at a controlled ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Flow Rate: ", bold: true, size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: c.flowRate + ", ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "with spectrophotometric monitoring performed at a ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Detection Wavelength: ", bold: true, size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: c.detectionWavelength + ".", size: 20, font: FONT_FAMILY }),
+    ],
+    alignment: AlignmentType.JUSTIFIED,
+    spacing: { before: 80, after: 60 },
+  });
+
+  const chromConditionsParagraph2 = new Paragraph({
+    children: [
+      new TextRun({ text: "Sample introduction is carried out with an ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Injection Volume: ", bold: true, size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: c.injectionVolume + ", ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "and thermal equilibrium of the stationary phase is maintained at a ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Column Temperature: ", bold: true, size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: c.columnTemperature + ". ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "The total chromatographic ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Run Time: ", bold: true, size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: c.runTime + ". ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Samples and reference standard preparations are prepared in ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Diluent: ", bold: true, size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: c.diluent + " ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "to attain a target ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Working Concentration: ", bold: true, size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: c.workingConcentration + ". ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Under these validated operational conditions, the typical chromatographic retention time for the main active analyte is approximately ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Approximate Retention Time: ", bold: true, size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: (c.approxRetentionTime || '6.5 min') + ".", size: 20, font: FONT_FAMILY }),
+    ],
+    alignment: AlignmentType.JUSTIFIED,
+    spacing: { before: 60, after: 60 },
+  });
+
+  const noteParagraph = new Paragraph({
+    children: [
+      new TextRun({ text: "Note: " + (c.note || 'Dissolve 1.36 g of Potassium Dihydrogen Phosphate in 1000 mL water, adjust pH to 6.0 with 0.1M KOH.'), italics: true, size: 19, font: FONT_FAMILY, color: "4B5563" }),
+    ],
+    spacing: { before: 40, after: 80 },
+  });
 
   // 4.2 Preparation of Solutions Table (2806, 7100 dxa)
   const colSol = [2806, 7100];
@@ -449,7 +525,7 @@ export async function generateAndDownloadAMVDocx(
       createHeaderCell('Make / Catalogue', colReagents[2], AlignmentType.LEFT),
       createHeaderCell('Batch / Lot No.', colReagents[3], AlignmentType.LEFT),
     ], true),
-    ...data.reagentsAndStandards.map((r) =>
+    ...(data.reagentsAndStandards || []).map((r) =>
       createRow([
         createDataCell(r.name, AlignmentType.LEFT, true, undefined, colReagents[0]),
         createDataCell(r.grade, AlignmentType.LEFT, false, undefined, colReagents[1]),
@@ -469,25 +545,25 @@ export async function generateAndDownloadAMVDocx(
       sr: 1,
       param: 'Specificity',
       criteria: 'No interference from blank (diluent) and placebo at the retention time of the analyte peak. Peak purity passed by PDA.',
-      result: isProtocol ? 'To be verified as per protocol criteria' : 'No interference observed; peak purity passed (purity angle < threshold) — Complies',
+      result: isProtocol ? 'To be verified as per protocol criteria' : 'No interference observed; peak purity passed (purity angle < threshold)',
     },
     {
       sr: 2,
       param: 'System Suitability',
       criteria: 'Tailing factor NMT 2.0; %RSD of area NMT 2.0 % (n=5); theoretical plates NLT 2000.',
-      result: isProtocol ? 'To be verified as per protocol criteria' : `Tailing ${formatNum(ss.meanTailing, 2)}; %RSD ${formatNum(ss.rsdArea, 2)} %; plates ${formatInt(ss.meanPlates)} — Complies`,
+      result: isProtocol ? 'To be verified as per protocol criteria' : `Tailing ${formatNum(ss.meanTailing, 2)}; %RSD ${formatNum(ss.rsdArea, 2)} %; plates ${formatInt(ss.meanPlates)}`,
     },
     {
       sr: 3,
       param: 'Linearity (50%–150%)',
       criteria: 'Correlation coefficient (r) shall be ≥ 0.999 (r² ≥ 0.998); slope and y-intercept reported; y-intercept bias at 100 % level within ±2.0 %.',
-      result: isProtocol ? 'To be verified as per protocol criteria' : `r = ${formatNum(lin.regression.correlationR, 5)}; slope ${formatNum(lin.regression.slope, 1)}; y-intercept ${formatNum(lin.regression.yIntercept, 0)}; bias ${formatNum(lin.regression.yInterceptBiasPercent, 2)} % — Complies`,
+      result: isProtocol ? 'To be verified as per protocol criteria' : `r = ${formatNum(lin.regression.correlationR, 5)}; slope ${formatNum(lin.regression.slope, 1)}; y-intercept ${formatNum(lin.regression.yIntercept, 0)}; bias ${formatNum(lin.regression.yInterceptBiasPercent, 2)} %`,
     },
     {
       sr: 4,
       param: 'Accuracy (50%–150%)',
       criteria: 'Mean recovery of three levels in triplicate between 98.0 % and 102.0 %; %RSD at each level NMT 2.0 %.',
-      result: isProtocol ? 'To be verified as per protocol criteria' : `Mean recovery ${formatNum(acc.meanRecoveryAllLevels, 2)} % (n = 9, %RSD ${formatNum(acc.rsdAllLevels, 2)} %) — Complies`,
+      result: isProtocol ? 'To be verified as per protocol criteria' : `Mean recovery ${formatNum(acc.meanRecoveryAllLevels, 2)} % (n = 9, %RSD ${formatNum(acc.rsdAllLevels, 2)} %)`,
     },
   ];
 
@@ -498,7 +574,7 @@ export async function generateAndDownloadAMVDocx(
       createHeaderCell('Acceptance Criteria', colValParam[2], AlignmentType.LEFT),
       createHeaderCell(valResultHeader, colValParam[3]),
     ], true),
-    ...valRowsP3Data.map((v) =>
+    ...(valRowsP3Data || []).map((v) =>
       createRow([
         createDataCell(v.sr, AlignmentType.CENTER, true, undefined, colValParam[0]),
         createDataCell(v.param, AlignmentType.LEFT, true, undefined, colValParam[1]),
@@ -509,51 +585,53 @@ export async function generateAndDownloadAMVDocx(
   ]);
 
   // Dynamic stability difference calculation for docx
-  const initialStdArea = stab.rows[0]?.standardArea || 1;
-  const initialSplArea = stab.rows[0]?.sampleArea || 1;
+  const initialStdArea = Number(stab.rows[0]?.standardArea) || 1;
+  const initialSplArea = Number(stab.rows[0]?.sampleArea) || 1;
   let maxDocxStdDiff = 0;
   let maxDocxSplDiff = 0;
   stab.rows.forEach((r, i) => {
     if (i > 0) {
-      const dS = (Math.abs(r.standardArea - initialStdArea) / initialStdArea) * 100;
-      const dP = (Math.abs(r.sampleArea - initialSplArea) / initialSplArea) * 100;
+      const curStd = Number(r.standardArea) || 0;
+      const curSpl = Number(r.sampleArea) || 0;
+      const dS = (Math.abs(curStd - initialStdArea) / initialStdArea) * 100;
+      const dP = (Math.abs(curSpl - initialSplArea) / initialSplArea) * 100;
       if (dS > maxDocxStdDiff) maxDocxStdDiff = dS;
       if (dP > maxDocxSplDiff) maxDocxSplDiff = dP;
     }
   });
 
-  const maxRobRsd = rob.rows.length > 0 ? Math.max(...rob.rows.map((r) => r.rsdPercent)) : 0.13;
+  const maxRobRsd = (rob?.rows?.length || 0) > 0 ? Math.max(... (rob?.rows || []).map((r) => Number(r.rsdPercent) || 0)) : 0.13;
 
   const valRowsP4Data = [
     {
       sr: 5,
       param: 'Range',
       criteria: 'Mean recovery 98.0 % to 102.0 %; %RSD ≤ 2.0 % at each level; correlation coefficient r ≥ 0.999.',
-      result: isProtocol ? 'To be verified as per protocol criteria' : `Mean recovery ${formatNum(acc.meanRecoveryAllLevels, 2)} %; %RSD ${formatNum(acc.rsdAllLevels, 2)} %; r = ${formatNum(lin.regression.correlationR, 5)} — Complies`,
+      result: isProtocol ? 'To be verified as per protocol criteria' : `Mean recovery ${formatNum(acc.meanRecoveryAllLevels, 2)} %; %RSD ${formatNum(acc.rsdAllLevels, 2)} %; r = ${formatNum(lin.regression.correlationR, 5)}`,
     },
     {
       sr: 6,
       param: 'Method Precision (Repeatability)',
       criteria: '%RSD for six assay sample preparations NMT 2.0 %.',
-      result: isProtocol ? 'To be verified as per protocol criteria' : `Mean ${formatNum(prec.analyst1Mean, 2)} %; %RSD ${formatNum(prec.analyst1Rsd, 2)} % — Complies`,
+      result: isProtocol ? 'To be verified as per protocol criteria' : `Mean ${formatNum(prec.analyst1Mean, 2)} %; %RSD ${formatNum(prec.analyst1Rsd, 2)} %`,
     },
     {
       sr: 7,
       param: 'Intermediate Precision (Ruggedness)',
       criteria: '%RSD for six results NMT 2.0 %; cumulative %RSD for twelve results NMT 2.0 %.',
-      result: isProtocol ? 'To be verified as per protocol criteria' : `Analyst 2 %RSD ${formatNum(prec.analyst2Rsd, 2)} %; Cumulative %RSD ${formatNum(prec.cumulativeRsd, 2)} % (n = 12) — Complies`,
+      result: isProtocol ? 'To be verified as per protocol criteria' : `Analyst 2 %RSD ${formatNum(prec.analyst2Rsd, 2)} %; Cumulative %RSD ${formatNum(prec.cumulativeRsd, 2)} % (n = 12)`,
     },
     {
       sr: 8,
       param: 'Robustness',
       criteria: 'System suitability criteria met under all deliberately varied conditions (%RSD NMT 2.0 %, Tailing NMT 2.0, Plates NLT 2000).',
-      result: isProtocol ? 'To be verified as per protocol criteria' : `Maximum %RSD ${formatNum(maxRobRsd, 2)} %; all criteria met — Complies`,
+      result: isProtocol ? 'To be verified as per protocol criteria' : `Maximum %RSD ${formatNum(maxRobRsd, 2)} %; all criteria met`,
     },
     {
       sr: 9,
       param: 'Solution Stability',
       criteria: 'Cumulative difference in peak response for standard and sample solutions over 24 hours shall not exceed 2.0 %; %RSD ≤ 2.0 %.',
-      result: isProtocol ? 'To be verified as per protocol criteria' : `Standard max diff ${formatNum(maxDocxStdDiff, 2)} %; Sample max diff ${formatNum(maxDocxSplDiff, 2)} % (24 h) — Complies`,
+      result: isProtocol ? 'To be verified as per protocol criteria' : `Standard max diff ${formatNum(maxDocxStdDiff, 2)} %; Sample max diff ${formatNum(maxDocxSplDiff, 2)} % (24 h)`,
     },
   ];
 
@@ -564,7 +642,7 @@ export async function generateAndDownloadAMVDocx(
       createHeaderCell('Acceptance Criteria', colValParam[2], AlignmentType.LEFT),
       createHeaderCell(valResultHeader, colValParam[3]),
     ], true),
-    ...valRowsP4Data.map((v) =>
+    ...(valRowsP4Data || []).map((v) =>
       createRow([
         createDataCell(v.sr, AlignmentType.CENTER, true, undefined, colValParam[0]),
         createDataCell(v.param, AlignmentType.LEFT, true, undefined, colValParam[1]),
@@ -583,19 +661,19 @@ export async function generateAndDownloadAMVDocx(
       createHeaderCell('Tailing Factor', colSS[2]),
       createHeaderCell('Theoretical Plates', colSS[3]),
     ], true),
-    ...ss.injections.map((inj) =>
+    ... (ss?.injections || []).map((inj) =>
       createRow([
         createDataCell(inj.injectionNo, AlignmentType.CENTER, true, undefined, colSS[0]),
-        createDataCell(isProtocol ? '' : formatInt(inj.peakArea), AlignmentType.RIGHT, false, undefined, colSS[1]),
-        createDataCell(isProtocol ? '' : formatNum(inj.tailingFactor, 2), AlignmentType.RIGHT, false, undefined, colSS[2]),
-        createDataCell(isProtocol ? '' : formatInt(inj.theoreticalPlates), AlignmentType.RIGHT, false, undefined, colSS[3]),
+        createDataCell(isProtocol ? '—' : formatInt(inj.peakArea), AlignmentType.RIGHT, false, undefined, colSS[1]),
+        createDataCell(isProtocol ? '—' : formatNum(inj.tailingFactor, 2), AlignmentType.RIGHT, false, undefined, colSS[2]),
+        createDataCell(isProtocol ? '—' : formatInt(inj.theoreticalPlates), AlignmentType.RIGHT, false, undefined, colSS[3]),
       ])
     ),
     createRow([
       createDataCell('Mean', AlignmentType.CENTER, true, altRowBgColor, colSS[0]),
-      createDataCell(isProtocol ? '' : formatInt(ss.meanArea), AlignmentType.RIGHT, true, altRowBgColor, colSS[1]),
-      createDataCell(isProtocol ? '' : formatNum(ss.meanTailing, 2), AlignmentType.RIGHT, true, altRowBgColor, colSS[2]),
-      createDataCell(isProtocol ? '' : formatInt(ss.meanPlates), AlignmentType.RIGHT, true, altRowBgColor, colSS[3]),
+      createDataCell(isProtocol ? '—' : formatInt(ss.meanArea), AlignmentType.RIGHT, true, altRowBgColor, colSS[1]),
+      createDataCell(isProtocol ? '—' : formatNum(ss.meanTailing, 2), AlignmentType.RIGHT, true, altRowBgColor, colSS[2]),
+      createDataCell(isProtocol ? '—' : formatInt(ss.meanPlates), AlignmentType.RIGHT, true, altRowBgColor, colSS[3]),
     ]),
     createRow([
       createDataCell('% RSD', AlignmentType.CENTER, true, altRowBgColor, colSS[0]),
@@ -614,11 +692,11 @@ export async function generateAndDownloadAMVDocx(
       createHeaderCell('Retention Time (min)', colSpec[1]),
       createHeaderCell('Interference Observed', colSpec[2]),
     ], true),
-    ...spec.rows.map((r) =>
+    ... (spec?.rows || []).map((r) =>
       createRow([
         createDataCell(r.solution, AlignmentType.LEFT, true, undefined, colSpec[0]),
-        createDataCell(isProtocol ? '' : r.retentionTime, AlignmentType.CENTER, false, undefined, colSpec[1]),
-        createDataCell(isProtocol ? '' : r.interference, AlignmentType.CENTER, false, undefined, colSpec[2]),
+        createDataCell(isProtocol ? '—' : r.retentionTime, AlignmentType.CENTER, false, undefined, colSpec[1]),
+        createDataCell(isProtocol ? '—' : r.interference, AlignmentType.CENTER, false, undefined, colSpec[2]),
       ])
     ),
   ];
@@ -637,12 +715,12 @@ export async function generateAndDownloadAMVDocx(
       createHeaderCell('Mean Peak Area (µV·s)', colLin1[2]),
       createHeaderCell('% of 100% Response', colLin1[3]),
     ], true),
-    ...lin.levels.map((lvl) =>
+    ... (lin?.levels || []).map((lvl) =>
       createRow([
         createDataCell(`${lvl.levelPercent} %`, AlignmentType.CENTER, true, undefined, colLin1[0]),
         createDataCell(formatNum(lvl.concentration, 2), AlignmentType.RIGHT, false, undefined, colLin1[1]),
-        createDataCell(isProtocol ? '' : formatInt(lvl.meanArea), AlignmentType.RIGHT, false, undefined, colLin1[2]),
-        createDataCell(isProtocol ? '' : `${formatNum(lvl.percentOf100Response, 2)} %`, AlignmentType.RIGHT, false, undefined, colLin1[3]),
+        createDataCell(isProtocol ? '—' : formatInt(lvl.meanArea), AlignmentType.RIGHT, false, undefined, colLin1[2]),
+        createDataCell(isProtocol ? '—' : `${formatNum(lvl.percentOf100Response, 2)} %`, AlignmentType.RIGHT, false, undefined, colLin1[3]),
       ])
     ),
   ];
@@ -654,8 +732,8 @@ export async function generateAndDownloadAMVDocx(
     createRow([createHeaderCell('Regression Parameter', colLin2[0], AlignmentType.LEFT), createHeaderCell('Value', colLin2[1])], true),
     createRow([createDataCell('Correlation Coefficient (r)', AlignmentType.LEFT, true, undefined, colLin2[0]), createDataCell(isProtocol ? 'Criteria: ≥ 0.999' : formatNum(lin.regression.correlationR, 5), AlignmentType.RIGHT, true, undefined, colLin2[1])]),
     createRow([createDataCell('Coefficient of Determination (r²)', AlignmentType.LEFT, true, undefined, colLin2[0]), createDataCell(isProtocol ? 'Criteria: ≥ 0.998' : formatNum(lin.regression.rSquared, 5), AlignmentType.RIGHT, true, undefined, colLin2[1])]),
-    createRow([createDataCell('Slope', AlignmentType.LEFT, true, undefined, colLin2[0]), createDataCell(isProtocol ? '' : formatNum(lin.regression.slope, 2), AlignmentType.RIGHT, false, undefined, colLin2[1])]),
-    createRow([createDataCell('y-Intercept', AlignmentType.LEFT, true, undefined, colLin2[0]), createDataCell(isProtocol ? '' : formatNum(lin.regression.yIntercept, 2), AlignmentType.RIGHT, false, undefined, colLin2[1])]),
+    createRow([createDataCell('Slope', AlignmentType.LEFT, true, undefined, colLin2[0]), createDataCell(isProtocol ? '—' : formatNum(lin.regression.slope, 2), AlignmentType.RIGHT, false, undefined, colLin2[1])]),
+    createRow([createDataCell('y-Intercept', AlignmentType.LEFT, true, undefined, colLin2[0]), createDataCell(isProtocol ? '—' : formatNum(lin.regression.yIntercept, 2), AlignmentType.RIGHT, false, undefined, colLin2[1])]),
     createRow([createDataCell('y-Intercept bias as % of 100% response', AlignmentType.LEFT, true, undefined, colLin2[0]), createDataCell(isProtocol ? 'Criteria: NMT ±2.0%' : `${formatNum(lin.regression.yInterceptBiasPercent, 2)} %`, AlignmentType.RIGHT, false, undefined, colLin2[1])]),
   ];
   const lin2Table = createDocxTable(colLin2, lin2Rows);
@@ -670,27 +748,27 @@ export async function generateAndDownloadAMVDocx(
       createHeaderCell('Amount Recovered (mg)', colAcc[3]),
       createHeaderCell('% Recovery', colAcc[4]),
     ], true),
-    ...acc.rows.map((r) =>
+    ... (acc?.rows || []).map((r) =>
       createRow([
         createDataCell(`${r.levelPercent} %`, AlignmentType.CENTER, true, undefined, colAcc[0]),
         createDataCell(r.expNo, AlignmentType.CENTER, false, undefined, colAcc[1]),
-        createDataCell(formatNum(r.amountAdded, 2), AlignmentType.RIGHT, false, undefined, colAcc[2]),
-        createDataCell(isProtocol ? '' : formatNum(r.amountRecovered, 2), AlignmentType.RIGHT, false, undefined, colAcc[3]),
-        createDataCell(isProtocol ? '' : `${formatNum(r.percentRecovery, 2)} %`, AlignmentType.RIGHT, false, undefined, colAcc[4]),
+        createDataCell(formatAmountByMagnitude(r.amountAdded), AlignmentType.RIGHT, false, undefined, colAcc[2]),
+        createDataCell(isProtocol ? '—' : formatAmountByMagnitude(r.amountRecovered), AlignmentType.RIGHT, false, undefined, colAcc[3]),
+        createDataCell(isProtocol ? '—' : `${formatNum(r.percentRecovery, 2)} %`, AlignmentType.RIGHT, false, undefined, colAcc[4]),
       ])
     ),
     createRow([
       createDataCell('Mean % Recovery (all levels)', AlignmentType.LEFT, true, altRowBgColor, colAcc[0]),
       createDataCell('3 Levels (50%, 100%, 150%)', AlignmentType.CENTER, false, altRowBgColor, colAcc[1]),
       createDataCell('9 Determinations', AlignmentType.CENTER, false, altRowBgColor, colAcc[2]),
-      createDataCell(isProtocol ? '' : 'Mean of 9 runs', AlignmentType.RIGHT, false, altRowBgColor, colAcc[3]),
+      createDataCell(isProtocol ? '—' : 'Mean of 9 runs', AlignmentType.RIGHT, false, altRowBgColor, colAcc[3]),
       createDataCell(isProtocol ? 'Criteria: 98.0 – 102.0 %' : `${formatNum(acc.meanRecoveryAllLevels, 2)} %`, AlignmentType.RIGHT, true, altRowBgColor, colAcc[4]),
     ]),
     createRow([
       createDataCell('% RSD (n = 9)', AlignmentType.LEFT, true, altRowBgColor, colAcc[0]),
       createDataCell('Across all 9 runs', AlignmentType.CENTER, false, altRowBgColor, colAcc[1]),
       createDataCell('Overall % RSD', AlignmentType.CENTER, false, altRowBgColor, colAcc[2]),
-      createDataCell(isProtocol ? '' : 'NMT 2.0 %', AlignmentType.RIGHT, false, altRowBgColor, colAcc[3]),
+      createDataCell(isProtocol ? '—' : 'NMT 2.0 %', AlignmentType.RIGHT, false, altRowBgColor, colAcc[3]),
       createDataCell(isProtocol ? 'Criteria: NMT 2.0 %' : `${formatNum(acc.rsdAllLevels, 2)} %`, AlignmentType.RIGHT, true, altRowBgColor, colAcc[4]),
     ]),
   ];
@@ -705,18 +783,18 @@ export async function generateAndDownloadAMVDocx(
       createHeaderCell('Analyst 2 (% Assay)', colPrec[2]),
       createHeaderCell('Statistical Evaluation', colPrec[3]),
     ], true),
-    ...prec.rows.map((r, i) =>
+    ... (prec?.rows || []).map((r, i) =>
       createRow([
         createDataCell(r.sampleNo, AlignmentType.CENTER, true, undefined, colPrec[0]),
-        createDataCell(isProtocol ? '' : `${formatNum(r.analyst1Assay, 2)} %`, AlignmentType.RIGHT, false, undefined, colPrec[1]),
-        createDataCell(isProtocol ? '' : `${formatNum(r.analyst2Assay, 2)} %`, AlignmentType.RIGHT, false, undefined, colPrec[2]),
-        createDataCell(isProtocol ? 'To be calculated' : (r.statisticalEvaluation || 'Complies'), AlignmentType.CENTER, false, undefined, colPrec[3]),
+        createDataCell(isProtocol ? '—' : `${formatNum(r.analyst1Assay, 2)} %`, AlignmentType.RIGHT, false, undefined, colPrec[1]),
+        createDataCell(isProtocol ? '—' : `${formatNum(r.analyst2Assay, 2)} %`, AlignmentType.RIGHT, false, undefined, colPrec[2]),
+        createDataCell(isProtocol ? 'To be calculated' : (r.statisticalEvaluation || 'To be verified'), AlignmentType.CENTER, false, undefined, colPrec[3]),
       ])
     ),
     createRow([
       createDataCell('Mean', AlignmentType.CENTER, true, altRowBgColor, colPrec[0]),
-      createDataCell(isProtocol ? '' : `${formatNum(prec.analyst1Mean, 2)} %`, AlignmentType.RIGHT, true, altRowBgColor, colPrec[1]),
-      createDataCell(isProtocol ? '' : `${formatNum(prec.analyst2Mean, 2)} %`, AlignmentType.RIGHT, true, altRowBgColor, colPrec[2]),
+      createDataCell(isProtocol ? '—' : `${formatNum(prec.analyst1Mean, 2)} %`, AlignmentType.RIGHT, true, altRowBgColor, colPrec[1]),
+      createDataCell(isProtocol ? '—' : `${formatNum(prec.analyst2Mean, 2)} %`, AlignmentType.RIGHT, true, altRowBgColor, colPrec[2]),
       createDataCell(isProtocol ? 'To be calculated' : `Cum. Mean = ${formatNum(prec.cumulativeMean, 2)} %`, AlignmentType.CENTER, true, altRowBgColor, colPrec[3]),
     ]),
     createRow([
@@ -737,12 +815,12 @@ export async function generateAndDownloadAMVDocx(
       createHeaderCell('Tailing Factor', colRob[2]),
       createHeaderCell('Theoretical Plates', colRob[3]),
     ], true),
-    ...rob.rows.map((r) =>
+    ... (rob?.rows || []).map((r) =>
       createRow([
         createDataCell(r.conditionVaried, AlignmentType.LEFT, true, undefined, colRob[0]),
-        createDataCell(isProtocol ? '' : `${formatNum(r.rsdPercent, 2)} %`, AlignmentType.RIGHT, false, undefined, colRob[1]),
-        createDataCell(isProtocol ? '' : formatNum(r.tailingFactor, 2), AlignmentType.RIGHT, false, undefined, colRob[2]),
-        createDataCell(isProtocol ? '' : formatInt(r.theoreticalPlates), AlignmentType.RIGHT, false, undefined, colRob[3]),
+        createDataCell(isProtocol ? '—' : `${formatNum(r.rsdPercent, 2)} %`, AlignmentType.RIGHT, false, undefined, colRob[1]),
+        createDataCell(isProtocol ? '—' : formatNum(r.tailingFactor, 2), AlignmentType.RIGHT, false, undefined, colRob[2]),
+        createDataCell(isProtocol ? '—' : formatInt(r.theoreticalPlates), AlignmentType.RIGHT, false, undefined, colRob[3]),
       ])
     ),
   ];
@@ -757,228 +835,138 @@ export async function generateAndDownloadAMVDocx(
       createHeaderCell('Sample Area (µV·s)', colStab[2]),
       createHeaderCell('% Diff (Std / Spl)', colStab[3]),
     ], true),
-    ...stab.rows.map((r) =>
+    ... (stab?.rows || []).map((r) =>
       createRow([
         createDataCell(r.timePoint, AlignmentType.CENTER, true, undefined, colStab[0]),
-        createDataCell(isProtocol ? '' : formatInt(r.standardArea), AlignmentType.RIGHT, false, undefined, colStab[1]),
-        createDataCell(isProtocol ? '' : formatInt(r.sampleArea), AlignmentType.RIGHT, false, undefined, colStab[2]),
-        createDataCell(isProtocol ? '' : r.diffPercent, AlignmentType.CENTER, false, undefined, colStab[3]),
+        createDataCell(isProtocol ? '—' : formatInt(r.standardArea), AlignmentType.RIGHT, false, undefined, colStab[1]),
+        createDataCell(isProtocol ? '—' : formatInt(r.sampleArea), AlignmentType.RIGHT, false, undefined, colStab[2]),
+        createDataCell(isProtocol ? '—' : r.diffPercent, AlignmentType.CENTER, false, undefined, colStab[3]),
       ])
     ),
   ];
   const stabTable = createDocxTable(colStab, stabRows);
 
-  // Section 13 Overall Conclusion & Review Checklist Table (2 cols: 4506, 5400 dxa)
-  const colCheck = [4506, 5400];
-  const checkRows = [
-    createRow([createHeaderCell('Particulars', colCheck[0], AlignmentType.LEFT), createHeaderCell('Details / Compliance', colCheck[1], AlignmentType.LEFT)], true),
-    ...data.reviewChecklist.map((item) =>
+  const abbrColWidths = [2500, 7406];
+  const abbrRows: TableRow[] = [
+    createRow([createHeaderCell('Abbreviation', abbrColWidths[0]), createHeaderCell('Full Form / Expansion', abbrColWidths[1])], true),
+    ...(data.abbreviations || []).map((ab, i) =>
       createRow([
-        createDataCell(item.particulars, AlignmentType.LEFT, true, undefined, colCheck[0]),
-        createDataCell(isProtocol ? 'To be verified upon execution' : item.compliance, AlignmentType.LEFT, false, undefined, colCheck[1]),
+        createDataCell(ab.abbreviation, AlignmentType.LEFT, true, i % 2 === 1 ? altRowBgColor : undefined, abbrColWidths[0]),
+        createDataCell(ab.expansion, AlignmentType.LEFT, false, i % 2 === 1 ? altRowBgColor : undefined, abbrColWidths[1]),
       ])
     ),
   ];
-  const checkTable = createDocxTable(colCheck, checkRows);
-
-  // Section 14 Abbreviations Table: All 18 items (2 cols: 3206, 6700 dxa)
-  const colAbbr = [3206, 6700];
-  const abbrRows = [
-    createRow([createHeaderCell('Abbreviation', colAbbr[0]), createHeaderCell('Expansion / Definition', colAbbr[1], AlignmentType.LEFT)], true),
-    ...data.abbreviations.map((a) =>
-      createRow([
-        createDataCell(a.abbreviation, AlignmentType.CENTER, true, undefined, colAbbr[0]),
-        createDataCell(a.expansion, AlignmentType.LEFT, false, undefined, colAbbr[1]),
-      ])
-    ),
-  ];
-  const abbrTable = createDocxTable(colAbbr, abbrRows);
+  const abbrTable = createDocxTable(abbrColWidths, abbrRows);
 
   const endMarkParagraph = new Paragraph({
     alignment: AlignmentType.CENTER,
-    spacing: { before: 180, after: 60 },
+    spacing: { before: 200, after: 100 },
     children: [
       new TextRun({
         text: '— END OF DOCUMENT —',
         bold: true,
-        size: 21, // 10.5pt (increased from 9.5pt)
+        size: 20,
         font: FONT_FAMILY,
-        color: '9CA3AF',
+        color: '6B7280',
       }),
     ],
   });
 
-  // =========================================================================
-  // ASSEMBLE ALL DOCUMENT CHILDREN WITH PRECISE PAGE BREAKS (EXACT 8 PAGES)
-  // =========================================================================
-
-  const docChildren = [
-    // ---------------- PAGE 1 ----------------
+  const docChildren: (Paragraph | Table)[] = [
     page1CompanyHeader,
     page1Address,
     page1DocTitle,
     ...(page1DemoCallout ? [page1DemoCallout] : []),
     page1MetaTable,
-    new Paragraph({ spacing: { before: 40, after: 40 } }),
+    new Paragraph({ spacing: { before: 60, after: 60 } }),
     page1SignOffTable,
-    createSectionHeader('1. Objective', 100, 40),
-    createBodyParagraph(data.objective, 20, 40),
-    createSectionHeader('2. Scope', 80, 40),
-    createBodyParagraph(data.scope, 20, 40),
-    createSectionHeader('3. Reference Documents & Verification Details', 80, 40),
+    new Paragraph({ spacing: { before: 80, after: 40 } }),
+    createSectionHeader('TABLE OF CONTENTS', 120, 50),
+    page1TocTable,
+
+    createSectionHeader('1. OBJECTIVE', 120, 50),
+    createBodyParagraph(data.objective || 'To establish documented evidence that the analytical test procedure for Assay by HPLC is suitable for its intended purpose and consistently yields results meeting predetermined acceptance criteria.'),
+
+    createSectionHeader('2. SCOPE', 120, 50),
+    createBodyParagraph(data.scope || `This document applies to the analytical method validation / verification for Assay of ${data.productName} by HPLC at ${data.companyName}, ${data.companyAddress}.`),
+
+    createSectionHeader('3. REFERENCE DOCUMENTS & VERIFICATION DETAILS', 120, 50),
     sec3Table,
-    createSectionHeader('4. Analytical Method Summary', 100, 30),
-    createSubSectionHeader('4.1 Chromatographic Conditions', 40, 30),
-    new Paragraph({ children: [new PageBreak()] }),
 
-    // ---------------- PAGE 2 ----------------
-    chromTable,
-    new Paragraph({
-      spacing: { before: 40, after: 60 },
-      children: [
-        new TextRun({
-          text: `Note: ${c.note || 'Dissolve 1.36 g of Potassium Dihydrogen Phosphate in 1000 mL water, adjust pH to 6.0 with 0.1M KOH.'}`,
-          italics: true,
-          size: 19, // 9.5pt (increased from 8.5pt)
-          font: FONT_FAMILY,
-          color: '4B5563',
-        }),
-      ],
-    }),
-    createSubSectionHeader('4.2 Preparation of Solutions (Summary)', 60, 40),
+    createSectionHeader('4. ANALYTICAL METHOD SUMMARY', 120, 50),
+    createSubSectionHeader('4.1 Chromatographic Conditions'),
+    chromConditionsParagraph1,
+    chromConditionsParagraph2,
+    noteParagraph,
+
+    createSubSectionHeader('4.2 Preparation of Solutions'),
     solTable,
-    createSubSectionHeader('4.3 Calculation Formula & Assay Equations', 80, 40),
-    new Paragraph({
-      spacing: { before: 30, after: 30 },
-      children: [
-        new TextRun({
-          text: data.calculationFormula?.assayFormula || 'Assay (%) = (AT / AS) * (WS / 100) * (100 / WT) * (AVG_WT / LC) * Purity',
-          bold: true,
-          size: 20, // 10pt (increased from 9pt)
-          font: FONT_FAMILY,
-          color: navyTextColor,
-        }),
-      ],
-    }),
-    new Paragraph({
-      spacing: { before: 20, after: 40 },
-      children: [
-        new TextRun({
-          text: data.calculationFormula?.contentFormula || 'Content (mg/tablet) = Assay (%) * Label Claim (mg) / 100',
-          bold: true,
-          size: 20, // 10pt (increased from 9pt)
-          font: FONT_FAMILY,
-          color: navyTextColor,
-        }),
-      ],
-    }),
-    ...(data.calculationFormula?.notes || [
-      '• AT = Peak area of analyte in the sample chromatogram',
-      '• AS = Mean peak area of analyte in standard chromatograms',
-      `• WS = Weight of ${data.activeSubstance} working standard taken (mg)`,
-      '• WT = Weight of powdered dosage unit sample taken (mg)',
-      '• AVG_WT = Average weight of 20 tablets (mg)',
-      `• LC = Label claim of ${data.activeSubstance} per unit (mg)`,
-      `• Purity = Decimal purity of ${data.activeSubstance} reference standard`,
-    ]).map((note) =>
-      new Paragraph({
-        spacing: { before: 10, after: 10 },
-        children: [
-          new TextRun({
-            text: note,
-            size: 19, // 9.5pt (increased from 8.5pt)
-            font: FONT_FAMILY,
-            color: '374151',
-          }),
-        ],
-      })
-    ),
-    new Paragraph({ children: [new PageBreak()] }),
 
-    // ---------------- PAGE 3 ----------------
-    createSubSectionHeader('4.4 Requirements — Reagents, Standards & Equipment', 40, 30),
+    createSubSectionHeader('4.3 Calculation Formulae'),
+    createBodyParagraph('Assay (%) = (AT / AS) × (WS / DS) × (DT / WT) × (AVG_WT / LC) × P × 100'),
+    createBodyParagraph('Where: AT = Sample Peak Area, AS = Standard Peak Area, WS = Standard Weight (mg), DS = Standard Dilution (mL), DT = Sample Dilution (mL), WT = Sample Powder Weight (mg), AVG_WT = Average Weight of 20 units (mg), LC = Label Claim (mg), P = Standard Potency decimal.'),
+
+    createSubSectionHeader('4.4 Reagents and Reference Standards'),
     reagentsTable,
-    createSectionHeader('5. Validation Parameters and Acceptance Criteria', 80, 40),
+
+    createSectionHeader('5. SUMMARY OF VALIDATION PARAMETERS & ACCEPTANCE CRITERIA', 120, 50),
     valTableP3,
-    new Paragraph({ children: [new PageBreak()] }),
-
-    // ---------------- PAGE 4 ----------------
     valTableP4,
-    createSectionHeader('6. System Suitability', 60, 30),
-    createBodyParagraph(`Inject five (5) replicate injections of the standard solution (${c.workingConcentration}). Record peak area, tailing factor, and theoretical plates into the execution table below.`, 20, 40),
+
+    createSectionHeader('6. SYSTEM SUITABILITY TEST (SST)', 120, 50),
     ssTable,
-    createAcceptanceParagraph(
-      isProtocol
-        ? 'Acceptance Criteria: %RSD of Peak Area <= 2.0%, Tailing Factor <= 2.0, Theoretical Plates >= 2000. (Observed Result: To be recorded upon execution)'
-        : `Acceptance: %RSD of Peak Area <= 2.0%, Tailing Factor <= 2.0, Theoretical Plates >= 2000. (Result: Mean Area = ${formatInt(ss.meanArea)}, %RSD = ${formatNum(ss.rsdArea, 2)}%, Tailing = ${formatNum(ss.meanTailing, 2)}, Plates = ${formatInt(ss.meanPlates)} — Complies)`
-    ),
-    createSectionHeader('7. Specificity', 70, 30),
-    createBodyParagraph('Inject blank, placebo, reference standard, sample, and impurity solutions in duplicate. Record retention times and confirm absence of co-eluting peaks at the analyte retention window.', 20, 40),
+
+    createSectionHeader('7. SPECIFICITY / SELECTIVITY', 120, 50),
     specTable,
-    createAcceptanceParagraph(
-      isProtocol
-        ? 'Acceptance Criteria: No interfering peak from blank or placebo matrix shall co-elute with the active substance peak. Peak purity shall be verified.'
-        : `Acceptance Criteria: No interfering peak from blank or placebo matrix shall co-elute with the active substance peak. (Result: No interfering peaks observed at ${data.activeSubstance} retention window. Peak purity passed — Complies)`
-    ),
-    createSectionHeader('8. Linearity and Range', 70, 30),
-    createBodyParagraph('Prepare linearity standard solutions across 5 concentration levels (50 % to 150 % of nominal working concentration). Inject in triplicate and construct calibration curve.', 20, 40),
-    new Paragraph({ children: [new PageBreak()] }),
 
-    // ---------------- PAGE 5 ----------------
+    createSectionHeader('8. LINEARITY AND RANGE', 120, 50),
     lin1Table,
-    new Paragraph({ spacing: { before: 40, after: 20 } }),
     lin2Table,
-    createAcceptanceParagraph(
-      isProtocol
-        ? 'Acceptance Criteria: Correlation coefficient (r) shall be ≥ 0.999; r² ≥ 0.998. The y-intercept bias shall be within ±2.0% of nominal response.'
-        : `Acceptance: Correlation coefficient r ≥ 0.999 (r² ≥ 0.998). (Result: r = ${formatNum(lin.regression.correlationR, 5)}, r² = ${formatNum(lin.regression.rSquared, 5)}, y-Intercept Bias = ${formatNum(lin.regression.yInterceptBiasPercent, 2)}% — Complies)`
-    ),
-    createSectionHeader('9. Accuracy (Recovery)', 60, 30),
-    createBodyParagraph(`Placebo blend spiked with ${data.activeSubstance} working standard at 50%, 100%, and 150% of nominal target assay concentration in triplicate (9 determinations).`, 20, 40),
+
+    createSectionHeader('9. ACCURACY (RECOVERY)', 120, 50),
     accTable,
-    createAcceptanceParagraph(
-      isProtocol
-        ? 'Acceptance Criteria: Mean recovery at each concentration level shall be between 98.0% and 102.0%. Overall % RSD across 9 determinations shall be NMT 2.0%.'
-        : `Acceptance: Mean recovery at each concentration level shall be 98.0%–102.0%; Overall %RSD NMT 2.0%. (Result: Mean Recovery = ${formatNum(acc.meanRecoveryAllLevels, 2)}%, Overall %RSD = ${formatNum(acc.rsdAllLevels, 2)}% — Complies)`
-    ),
-    createSectionHeader('10. Precision & Intermediate Precision (Ruggedness)', 70, 30),
-    new Paragraph({ children: [new PageBreak()] }),
 
-    // ---------------- PAGE 6 ----------------
-    createBodyParagraph('Prepare six (6) individual sample preparations from homogenous batch. Analyst 1 shall test on Day 1 on Instrument 1. Analyst 2 shall independently prepare and test 6 fresh samples on Day 2 on Instrument 2.', 20, 40),
+    createSectionHeader('10. METHOD PRECISION (REPEATABILITY)', 120, 50),
     precTable,
-    createAcceptanceParagraph(
-      isProtocol
-        ? 'Acceptance Criteria: % RSD of six assay results for Analyst 1 and Analyst 2 shall be NMT 2.0%. Overall cumulative % RSD (n=12) shall be NMT 2.0%. Absolute difference between means shall be NMT 1.5%.'
-        : `Acceptance: Analyst 1 %RSD NMT 2.0%, Analyst 2 %RSD NMT 2.0%, Cumulative %RSD NMT 2.0%, Mean Diff NMT 1.5%. (Result: A1 %RSD = ${formatNum(prec.analyst1Rsd, 2)}%, A2 %RSD = ${formatNum(prec.analyst2Rsd, 2)}%, Cum %RSD = ${formatNum(prec.cumulativeRsd, 2)}%, Diff = ${formatNum(prec.diffBetweenMeans, 2)}% — Complies)`
-    ),
-    createSectionHeader('11. Robustness', 70, 30),
-    createBodyParagraph(
-      rob.instructionParagraph ||
-        'Evaluate system suitability under deliberately varied HPLC conditions (Flow rate ±0.1 mL/min, Column Temp ±3°C, Mobile phase pH ±0.2).',
-      20,
-      40
-    ),
-    robTable,
-    createAcceptanceParagraph(
-      isProtocol
-        ? 'Acceptance Criteria: System suitability criteria (% RSD NMT 2.0%, Tailing NMT 2.0, Plates NLT 2000) shall be complied with under all varied conditions.'
-        : `Acceptance: System suitability criteria met under all varied conditions. (Result: Peak shape, tailing <= 2.0, plates >= 2000 maintained under all variations — Complies)`
-    ),
-    createSectionHeader('12. Solution Stability', 70, 30),
-    createBodyParagraph('Evaluate analytical solution stability at room temperature and 2–8°C over 24 hours. Analyze at intervals (0h, 3h, 6h, 12h, 18h, 24h).', 20, 40),
-    stabTable,
-    createAcceptanceParagraph(
-      isProtocol
-        ? 'Acceptance Criteria: The cumulative percentage difference in peak response for standard and sample solutions over 24 hours shall not exceed 2.0%.'
-        : `Acceptance: Cumulative percentage difference in peak response over 24h shall not exceed 2.0%. (Result: Max difference Std = ${formatNum(maxDocxStdDiff, 2)} %, Spl = ${formatNum(maxDocxSplDiff, 2)} % — Stable for 24h)`
-    ),
-    new Paragraph({ children: [new PageBreak()] }),
 
-    // ---------------- PAGE 7 ----------------
-    createSectionHeader('13. Overall Conclusion & Review Checklist', 70, 30),
-    createBodyParagraph(`The analytical method for ${data.productName} Assay by HPLC is specific, linear, precise, accurate, robust, and stable, meeting all acceptance criteria as per ICH Q2(R2) and USP compendial standards.`, 20, 40),
-    checkTable,
+    createSectionHeader('12. ROBUSTNESS', 120, 50),
+    robTable,
+
+    createSectionHeader('13. SOLUTION STABILITY', 120, 50),
+    stabTable,
+
+    createSectionHeader('Overall Conclusion', 120, 50),
+    ...(isProtocol
+      ? [
+          new Paragraph({ spacing: { before: 120, after: 60 }, children: [new TextRun({ text: '____________________________________________________________________', size: 22, font: FONT_FAMILY })] }),
+          new Paragraph({ spacing: { before: 60, after: 60 }, children: [new TextRun({ text: '____________________________________________________________________', size: 22, font: FONT_FAMILY })] }),
+          new Paragraph({ spacing: { before: 60, after: 120 }, children: [new TextRun({ text: '____________________________________________________________________', size: 22, font: FONT_FAMILY })] }),
+          new Paragraph({ spacing: { before: 60, after: 240 }, children: [new TextRun({ text: 'To be completed by the analyst after execution.', size: 22, font: FONT_FAMILY, italics: true })] }),
+        ]
+      : [
+          createBodyParagraph((data as any).overallConclusion || `The analytical method for Assay of ${data.productName} by HPLC has been evaluated and meets all predetermined acceptance criteria in accordance with ICH Q2(R2) and USP <1225> guidelines. The method demonstrates acceptable specificity, linearity (r ≥ 0.999), accuracy (mean recovery 98.0–102.0%), precision (%RSD ≤ 2.0%), intermediate precision, robustness, and 24-hour solution stability. All predetermined acceptance criteria have been satisfied. The analytical method is concluded to be validated and suitable for its intended quality control purpose.`),
+        ]),
+    
+    createSectionHeader('Review Checklist', 120, 50),
+    createDocxTable([5000, 4906], [
+      createRow([
+        createDataCell('Raw data & chromatograms reviewed', AlignmentType.LEFT, false, undefined, 5000),
+        createDataCell(isProtocol ? '[ ] Yes  [ ] No    Initials ____' : '[X] Yes  [ ] No    Reviewed by QC', AlignmentType.LEFT, false, undefined, 4906)
+      ]),
+      createRow([
+        createDataCell('Audit trail reviewed', AlignmentType.LEFT, false, undefined, 5000),
+        createDataCell(isProtocol ? '[ ] Yes  [ ] No    Initials ____' : '[X] Yes  [ ] No    Verified', AlignmentType.LEFT, false, undefined, 4906)
+      ]),
+      createRow([
+        createDataCell('Deviation / OOS raised', AlignmentType.LEFT, false, undefined, 5000),
+        createDataCell(isProtocol ? '[ ] None  [ ] Ref No: _________' : '[X] None  [ ] Ref No: N/A', AlignmentType.LEFT, false, undefined, 4906)
+      ]),
+      createRow([
+        createDataCell('Annexures attached', AlignmentType.LEFT, false, undefined, 5000),
+        createDataCell(isProtocol ? '____ of ____ pages' : 'Attached (Annexures 1 to 5)', AlignmentType.LEFT, false, undefined, 4906)
+      ])
+    ]),
+
     createSectionHeader('14. Abbreviations', 70, 30),
     abbrTable,
     endMarkParagraph,
@@ -988,69 +976,29 @@ export async function generateAndDownloadAMVDocx(
   const runningHeader = new Header({
     children: [
       new Paragraph({
-        alignment: AlignmentType.RIGHT,
+        alignment: isWestcoast ? AlignmentType.CENTER : AlignmentType.RIGHT,
         spacing: { before: 0, after: 80 },
         children: [
           new TextRun({
-            text: `${data.companyName}  |  ${isProtocol ? 'AMV Protocol' : 'AMV Report'} – ${data.productName}  |  Doc No. ${singleDocNumber}`,
-            size: 18, // 9pt (increased from 8pt)
+            text: isWestcoast ? 'ANALYTICAL METHOD VALIDATION REPORT' : `${data.companyName}  |  ${isProtocol ? 'AMV Protocol' : 'AMV Report'} – ${data.productName}  |  Doc No. ${singleDocNumber}`,
+            size: 24,
+            bold: isWestcoast,
             font: FONT_FAMILY,
-            color: '6B7280',
+            color: isWestcoast ? '000000' : '6B7280',
           }),
         ],
       }),
     ],
   });
 
-  const runningFooter = new Footer({
-    children: [
-      ...(options.dataMode === 'DEMO'
-        ? [
-            new Paragraph({
-              alignment: AlignmentType.CENTER,
-              children: [
-                new TextRun({
-                  text: 'DEMO / FORMAT-DEMONSTRATION ONLY — NOT FOR GMP USE',
-                  size: 15,
-                  bold: true,
-                  color: 'B45309',
-                  font: FONT_FAMILY,
-                }),
-              ],
-            }),
-          ]
-        : []),
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: { before: 80, after: 0 },
-        children: [
-          new TextRun({
-            text: 'Page ',
-            size: 18, // 9pt (increased from 8pt)
-            font: FONT_FAMILY,
-            color: '9CA3AF',
-          }),
-          new TextRun({
-            children: [PageNumber.CURRENT],
-            size: 18,
-            font: FONT_FAMILY,
-            color: '9CA3AF',
-          }),
-          new TextRun({
-            text: ' of ',
-            size: 18,
-            font: FONT_FAMILY,
-            color: '9CA3AF',
-          }),
-          new TextRun({
-            children: [PageNumber.TOTAL_PAGES],
-            size: 18,
-            font: FONT_FAMILY,
-            color: '9CA3AF',
-          }),
-        ],
-      }),
-    ],
+  const stampBytes = await getWestCoastStampUint8Array(180);
+
+  const runningFooter = createDocxSignOffFooter({
+    fontFamily: FONT_FAMILY,
+    dataMode: options.dataMode,
+    footerData: options.footerSignOffData,
+    stampImageBytes: stampBytes,
+    theme: options.theme,
   });
 
   const doc = new Document({

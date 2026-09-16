@@ -16,7 +16,8 @@ export const LinearityChart: React.FC<LinearityChartProps> = ({
   approxRt,
   activeSubstance,
 }) => {
-  const levels = linearity.levels;
+  const levels = linearity?.levels || [];
+  if (levels.length === 0) return null;
   const reg = linearity.regression;
 
   // Chart dimensions

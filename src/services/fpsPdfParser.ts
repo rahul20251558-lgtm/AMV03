@@ -37,6 +37,15 @@ export interface ExtractedFpsMoaData {
   sampleConcentration: string;
   standardConcentration: string;
   workingConcentration: string;
+  approxRetentionTime?: string;
+  standardSolution?: string;
+  sampleSolution?: string;
+  activeSubstance?: string;
+  standardWeight?: string;
+  sampleWeight?: string;
+  stdDilution?: string;
+  sampleDilution?: string;
+  standardPurity?: string;
   concentrationOptions: { label: string; value: string; isNominal: boolean }[];
 
   // Acceptance Limits (from FPS section)
@@ -247,7 +256,45 @@ export function parseFpsMoaText(rawText: string): ExtractedFpsMoaData {
   const avgWtMatch = text.match(/Average\s*weight\s+([^\r\n]+)/i);
   const hardMatch = text.match(/Hardness\s+([^\r\n]+)/i);
   const friabMatch = text.match(/Friability\s+([^\r\n]+)/i);
-  const dtMatch = text.match(/Disintegration\s*time\s+([^\r\n]+)/i);
+  const disintMatch = text.match(/Disintegration\s*time\s+([^\r\n]+)/i);
+
+  // Approximate Retention Time extraction
+  const rtMatch = text.match(/(?:Approx\.?\s*(?:Retention\s*Time|RT)|Retention\s*Time)\s*[:\s]+(?:is\s*(?:about\s*)?)?([0-9.]+\s*min(?:utes)?)/i);
+  const approxRetentionTime = rtMatch ? rtMatch[1].trim() : '';
+
+  // Standard and Sample solution preparation procedures
+  const stdSolMatch = text.match(/(?:Standard\s*solution|Standard\s*preparation)\s*[:\s]+([^\r\n]+(?:\r?\n(?!\s*(?:Sample\s+solution|Sample\s+stock|Chromatographic|Calculation|Procedure|[0-9]+\.\s+[A-Z]))[^\r\n]+)*)/i);
+  const standardSolution = stdSolMatch ? stdSolMatch[1].replace(/\s+/g, ' ').trim() : '';
+
+  const smpSolMatch = text.match(/(?:Sample\s*solution|Sample\s*preparation)\s*[:\s]+([^\r\n]+(?:\r?\n(?!\s*(?:Standard\s+solution|Chromatographic|Calculation|Procedure|[0-9]+\.\s+[A-Z]))[^\r\n]+)*)/i);
+  const sampleSolution = smpSolMatch ? smpSolMatch[1].replace(/\s+/g, ' ').trim() : '';
+
+  // Active substance
+  const activeSubMatch = text.match(/(?:Active\s*Substance|Drug\s*Substance|Generic\s*Name)\s*[:\s]+([^\r\n]+)/i);
+  const detectedActiveSubstance = activeSubMatch ? activeSubMatch[1].trim() : '';
+
+  // Standard Weight (WS) and Dilution (DS)
+  const wsMatch = text.match(/(?:Weight\s*of\s*(?:Standard|RS)|Standard\s*Weight|WS)\s*[:\s=]+([0-9.]+)\s*mg/i) ||
+                  text.match(/(?:weigh\s*(?:accurately)?|take)\s*(?:about\s*)?([0-9.]+)\s*mg\s*(?:of)?\s*(?:[A-Za-z0-9\s-]+)?(?:working\s*standard|reference\s*standard|RS)/i);
+  const standardWeight = wsMatch ? wsMatch[1].trim() : '';
+
+  const dsMatch = text.match(/(?:Standard\s*dilution|DS)\s*[:\s=]+([0-9.]+)\s*mL/i) ||
+                  (stdSolMatch && stdSolMatch[0].match(/(?:dilute\s*to|into\s*a\s*|in\s*a\s*)([0-9.]+)\s*mL/i));
+  const stdDilution = dsMatch ? dsMatch[1].trim() : '';
+
+  // Sample Weight (WT) and Dilution (DT)
+  const wtMatch = text.match(/(?:Weight\s*of\s*Sample|Sample\s*Weight|WT)\s*[:\s=]+([0-9.]+)\s*mg/i) ||
+                  text.match(/(?:weigh\s*(?:accurately)?|take)\s*(?:powder\s*equivalent\s*to\s*(?:about\s*)?|sample\s*powder\s*about\s*|about\s*)?([0-9.]+)\s*mg/i);
+  const sampleWeight = wtMatch ? wtMatch[1].trim() : '';
+
+  const dtMatch = text.match(/(?:Sample\s*dilution|DT)\s*[:\s=]+([0-9.]+)\s*mL/i) ||
+                  (smpSolMatch && smpSolMatch[0].match(/(?:dilute\s*to|into\s*a\s*|in\s*a\s*)([0-9.]+)\s*mL/i));
+  const sampleDilution = dtMatch ? dtMatch[1].trim() : '';
+
+  // Standard Purity / Potency %
+  const purMatch = text.match(/(?:Potency|Purity)\s*[:\s=]+([0-9.]+\s*%)/i) ||
+                   text.match(/([0-9.]+)\s*%\s*(?:purity|potency|as-is)/i);
+  const standardPurity = purMatch ? purMatch[1].replace('%', '').trim() : '';
 
   // Dissolution Conditions (if Dissolution block exists)
   const dissMedMatch = dissBlock.match(/Medium\s*:\s*([^\r\n]+)/i);
@@ -286,6 +333,15 @@ export function parseFpsMoaText(rawText: string): ExtractedFpsMoaData {
     sampleConcentration,
     standardConcentration,
     workingConcentration,
+    approxRetentionTime,
+    standardSolution,
+    sampleSolution,
+    activeSubstance: detectedActiveSubstance,
+    standardWeight,
+    sampleWeight,
+    stdDilution,
+    sampleDilution,
+    standardPurity,
     concentrationOptions,
 
     dissolutionLimit,

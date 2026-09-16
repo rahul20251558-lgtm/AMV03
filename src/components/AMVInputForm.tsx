@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { pharmaMasterDB, detectMultiApiSignals } from '../services/pharmaMasterRegistry';
-import { Search, Sparkles, RefreshCw, Layers, Calendar, FileCode2, FlaskConical, Beaker, Building2, UploadCloud, FileText, CheckCircle2 } from 'lucide-react';
+import { Search, Sparkles, RefreshCw, Layers, Calendar, FileCode2, FlaskConical, Beaker, Building2, UploadCloud, FileText, CheckCircle2 , History } from 'lucide-react';
 import { ThemeFormat, ValidationMethodType } from '../types';
 
 interface AMVInputFormProps {
   productName: string;
   onProductNameChange: (val: string) => void;
   documentNo: string;
+  supersedes: string;
+  onSupersedesChange: (val: string) => void;
   onDocumentNoChange: (val: string) => void;
   batchNo: string;
   onBatchNoChange: (val: string) => void;
@@ -77,6 +79,8 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
   onProductNameChange,
   documentNo,
   onDocumentNoChange,
+  supersedes,
+  onSupersedesChange,
   batchNo,
   onBatchNoChange,
   standardLot,
@@ -113,7 +117,7 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
   const isMultiApi = (matchedProduct && matchedProduct.apiCount > 1) || (!matchedProduct && signals.hasCombinationSignal);
   
   const availableApis = matchedProduct 
-    ? matchedProduct.apiList.map(a => a.apiName)
+    ? (matchedProduct.apiList || []).map(a => a.apiName)
     : signals.candidateApiNames;
 
   // Auto-select first API if none selected and it's a multi-API product
@@ -305,7 +309,7 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
                 Target Active Ingredient (Multi-API Detected)
               </label>
               <div className="flex flex-wrap gap-2">
-                {availableApis.map(api => (
+                {(availableApis || []).map(api => (
                   <button
                     key={api}
                     type="button"
@@ -409,7 +413,7 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
             </span>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {currentSuggestions.map((item) => (
+            {(currentSuggestions || []).map((item) => (
               <button
                 key={item}
                 type="button"

@@ -167,7 +167,7 @@ export function recalculateDissolutionSystemSuitability(
     };
   }
 
-  const areas = valid.map((inj) =>
+  const areas = (valid || []).map((inj) =>
     typeof inj.peakArea === 'number' ? inj.peakArea : parseFloat(String(inj.peakArea).replace(/,/g, ''))
   );
   const sum = areas.reduce((acc, a) => acc + a, 0);
@@ -316,7 +316,8 @@ export function generateLinearityData(
   const calcSlope = Number((num / denX).toFixed(2));
   const calcIntercept = Number((meanY - calcSlope * meanX).toFixed(2));
   const rVal = num / (Math.sqrt(denX) * Math.sqrt(denY));
-  const rSquared = Number(Math.min(0.9999, Math.max(0.9995, rVal * rVal)).toFixed(4));
+  const rawR2 = Math.min(0.999988, Math.max(0.999512, rVal * rVal));
+  const rSquared = Number(rawR2.toFixed(6));
 
   return {
     levels,
@@ -373,8 +374,9 @@ export function generatePrecisionData(
   }
 
   // Analyst 1
+  const baseSampleWt = (ctx && ctx.methodType === 'assay' && ctx.W_T) ? ctx.W_T : strengthMg;
   for (let i = 1; i <= numSamples; i++) {
-    const sampleWt = isDissolution ? strengthMg : Number((strengthMg + (rand() - 0.5) * 0.4).toFixed(2));
+    const sampleWt = isDissolution ? strengthMg : Number((baseSampleWt + (rand() - 0.5) * 0.4).toFixed(2));
     const truePct = targetMeanPercent + (rand() - 0.5) * rsdPercent;
     
     const { area, pct } = getAreaAndPct(truePct, sampleWt, rand);
@@ -393,7 +395,7 @@ export function generatePrecisionData(
   const rand2 = createSeededRandom(`${productName.toLowerCase()}_analyst2`);
   const targetA2Pct = targetMeanPercent + (rand2() - 0.5) * 0.4;
   for (let i = 1; i <= numSamples; i++) {
-    const sampleWt = isDissolution ? strengthMg : Number((strengthMg + (rand2() - 0.5) * 0.4).toFixed(2));
+    const sampleWt = isDissolution ? strengthMg : Number((baseSampleWt + (rand2() - 0.5) * 0.4).toFixed(2));
     const truePct = targetA2Pct + (rand2() - 0.5) * rsdPercent;
     
     const { area, pct } = getAreaAndPct(truePct, sampleWt, rand2);
@@ -419,7 +421,7 @@ export function generatePrecisionData(
   const sdA2 = Number(Math.sqrt(varianceA2).toFixed(3));
   const rsdA2 = Number(((sdA2 / meanA2Percent) * 100).toFixed(2));
 
-  const allPercents = [...rows.map(r => r.percentAssayOrDissolved), ...analyst2Rows.map(r => r.percentAssayOrDissolved)];
+  const allPercents = [... (rows || []).map(r => r.percentAssayOrDissolved), ... (analyst2Rows || []).map(r => r.percentAssayOrDissolved)];
   const cumulMean = Number((allPercents.reduce((a, b) => a + b, 0) / 12).toFixed(2));
   const cumulVar = allPercents.reduce((acc, p) => acc + Math.pow(p - cumulMean, 2), 0) / 11;
   const cumulSd = Number(Math.sqrt(cumulVar).toFixed(3));
@@ -455,8 +457,9 @@ export function generateAccuracyRecoveryData(
     const repVals = [];
 
     for (let j = 1; j <= 3; j++) {
-      // 5-place analytical microbalance weighing variance for low strength formulations (< 10 mg)
-      const decimals = strengthMg >= 50 ? 1 : strengthMg >= 10 ? 2 : 3;
+      // Magnitude-based precision: ≥100 → 2 dp , ≥10 → 3 dp , ≥1 → 4 dp , <1 → 5 dp
+      const absVal = Math.abs(nominalAdded);
+      const decimals = absVal >= 100 ? 2 : absVal >= 10 ? 3 : absVal >= 1 ? 4 : 5;
       const weightDelta = (rand() - 0.5) * (nominalAdded * 0.008);
       const added = Number((nominalAdded + weightDelta).toFixed(decimals));
 
@@ -479,7 +482,7 @@ export function generateAccuracyRecoveryData(
       const theoreticalRecovered = area / rf;
       const recovered = Number(theoreticalRecovered.toFixed(decimals));
       
-      // Calculate percent recovery from the reported physical quantities
+      // Calculate percent recovery directly from the displayed physical quantities (never diverges!)
       const actualRecPct = Number(((recovered / added) * 100).toFixed(2));
 
       reps.push({

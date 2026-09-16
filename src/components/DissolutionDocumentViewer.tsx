@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { DissolutionAMVDocumentData, DocumentType, ThemeFormat, FontFamilyType, FontSizePt, DataMode } from '../types';
-import { Download, Printer, Edit3, Layers, CheckCircle2, Plus, Trash2, Sparkles, FileText, Table } from 'lucide-react';
+import { DissolutionAMVDocumentData, DocumentType, ThemeFormat, FontFamilyType, FontSizePt, DataMode, FooterSignOffData } from '../types';
+import { Download, Printer, Edit3, Layers, CheckCircle2, Plus, Trash2, Sparkles, FileText, Table, Calendar } from 'lucide-react';
 import { recalculateDissolutionSystemSuitability } from '../services/pharmaMathEngine';
 import { FontAndSizeControl } from './FontAndSizeControl';
 import { verifyConcentrationScale } from '../services/selfAuditEngine';
 import { getProductDegradantProfile } from '../services/complianceAuditGate';
 import { getCleanDrugDisplayName } from '../services/postGenerationSanitizer';
+import { SignOffFooter, DEFAULT_FOOTER_SIGN_OFF } from './SignOffFooter';
+import { FooterDateModal } from './FooterDateModal';
 
 interface DissolutionDocumentViewerProps {
   data: DissolutionAMVDocumentData;
@@ -22,6 +24,8 @@ interface DissolutionDocumentViewerProps {
   onDownloadReport: () => void;
   onDownloadBoth: () => void;
   onUpdateData?: (updated: DissolutionAMVDocumentData) => void;
+  footerSignOffData?: FooterSignOffData;
+  onUpdateFooterSignOffData?: (data: FooterSignOffData) => void;
 }
 
 export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps> = ({
@@ -39,13 +43,25 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
   onDownloadReport,
   onDownloadBoth,
   onUpdateData,
+  footerSignOffData,
+  onUpdateFooterSignOffData,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
+  const [isFooterDateModalOpen, setIsFooterDateModalOpen] = useState(false);
+  const [localFooterData, setLocalFooterData] = useState<FooterSignOffData>(DEFAULT_FOOTER_SIGN_OFF);
+
+  const activeFooterData = footerSignOffData || localFooterData;
+  const handleUpdateFooter = (updated: FooterSignOffData) => {
+    setLocalFooterData(updated);
+    if (onUpdateFooterSignOffData) onUpdateFooterSignOffData(updated);
+  };
   const [tableFormat, setTableFormat] = useState<'realReport' | 'extended'>('realReport');
   const [sectionFormat, setSectionFormat] = useState<'monograph' | 'standard'>('monograph');
   const [showForcedDegradation, setShowForcedDegradation] = useState(false);
   const isProtocol = docType === 'protocol';
+  const renderPct = (val: any) => (val === undefined || val === null || val === '—' || val === '' || Number.isNaN(Number(val))) ? '—' : `${val} %`;
   const isBlue = theme === 'blue';
+  const isWestcoast = theme === 'westcoast';
   const isMonograph = sectionFormat === 'monograph';
   const currentMode: DataMode = dataMode === 'TEMPLATE' ? 'TEMPLATE' : 'DEMO';
 
@@ -73,23 +89,28 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
     : 'text-zinc-900 border-zinc-800';
 
   const runningHeader = (
+  isWestcoast ? (
+    <div className="text-center font-bold text-[12pt] mb-4 uppercase tracking-wider">
+      ANALYTICAL METHOD VALIDATION REPORT
+    </div>
+  ) : (
     <div className="flex justify-between items-center pb-2 mb-4 border-b border-zinc-300 text-[0.85em] text-zinc-500">
       <span className="font-semibold text-zinc-700">{data.companyName}</span>
       <span>
         {isProtocol ? 'AMV Protocol' : 'AMV Report'} (Dissolution Method) – {data.productName} | Doc No. {data.protocolNo}
       </span>
     </div>
-  );
+  )
+);
 
   const runningFooter = (pageNum: number) => (
-    <div className="pt-3 mt-5 border-t border-zinc-200 text-[0.85em] text-zinc-400 space-y-1">
-      {dataMode === 'DEMO' && (
-        <div className="text-center font-bold text-[11px] text-amber-700 tracking-wider uppercase">
-          DEMO / FORMAT-DEMONSTRATION ONLY — NOT FOR GMP USE
-        </div>
-      )}
-      <div className="text-center">Page {pageNum} of 10</div>
-    </div>
+    <SignOffFooter theme={theme}
+      pageNum={pageNum}
+      totalPages={10}
+      dataMode={dataMode}
+      footerData={activeFooterData}
+      onUpdateFooterData={handleUpdateFooter}
+    />
   );
 
   const handleFieldChange = (section: keyof DissolutionAMVDocumentData, field: string, val: any) => {
@@ -104,7 +125,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
 
   const handleInjectionChange = (index: number, field: 'weightMg' | 'peakArea', value: string) => {
     if (!onUpdateData) return;
-    const updatedInjections = [...data.systemSuitability.injections];
+    const updatedInjections = [...(data.systemSuitability?.injections || [])];
     const parsed = field === 'weightMg' ? value : value.replace(/,/g, '');
     updatedInjections[index] = {
       ...updatedInjections[index],
@@ -123,15 +144,15 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
 
   const handleAddInjection = () => {
     if (!onUpdateData) return;
-    const newSrNo = data.systemSuitability.injections.length + 1;
+    const newSrNo = (data.systemSuitability?.injections?.length || 0) + 1;
     const updatedInjections = [
-      ...data.systemSuitability.injections,
+      ...data.systemSuitability?.injections,
       {
         srNo: newSrNo,
         weightMg: 50.0,
         peakArea:
-          typeof data.systemSuitability.stats.meanArea === 'number' && data.systemSuitability.stats.meanArea > 0
-            ? data.systemSuitability.stats.meanArea
+          typeof data.systemSuitability?.stats?.meanArea === 'number' && data.systemSuitability?.stats?.meanArea > 0
+            ? data.systemSuitability?.stats?.meanArea
             : 42500,
         remark: `Standard Preparation ${newSrNo}`,
       },
@@ -147,10 +168,10 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
   };
 
   const handleRemoveInjection = (index: number) => {
-    if (!onUpdateData || data.systemSuitability.injections.length <= 2) return;
-    const updatedInjections = data.systemSuitability.injections
+    if (!onUpdateData || (data.systemSuitability?.injections?.length || 0) <= 2) return;
+    const updatedInjections = data.systemSuitability?.injections
       .filter((_, i) => i !== index)
-      .map((inj, i) => ({ ...inj, srNo: i + 1, remark: `Standard Preparation ${i + 1}` }));
+      ?.map((inj, i) => ({ ...inj, srNo: i + 1, remark: `Standard Preparation ${i + 1}` }));
     const stats = recalculateDissolutionSystemSuitability(updatedInjections);
     onUpdateData({
       ...data,
@@ -199,7 +220,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
     const degRt = Number((activeRt * 0.65).toFixed(2));
     const degRrt = Number((degRt / activeRt).toFixed(2));
 
-    const updatedValidationParams = data.validationParameters.map((vp) => {
+    const updatedValidationParams = data.validationParameters?.map((vp) => {
       if (vp.srNo === '5.2') {
         return {
           ...vp,
@@ -224,7 +245,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
 
     const updatedSpecificity = {
       ...data.specificity,
-      stressRows: include && data.specificity?.stressRows?.length ? data.specificity.stressRows : include ? [
+      stressRows: include && data.specificity?.stressRows?.length ? data.specificity?.stressRows : include ? [
         { condition: 'Acid Stress', stressParameters: '0.1N HCl, 60 °C, 2 hr', degradantRtMin: degRt.toFixed(2), activeRtMin: activeRtDisplay, degradantPeakArea: 4850, activePeakArea: 39500, degradationPercent: '10.9', resolution: '4.12', peakPurity: 'Passed (Purity Angle < Threshold)' },
         { condition: 'Base Stress', stressParameters: '0.1N NaOH, 60 °C, 2 hr', degradantRtMin: degRt.toFixed(2), activeRtMin: activeRtDisplay, degradantPeakArea: 5200, activePeakArea: 39100, degradationPercent: '11.7', resolution: '4.08', peakPurity: 'Passed (Purity Angle < Threshold)' },
         { condition: 'Oxidative Stress', stressParameters: '3 % H₂O₂, 25 °C, 2 hr', degradantRtMin: degRt.toFixed(2), activeRtMin: activeRtDisplay, degradantPeakArea: 3950, activePeakArea: 40300, degradationPercent: '8.9', resolution: '4.15', peakPurity: 'Passed (Purity Angle < Threshold)' },
@@ -244,13 +265,13 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
 
     const updatedOverallConclusion = include
       ? `The Analytical Method Verification for the Dissolution of ${data.productName} by HPLC has been successfully performed in accordance with ${
-          data.reference.includes('ICH Q2(R2)') ? data.reference : `${data.reference} and ICH Q2(R2)`
+          data.reference?.includes('ICH Q2(R2)') ? data.reference : `${data.reference} and ICH Q2(R2)`
         }. All validation parameters—System Suitability, Specificity & Selectivity (including Forced Degradation with spectral peak purity), Linearity, Range, Method Precision (Repeatability), Intermediate Precision, Accuracy (Recovery), Robustness, and Solution Stability—meet all predefined acceptance criteria. The method is formally verified for routine batch release testing.`
       : `The Analytical Method Verification for the Dissolution of ${data.productName} by HPLC has been successfully performed in accordance with ${
-          data.reference.includes('ICH Q2(R2)') ? data.reference : `${data.reference} and ICH Q2(R2)`
+          data.reference?.includes('ICH Q2(R2)') ? data.reference : `${data.reference} and ICH Q2(R2)`
         }. All verification parameters—System Suitability, Specificity (Blank & Placebo Non-Interference with spectral peak purity), Linearity, Range, Method Precision (Repeatability), Intermediate Precision, Accuracy (Recovery), Robustness, and Solution Stability—meet all predefined acceptance criteria. The method is formally verified for routine batch release testing.`;
 
-    const updatedRevisionHistory = data.revisionHistory.map((rev) => {
+    const updatedRevisionHistory = data.revisionHistory?.map((rev) => {
       if (rev.version === '01') {
         return {
           ...rev,
@@ -320,6 +341,18 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
               <span className="w-2 h-2 rounded-full bg-zinc-400"></span>
               Simple Format (No Color)
             </button>
+            <button
+              type="button"
+              onClick={() => onThemeChange('westcoast')}
+              className={`px-2.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                theme === 'westcoast'
+                  ? 'bg-green-700 text-white shadow-xs'
+                  : 'text-zinc-600 hover:text-zinc-900'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-green-400"></span>
+              Westcoast Format
+            </button>
           </div>
 
           {/* Typography Controls: Font Family & Font Size (matching uploaded image: Times New Roman 12) */}
@@ -329,6 +362,17 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
             onFontFamilyChange={onFontFamilyChange || (() => {})}
             onFontSizeChange={onFontSizeChange || (() => {})}
           />
+
+          {/* Quick Footer Date & Details Button */}
+          <button
+            type="button"
+            onClick={() => setIsFooterDateModalOpen(true)}
+            className="px-2.5 py-1.5 rounded-lg border border-blue-200 bg-blue-50/80 hover:bg-blue-100 text-blue-900 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="Configure Footer Sign-off Date (Applies across all pages)"
+          >
+            <Calendar className="w-3.5 h-3.5 text-blue-700" />
+            <span>Footer Date: <strong className="font-mono text-blue-950">{activeFooterData?.preparedBy?.date || '24/01/2024'}</strong></span>
+          </button>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -541,7 +585,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                     <td className="w-1/3 bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">
                       {isProtocol ? 'Protocol No.' : 'Report No.'}
                     </td>
-                    <td className="p-2 font-medium">{isProtocol ? data.protocolNo : (data.reportNo || data.protocolNo.replace('/AMV/', '/AMVR/'))}</td>
+                    <td className="p-2 font-medium">{isProtocol ? data.protocolNo : (data.reportNo || data.protocolNo?.replace('/AMV/', '/AMVR/'))}</td>
                   </tr>
                   <tr className="border-b border-zinc-200">
                     <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">
@@ -570,7 +614,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                       {isProtocol ? 'Batch No. to be used' : 'Batch No. used'}
                     </td>
                     <td className="p-2 font-semibold text-zinc-900">
-                      {isProtocol ? '' : data.batchNoUsed}
+                      {isProtocol ? '—' : data.batchNoUsed}
                     </td>
                   </tr>
                   {data.supersedes && (
@@ -605,28 +649,78 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                   <tbody>
                     <tr className="border-b border-zinc-200">
                       <td className="p-2 font-medium border-r border-zinc-200">Prepared By</td>
-                      <td className="p-2 border-r border-zinc-200 text-zinc-700">{isProtocol ? '' : data.signOffs.preparedBy.designation}</td>
-                      <td className="p-2 border-r border-zinc-200 font-medium">{isProtocol ? '' : data.signOffs.preparedBy.name}</td>
-                      <td className="p-2 text-center text-zinc-600">{isProtocol ? '' : `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.date}`}</td>
+                      <td className="p-2 border-r border-zinc-200 text-zinc-700">{isProtocol ? '—' : data.signOffs?.preparedBy?.designation}</td>
+                      <td className="p-2 border-r border-zinc-200 font-medium">{isProtocol ? '—' : data.signOffs?.preparedBy?.name}</td>
+                      <td className="p-2 text-center text-zinc-600">{isProtocol ? '—' : `${data.signOffs?.preparedBy?.name} / ${data.signOffs?.preparedBy?.date}`}</td>
                     </tr>
                     <tr className="border-b border-zinc-200">
                       <td className="p-2 font-medium border-r border-zinc-200">Checked By</td>
-                      <td className="p-2 border-r border-zinc-200 text-zinc-700">{isProtocol ? '' : data.signOffs.checkedBy.designation}</td>
-                      <td className="p-2 border-r border-zinc-200 font-medium">{isProtocol ? '' : data.signOffs.checkedBy.name}</td>
-                      <td className="p-2 text-center text-zinc-600">{isProtocol ? '' : `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.date}`}</td>
+                      <td className="p-2 border-r border-zinc-200 text-zinc-700">{isProtocol ? '—' : data.signOffs?.checkedBy?.designation}</td>
+                      <td className="p-2 border-r border-zinc-200 font-medium">{isProtocol ? '—' : data.signOffs?.checkedBy?.name}</td>
+                      <td className="p-2 text-center text-zinc-600">{isProtocol ? '—' : `${data.signOffs?.checkedBy?.name} / ${data.signOffs?.checkedBy?.date}`}</td>
                     </tr>
                     <tr className="border-b border-zinc-200">
                       <td className="p-2 font-medium border-r border-zinc-200">Reviewed By</td>
-                      <td className="p-2 border-r border-zinc-200 text-zinc-700">{isProtocol ? '' : data.signOffs.reviewedBy.designation}</td>
-                      <td className="p-2 border-r border-zinc-200 font-medium">{isProtocol ? '' : data.signOffs.reviewedBy.name}</td>
-                      <td className="p-2 text-center text-zinc-600">{isProtocol ? '' : `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.date}`}</td>
+                      <td className="p-2 border-r border-zinc-200 text-zinc-700">{isProtocol ? '—' : data.signOffs?.reviewedBy?.designation}</td>
+                      <td className="p-2 border-r border-zinc-200 font-medium">{isProtocol ? '—' : data.signOffs?.reviewedBy?.name}</td>
+                      <td className="p-2 text-center text-zinc-600">{isProtocol ? '—' : `${data.signOffs?.reviewedBy?.name} / ${data.signOffs?.reviewedBy?.date}`}</td>
                     </tr>
                     <tr>
                       <td className="p-2 font-medium border-r border-zinc-200">Authorized By</td>
-                      <td className="p-2 border-r border-zinc-200 text-zinc-700">{isProtocol ? '' : data.signOffs.authorisedBy.designation}</td>
-                      <td className="p-2 border-r border-zinc-200 font-medium">{isProtocol ? '' : data.signOffs.authorisedBy.name}</td>
-                      <td className="p-2 text-center text-zinc-600">{isProtocol ? '' : `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.date}`}</td>
+                      <td className="p-2 border-r border-zinc-200 text-zinc-700">{isProtocol ? '—' : data.signOffs?.authorisedBy?.designation}</td>
+                      <td className="p-2 border-r border-zinc-200 font-medium">{isProtocol ? '—' : data.signOffs?.authorisedBy?.name}</td>
+                      <td className="p-2 text-center text-zinc-600">{isProtocol ? '—' : `${data.signOffs?.authorisedBy?.name} / ${data.signOffs?.authorisedBy?.date}`}</td>
                     </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* TABLE OF CONTENTS */}
+            <div className="mt-4 mb-4">
+              <h3 className={`text-xs font-bold uppercase tracking-wider mb-2 ${sectionHeadingClass}`}>
+                TABLE OF CONTENTS
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse border border-zinc-300 text-xs">
+                  <thead>
+                    <tr className="bg-zinc-100 border-b border-zinc-300 font-bold text-zinc-800">
+                      <th className="p-1.5 border-r border-zinc-300 text-center w-16">Sr. No.</th>
+                      <th className="p-1.5 border-r border-zinc-300 text-left">Contents / Section Title</th>
+                      <th className="p-1.5 text-center w-24">Page No.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { srNo: '1.0', title: 'Objective', pageNo: 'Page 2' },
+                      { srNo: '2.0', title: 'Scope', pageNo: 'Page 2' },
+                      { srNo: '3.0', title: 'Reference and Verification Details', pageNo: 'Page 2' },
+                      { srNo: '4.0', title: 'Analytical Method Summary (4.1 Chromatographic Conditions)', pageNo: 'Page 2' },
+                      { srNo: '4.2', title: 'Dissolution Test Conditions (Apparatus, Medium, RPM, Q)', pageNo: 'Page 3' },
+                      { srNo: '4.3', title: 'Preparation of Solutions & Target Working Concentration', pageNo: 'Page 3' },
+                      { srNo: '4.4', title: 'Calculation Formula & % Dissolved Equations', pageNo: 'Page 3' },
+                      { srNo: '4.5', title: 'Acceptance Criteria / Monograph Specification Limits', pageNo: 'Page 3' },
+                      { srNo: '4.6', title: 'Reagents and Reference Standards', pageNo: 'Page 3' },
+                      { srNo: '4.7', title: 'Equipment Identification & Calibration Status', pageNo: 'Page 3' },
+                      { srNo: '5.0', title: 'Verification Parameters and Acceptance Criteria', pageNo: 'Page 4' },
+                      { srNo: '6.0', title: 'System Suitability Test (SST, n = 5 / 6 replicates)', pageNo: 'Page 4' },
+                      { srNo: '7.0', title: 'Specificity / Placebo Interference Evaluation', pageNo: 'Page 4' },
+                      { srNo: '8.0', title: 'Linearity and Range (Q-20 % to 120 % of target)', pageNo: 'Page 5' },
+                      { srNo: '9.0', title: 'Accuracy / Recovery by Standard Addition (50 %, 100 %, 120 %)', pageNo: 'Page 6' },
+                      { srNo: '10.0', title: 'Method Precision / Repeatability (n = 6 dosage units)', pageNo: 'Page 7' },
+                      { srNo: '11.0', title: 'Intermediate Precision / Ruggedness (Analyst-to-Analyst)', pageNo: 'Page 7' },
+                      { srNo: '12.0', title: 'Filter Validation / Filter Suitability Evaluation', pageNo: 'Page 8' },
+                      { srNo: '13.0', title: 'Stability of Analytical Solutions (Standard & Filtered Sample)', pageNo: 'Page 8' },
+                      { srNo: '14.0', title: 'Overall Conclusion', pageNo: 'Page 9' },
+                      { srNo: '15.0', title: 'Review Checklist & Completion Record', pageNo: 'Page 9' },
+                      { srNo: '16.0', title: 'List of Abbreviations & Document Revision History', pageNo: 'Page 10' },
+                    ]?.map((item, idx) => (
+                      <tr key={idx} className={`border-b border-zinc-200 last:border-b-0 ${idx % 2 === 1 ? 'bg-zinc-50' : ''}`}>
+                        <td className="p-1 border-r border-zinc-300 text-center font-mono font-medium text-zinc-700">{item.srNo}</td>
+                        <td className="p-1 border-r border-zinc-300 text-left text-zinc-900">{item.title}</td>
+                        <td className="p-1 text-center font-bold text-zinc-900">{item.pageNo}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -666,23 +760,23 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                   <tbody>
                     <tr className="border-b border-zinc-200">
                       <td className="w-1/3 bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">Reference</td>
-                      <td className="p-2">{data.referenceDetails.reference}</td>
+                      <td className="p-2">{data.referenceDetails?.reference}</td>
                     </tr>
                     <tr className="border-b border-zinc-200">
                       <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">Type of study</td>
-                      <td className="p-2">{data.referenceDetails.typeOfStudy}</td>
+                      <td className="p-2">{data.referenceDetails?.typeOfStudy}</td>
                     </tr>
                     <tr className="border-b border-zinc-200">
                       <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">Test to be verified</td>
-                      <td className="p-2 font-medium">{data.referenceDetails.testToBeVerified}</td>
+                      <td className="p-2 font-medium">{data.referenceDetails?.testToBeVerified}</td>
                     </tr>
                     <tr className="border-b border-zinc-200">
                       <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">Verification team</td>
-                      <td className="p-2">{data.referenceDetails.verificationTeam}</td>
+                      <td className="p-2">{data.referenceDetails?.verificationTeam}</td>
                     </tr>
                     <tr>
                       <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">Experimental details</td>
-                      <td className="p-2">{data.referenceDetails.experimentalDetails}</td>
+                      <td className="p-2">{data.referenceDetails?.experimentalDetails}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -695,28 +789,13 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                 4. ANALYTICAL METHOD SUMMARY
               </h3>
               <h4 className="text-xs font-semibold text-zinc-800 mb-2">4.1 Chromatographic Conditions</h4>
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse border border-zinc-300 text-xs">
-                  <tbody>
-                    {Object.entries({
-                      'Instrument / Detector': data.methodSummary.chromatographicConditions.instrument,
-                      'Column': data.methodSummary.chromatographicConditions.column,
-                      'Mobile Phase': data.methodSummary.chromatographicConditions.mobilePhase,
-                      'Mode of Elution': data.methodSummary.chromatographicConditions.modeOfElution,
-                      'Flow Rate': data.methodSummary.chromatographicConditions.flowRate,
-                      'Column Temperature': data.methodSummary.chromatographicConditions.columnTemperature,
-                      'Detection Wavelength': data.methodSummary.chromatographicConditions.detectionWavelength,
-                      'Injection Volume': data.methodSummary.chromatographicConditions.injectionVolume,
-                      'Diluent': data.methodSummary.chromatographicConditions.diluent,
-                      'Determination of Content': data.methodSummary.chromatographicConditions.determinationOfContent,
-                    }).map(([k, v], idx) => (
-                      <tr key={idx} className="border-b border-zinc-200 last:border-b-0">
-                        <td className="w-1/3 bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">{k}</td>
-                        <td className="p-2">{v}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="text-xs text-zinc-800 leading-relaxed space-y-2 p-3.5 bg-zinc-50 border border-zinc-300 rounded">
+                <p className="text-justify">
+                  The chromatographic quantitation for Dissolution analysis is performed on an <strong>Instrument / Detector:</strong> {data.methodSummary?.chromatographicConditions?.instrument}. The analytical separation is executed on a stationary phase consisting of <strong>Column:</strong> {data.methodSummary?.chromatographicConditions?.column}. The mobile phase system employed is <strong>Mobile Phase:</strong> {data.methodSummary?.chromatographicConditions?.mobilePhase} operating in an <strong>Elution Mode:</strong> of {data.methodSummary?.chromatographicConditions?.modeOfElution}. The system is operated isocratically at a controlled <strong>Flow Rate:</strong> of {data.methodSummary?.chromatographicConditions?.flowRate}.
+                </p>
+                <p className="text-justify">
+                  The stationary phase temperature is maintained at a <strong>Column Temperature:</strong> of {data.methodSummary?.chromatographicConditions?.columnTemperature}, with spectrophotometric detection conducted at a <strong>Detection Wavelength:</strong> of {data.methodSummary?.chromatographicConditions?.detectionWavelength}. Sample introduction is carried out using an <strong>Injection Volume:</strong> of {data.methodSummary?.chromatographicConditions?.injectionVolume}. All standard and test solutions are prepared in <strong>Diluent:</strong> {data.methodSummary?.chromatographicConditions?.diluent}. The quantitation procedure is based on <strong>Determination of Content:</strong> {data.methodSummary?.chromatographicConditions?.determinationOfContent}.
+                </p>
               </div>
             </div>
           </div>
@@ -735,19 +814,19 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                 <table className="w-full border-collapse border border-zinc-300 text-xs">
                   <tbody>
                     {(() => {
-                      const appStr = (data.methodSummary.dissolutionConditions.apparatus || '').toLowerCase();
+                      const appStr = (data.methodSummary?.dissolutionConditions?.apparatus || '').toLowerCase();
                       const speedKey = appStr.includes('basket') || appStr.includes('apparatus 1') ? 'Basket Speed' : 'Paddle Speed';
                       return Object.entries({
-                        'Compliance': data.methodSummary.dissolutionConditions.compliance,
-                        'Apparatus': data.methodSummary.dissolutionConditions.apparatus,
-                        [speedKey]: data.methodSummary.dissolutionConditions.paddleSpeed,
-                        'Medium': data.methodSummary.dissolutionConditions.medium,
-                        'Medium Temperature': data.methodSummary.dissolutionConditions.mediumTemperature,
-                        'Sampling Time': data.methodSummary.dissolutionConditions.samplingTime,
-                        'Sample Treatment': data.methodSummary.dissolutionConditions.sampleTreatment,
-                        'Number of Units': data.methodSummary.dissolutionConditions.numberOfUnits,
+                        'Compliance': data.methodSummary?.dissolutionConditions?.compliance,
+                        'Apparatus': data.methodSummary?.dissolutionConditions?.apparatus,
+                        [speedKey]: data.methodSummary?.dissolutionConditions?.paddleSpeed,
+                        'Medium': data.methodSummary?.dissolutionConditions?.medium,
+                        'Medium Temperature': data.methodSummary?.dissolutionConditions?.mediumTemperature,
+                        'Sampling Time': data.methodSummary?.dissolutionConditions?.samplingTime,
+                        'Sample Treatment': data.methodSummary?.dissolutionConditions?.sampleTreatment,
+                        'Number of Units': data.methodSummary?.dissolutionConditions?.numberOfUnits,
                       });
-                    })().map(([k, v], idx) => (
+                    })()?.map(([k, v], idx) => (
                       <tr key={idx} className="border-b border-zinc-200 last:border-b-0">
                         <td className="w-1/3 bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">{k}</td>
                         <td className="p-2">{v}</td>
@@ -790,14 +869,14 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
               </div>
 
               <div className="space-y-2 text-zinc-700 text-xs">
-                <p><strong>Solution (1) — Test Solution:</strong> {data.methodSummary.solutionPreparation.testSolution}</p>
-                <p><strong>Solution (2) — Standard Solution:</strong> {data.methodSummary.solutionPreparation.standardSolution}</p>
-                <p><strong>Blank:</strong> {data.methodSummary.solutionPreparation.blank}</p>
-                <p><strong>Placebo Solution:</strong> {data.methodSummary.solutionPreparation.placeboSolution}</p>
-                <p><strong>Precision — Standard Solution:</strong> {data.methodSummary.solutionPreparation.precisionStandardSolution}</p>
-                <p><strong>Precision — Sample Solution:</strong> {data.methodSummary.solutionPreparation.precisionSampleSolution}</p>
-                <p><strong>Linearity Solutions:</strong> {data.methodSummary.solutionPreparation.linearitySolutions}</p>
-                <p className="text-zinc-500 italic">Note: {data.methodSummary.solutionPreparation.handlingNote}</p>
+                <p><strong>Solution (1) — Test Solution:</strong> {data.methodSummary?.solutionPreparation?.testSolution}</p>
+                <p><strong>Solution (2) — Standard Solution:</strong> {data.methodSummary?.solutionPreparation?.standardSolution}</p>
+                <p><strong>Blank:</strong> {data.methodSummary?.solutionPreparation?.blank}</p>
+                <p><strong>Placebo Solution:</strong> {data.methodSummary?.solutionPreparation?.placeboSolution}</p>
+                <p><strong>Precision — Standard Solution:</strong> {data.methodSummary?.solutionPreparation?.precisionStandardSolution}</p>
+                <p><strong>Precision — Sample Solution:</strong> {data.methodSummary?.solutionPreparation?.precisionSampleSolution}</p>
+                <p><strong>Linearity Solutions:</strong> {data.methodSummary?.solutionPreparation?.linearitySolutions}</p>
+                <p className="text-zinc-500 italic">Note: {data.methodSummary?.solutionPreparation?.handlingNote}</p>
               </div>
             </div>
 
@@ -814,12 +893,12 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                   </thead>
                   <tbody>
                     <tr className="border-b border-zinc-200">
-                      <td className="p-2 font-medium border-r border-zinc-200">{data.methodSummary.monographLimits.criterion}</td>
-                      <td className="p-2 font-semibold text-emerald-700">{data.methodSummary.monographLimits.limit}</td>
+                      <td className="p-2 font-medium border-r border-zinc-200">{data.methodSummary?.monographLimits?.criterion}</td>
+                      <td className="p-2 font-semibold text-emerald-700">{data.methodSummary?.monographLimits?.limit}</td>
                     </tr>
                     <tr>
                       <td className="p-2 bg-zinc-50 font-semibold border-r border-zinc-200 text-zinc-700">Basis of calculation</td>
-                      <td className="p-2">{data.methodSummary.monographLimits.basisOfCalculation}</td>
+                      <td className="p-2">{data.methodSummary?.monographLimits?.basisOfCalculation}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -840,7 +919,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.methodSummary.requirements.map((req, idx) => (
+                    {data.methodSummary?.requirements?.map((req, idx) => (
                       <tr key={idx} className="border-b border-zinc-200 last:border-b-0 hover:bg-zinc-50">
                         <td className="p-2 font-medium border-r border-zinc-200">{req.name}</td>
                         <td className="p-2 border-r border-zinc-200 text-zinc-600">{req.grade}</td>
@@ -877,7 +956,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.validationParameters.map((vp, idx) => (
+                    {data.validationParameters?.map((vp, idx) => (
                       <tr key={idx} className="border-b border-zinc-200 last:border-b-0 hover:bg-zinc-50">
                         <td className="p-2 text-center border-r border-zinc-200 font-mono">{vp.srNo}</td>
                         <td className="p-2 font-semibold border-r border-zinc-200 text-zinc-900">{vp.parameter}</td>
@@ -910,7 +989,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                 </span>
               </div>
               <p className="text-zinc-700 text-justify mb-3">
-                A set of parameters and criteria thereof to ensure that the system is working properly. System suitability is performed during the entire verification of this method by preparing {data.systemSuitability.injections.length === 6 ? 'six' : data.systemSuitability.injections.length === 5 ? 'five' : `${data.systemSuitability.injections.length}`} preparations of the same concentration of the standard, and the results are evaluated by the application of statistical techniques, i.e. Mean, Standard Deviation and Relative Standard Deviation (%).
+                A set of parameters and criteria thereof to ensure that the system is working properly. System suitability is performed during the entire verification of this method by preparing {(data.systemSuitability?.injections?.length || 0) === 6 ? 'six' : (data.systemSuitability?.injections?.length || 0) === 5 ? 'five' : `${(data.systemSuitability?.injections?.length || 0)}`} preparations of the same concentration of the standard, and the results are evaluated by the application of statistical techniques, i.e. Mean, Standard Deviation and Relative Standard Deviation (%).
               </p>
 
               {tableFormat === 'realReport' ? (
@@ -929,10 +1008,10 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                       </tr>
                     </thead>
                     <tbody>
-                      {data.systemSuitability.injections.map((inj, idx) => (
+                      {data.systemSuitability?.injections?.map((inj, idx) => (
                         <tr key={idx} className="border-b border-zinc-900 hover:bg-zinc-50/60">
                           <td className="p-2 text-center border-r border-zinc-900 font-mono text-zinc-900">
-                            {isProtocol ? '' : isEditing ? (
+                            {isProtocol ? '—' : isEditing ? (
                               <input
                                 type="number"
                                 step="0.01"
@@ -945,7 +1024,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                             )}
                           </td>
                           <td className="p-2 text-center border-zinc-900 font-mono text-zinc-900">
-                            {isProtocol ? '' : isEditing ? (
+                            {isProtocol ? '—' : isEditing ? (
                               <input
                                 type="number"
                                 value={inj.peakArea}
@@ -961,7 +1040,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                               <button
                                 type="button"
                                 onClick={() => handleRemoveInjection(idx)}
-                                disabled={data.systemSuitability.injections.length <= 2}
+                                disabled={(data.systemSuitability?.injections?.length || 0) <= 2}
                                 className="text-red-500 hover:text-red-700 p-1 disabled:opacity-30"
                                 title="Delete row"
                               >
@@ -980,9 +1059,9 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                         <td className="p-2.5 text-center font-bold font-mono text-zinc-900">
                           {isProtocol
                             ? ''
-                            : typeof data.systemSuitability.stats.meanArea === 'number'
-                            ? data.systemSuitability.stats.meanArea.toLocaleString()
-                            : data.systemSuitability.stats.meanArea}
+                            : typeof data.systemSuitability?.stats?.meanArea === 'number'
+                            ? data.systemSuitability?.stats?.meanArea?.toLocaleString()
+                            : data.systemSuitability?.stats?.meanArea}
                         </td>
                         {isEditing && <td></td>}
                       </tr>
@@ -991,7 +1070,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                           RSD (NMT 2.0%)
                         </td>
                         <td className="p-2.5 text-center font-bold font-mono text-zinc-900">
-                          {isProtocol ? 'To be evaluated' : `${data.systemSuitability.stats.rsdArea} %`}
+                          {isProtocol ? 'To be evaluated' : `${renderPct(data.systemSuitability?.stats?.rsdArea)}`}
                         </td>
                         {isEditing && <td></td>}
                       </tr>
@@ -1000,7 +1079,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                           Theoretical Plates (NLT 2000)
                         </td>
                         <td className="p-2.5 text-center font-bold font-mono text-zinc-900">
-                          {isProtocol ? 'Limit: NLT 2000' : `${(data.systemSuitability.stats.meanPlates || 4850).toLocaleString()} (Complies)`}
+                          {isProtocol ? 'Limit: NLT 2000' : `${(data.systemSuitability?.stats?.meanPlates || 4850).toLocaleString()} (Complies)`}
                         </td>
                         {isEditing && <td></td>}
                       </tr>
@@ -1009,7 +1088,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                           Tailing Factor (NMT 1.5)
                         </td>
                         <td className="p-2.5 text-center font-bold font-mono text-zinc-900">
-                          {isProtocol ? 'Limit: NMT 1.5' : `${data.systemSuitability.stats.meanTailing || 1.12} (Complies)`}
+                          {isProtocol ? 'Limit: NMT 1.5' : `${data.systemSuitability?.stats?.meanTailing || 1.12} (Complies)`}
                         </td>
                         {isEditing && <td></td>}
                       </tr>
@@ -1032,11 +1111,11 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                       </tr>
                     </thead>
                     <tbody>
-                      {data.systemSuitability.injections.map((inj, idx) => (
+                      {data.systemSuitability?.injections?.map((inj, idx) => (
                         <tr key={idx} className="border-b border-zinc-200 last:border-b-0 hover:bg-zinc-50">
                           <td className="p-2 text-center border-r border-zinc-200 font-mono">{inj.srNo}</td>
                           <td className="p-2 text-center border-r border-zinc-200 font-mono">
-                            {isProtocol ? '' : isEditing ? (
+                            {isProtocol ? '—' : isEditing ? (
                               <input
                                 type="number"
                                 step="0.01"
@@ -1049,7 +1128,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                             )}
                           </td>
                           <td className="p-2 text-right border-r border-zinc-200 font-mono">
-                            {isProtocol ? '' : isEditing ? (
+                            {isProtocol ? '—' : isEditing ? (
                               <input
                                 type="number"
                                 value={inj.peakArea}
@@ -1061,18 +1140,18 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                             )}
                           </td>
                           <td className="p-2 text-center border-r border-zinc-200 font-mono">
-                            {isProtocol ? '' : (inj.tailingFactor ?? '1.12')}
+                            {isProtocol ? '—' : (inj.tailingFactor ?? '1.12')}
                           </td>
                           <td className="p-2 text-center border-r border-zinc-200 font-mono">
-                            {isProtocol ? '' : typeof inj.theoreticalPlates === 'number' ? inj.theoreticalPlates.toLocaleString() : (inj.theoreticalPlates ?? '4,850')}
+                            {isProtocol ? '—' : typeof inj.theoreticalPlates === 'number' ? inj.theoreticalPlates.toLocaleString() : (inj.theoreticalPlates ?? '4,850')}
                           </td>
-                          <td className="p-2 text-zinc-600">{isProtocol ? '' : inj.remark}</td>
+                          <td className="p-2 text-zinc-600">{isProtocol ? '—' : inj.remark}</td>
                           {isEditing && (
                             <td className="p-1 text-center">
                               <button
                                 type="button"
                                 onClick={() => handleRemoveInjection(idx)}
-                                disabled={data.systemSuitability.injections.length <= 2}
+                                disabled={(data.systemSuitability?.injections?.length || 0) <= 2}
                                 className="text-red-500 hover:text-red-700 p-1 disabled:opacity-30"
                               >
                                 <Trash2 className="w-3.5 h-3.5 mx-auto" />
@@ -1094,35 +1173,35 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                       <tr className="border-b border-zinc-200">
                         <td className="w-1/2 bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">Mean Peak Area</td>
                         <td className="p-2 font-mono font-medium border-r border-zinc-200">
-                          {isProtocol ? '' : typeof data.systemSuitability.stats.meanArea === 'number' ? data.systemSuitability.stats.meanArea.toLocaleString() : data.systemSuitability.stats.meanArea}
+                          {isProtocol ? '—' : typeof data.systemSuitability?.stats?.meanArea === 'number' ? data.systemSuitability?.stats?.meanArea?.toLocaleString() : data.systemSuitability?.stats?.meanArea}
                         </td>
                         <td className="p-2 text-zinc-500 text-[11px]">Acceptance: Record value</td>
                       </tr>
                       <tr className="border-b border-zinc-200">
                         <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">Standard Deviation (SD)</td>
                         <td className="p-2 font-mono font-medium border-r border-zinc-200">
-                          {isProtocol ? '' : data.systemSuitability.stats.sdArea}
+                          {isProtocol ? '—' : data.systemSuitability?.stats?.sdArea}
                         </td>
                         <td className="p-2 text-zinc-500 text-[11px]">Acceptance: Record value</td>
                       </tr>
                       <tr className="border-b border-zinc-200">
                         <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">% RSD of Peak Area</td>
                         <td className="p-2 font-mono font-bold border-r border-zinc-200 text-emerald-700">
-                          {isProtocol ? 'To be evaluated' : `${data.systemSuitability.stats.rsdArea} %`}
+                          {isProtocol ? 'To be evaluated' : `${renderPct(data.systemSuitability?.stats?.rsdArea)}`}
                         </td>
                         <td className="p-2 text-zinc-700 font-medium text-[11px]">Acceptance: NMT 2.0 % (Complies)</td>
                       </tr>
                       <tr className="border-b border-zinc-200">
                         <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">Theoretical Plates (USP Plates)</td>
                         <td className="p-2 font-mono font-medium border-r border-zinc-200">
-                          {isProtocol ? 'Limit: NLT 2000' : `${(data.systemSuitability.stats.meanPlates || 4850).toLocaleString()}`}
+                          {isProtocol ? 'Limit: NLT 2000' : `${(data.systemSuitability?.stats?.meanPlates || 4850).toLocaleString()}`}
                         </td>
                         <td className="p-2 text-zinc-700 font-medium text-[11px]">Acceptance: NLT 2000 (Complies)</td>
                       </tr>
                       <tr>
                         <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">Tailing Factor (USP Tailing)</td>
                         <td className="p-2 font-mono font-medium border-r border-zinc-200">
-                          {isProtocol ? 'Limit: NMT 1.5' : `${data.systemSuitability.stats.meanTailing || 1.12}`}
+                          {isProtocol ? 'Limit: NMT 1.5' : `${data.systemSuitability?.stats?.meanTailing || 1.12}`}
                         </td>
                         <td className="p-2 text-zinc-700 font-medium text-[11px]">Acceptance: NMT 1.5 (Complies)</td>
                       </tr>
@@ -1134,7 +1213,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
               <div className="p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs">
                 <strong>Conclusion: </strong>
                 <span className="text-zinc-700">
-                  {isProtocol ? data.systemSuitability.stats.conclusionProtocol : data.systemSuitability.stats.conclusionReport}
+                  {isProtocol ? data.systemSuitability?.stats?.conclusionProtocol : data.systemSuitability?.stats?.conclusionReport}
                 </span>
               </div>
             </div>
@@ -1195,7 +1274,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
               </div>
 
               {/* Table B: Forced Degradation & Stress Testing (Rendered ONLY if included) */}
-              {data.includeForcedDegradation && data.specificity?.stressRows && data.specificity.stressRows.length > 0 && (
+              {data.includeForcedDegradation && data.specificity?.stressRows && data.specificity?.stressRows?.length > 0 && (
                 <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-lg mb-4">
                   <h4 className="text-xs font-semibold text-zinc-800 mb-2">
                     7.2 Optional Forced Degradation &amp; Stress Testing
@@ -1239,7 +1318,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                               {isProtocol ? '—' : typeof row.activePeakArea === 'number' ? row.activePeakArea.toLocaleString() : row.activePeakArea}
                             </td>
                             <td className="p-1.5 text-center border-r border-zinc-200 font-mono font-bold text-zinc-800">
-                              {isProtocol ? '—' : `${row.degradationPercent} %`}
+                              {isProtocol ? '—' : `${renderPct(row.degradationPercent)}`}
                             </td>
                             <td className="p-1.5 text-center border-r border-zinc-200 font-mono font-bold text-emerald-700">
                               {isProtocol ? 'NLT 2.0' : row.resolution}
@@ -1301,13 +1380,13 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.linearity.levels.map((lvl, idx) => (
+                    {data.linearity?.levels?.map((lvl, idx) => (
                       <tr key={idx} className="border-b border-zinc-200 last:border-b-0 hover:bg-zinc-50">
                         <td className="p-2 font-semibold border-r border-zinc-200 text-zinc-900">{lvl.levelName}</td>
                         <td className="p-2 text-center border-r border-zinc-200 font-mono">{lvl.nominalPpm}</td>
-                        <td className="p-2 text-center border-r border-zinc-200 font-mono">{isProtocol ? '' : lvl.weightMg}</td>
+                        <td className="p-2 text-center border-r border-zinc-200 font-mono">{isProtocol ? '—' : lvl.weightMg}</td>
                         <td className="p-2 text-center border-r border-zinc-200">{lvl.finalDilution}</td>
-                        <td className="p-2 text-right font-mono">{isProtocol ? '' : typeof lvl.meanArea === 'number' ? lvl.meanArea.toLocaleString() : lvl.meanArea}</td>
+                        <td className="p-2 text-right font-mono">{isProtocol ? '—' : typeof lvl.meanArea === 'number' ? lvl.meanArea.toLocaleString() : lvl.meanArea}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1321,18 +1400,18 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                     <tr className="border-b border-zinc-200">
                       <td className="w-1/2 bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">Correlation Coefficient (r²)</td>
                       <td className="p-2 font-mono font-bold border-r border-zinc-200 text-emerald-700">
-                        {isProtocol ? 'Criteria: > 0.995' : data.linearity.regression.rSquared}
+                        {isProtocol ? 'Criteria: > 0.995' : data.linearity?.regression?.rSquared}
                       </td>
                       <td className="p-2 text-zinc-700 font-medium text-[11px]">Acceptance: &gt; 0.995</td>
                     </tr>
                     <tr className="border-b border-zinc-200">
                       <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">Slope (S)</td>
-                      <td className="p-2 font-mono border-r border-zinc-200">{isProtocol ? '' : data.linearity.regression.slope}</td>
+                      <td className="p-2 font-mono border-r border-zinc-200">{isProtocol ? '—' : data.linearity?.regression?.slope}</td>
                       <td className="p-2 text-zinc-500 text-[11px]">Record value</td>
                     </tr>
                     <tr>
                       <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">y-Intercept (c)</td>
-                      <td className="p-2 font-mono border-r border-zinc-200">{isProtocol ? '' : data.linearity.regression.yIntercept}</td>
+                      <td className="p-2 font-mono border-r border-zinc-200">{isProtocol ? '—' : data.linearity?.regression?.yIntercept}</td>
                       <td className="p-2 text-zinc-500 text-[11px]">Record value</td>
                     </tr>
                   </tbody>
@@ -1341,7 +1420,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
 
               <div className="p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs mb-6">
                 <strong>Conclusion: </strong>
-                <span className="text-zinc-700">{isProtocol ? data.linearity.regression.conclusionProtocol : data.linearity.regression.conclusionReport}</span>
+                <span className="text-zinc-700">{isProtocol ? data.linearity?.regression?.conclusionProtocol : data.linearity?.regression?.conclusionReport}</span>
               </div>
 
               {/* Range */}
@@ -1363,12 +1442,12 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.range.rows.map((r, idx) => (
+                    {data.range?.rows?.map((r, idx) => (
                       <tr key={idx} className="border-b border-zinc-200 last:border-b-0 hover:bg-zinc-50">
                         <td className="p-2 text-center border-r border-zinc-200 font-mono">{r.srNo}</td>
                         <td className="p-2 text-center border-r border-zinc-200 font-semibold">{r.levelPpm}</td>
                         <td className="p-2 border-r border-zinc-200 font-mono text-[11px]">{r.sampleId}</td>
-                        <td className="p-2 text-right font-mono">{isProtocol ? '' : typeof r.peakArea === 'number' ? r.peakArea.toLocaleString() : r.peakArea}</td>
+                        <td className="p-2 text-right font-mono">{isProtocol ? '—' : typeof r.peakArea === 'number' ? r.peakArea.toLocaleString() : r.peakArea}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1381,22 +1460,22 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                   <tbody>
                     <tr className="border-b border-zinc-200">
                       <td className="w-1/2 bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">Mean / SD at 75 ppm</td>
-                      <td className="p-2 font-mono border-r border-zinc-200">{isProtocol ? '' : data.range.stats.mean75}</td>
+                      <td className="p-2 font-mono border-r border-zinc-200">{isProtocol ? '—' : data.range?.stats?.mean75}</td>
                       <td className="p-2 text-zinc-500 text-[11px]">Record value</td>
                     </tr>
                     <tr className="border-b border-zinc-200">
                       <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">% RSD at 75 ppm</td>
-                      <td className="p-2 font-mono font-bold border-r border-zinc-200 text-emerald-700">{isProtocol ? 'To be evaluated' : `${data.range.stats.rsd75} %`}</td>
+                      <td className="p-2 font-mono font-bold border-r border-zinc-200 text-emerald-700">{isProtocol ? 'To be evaluated' : `${renderPct(data.range?.stats?.rsd75)}`}</td>
                       <td className="p-2 text-zinc-700 font-medium text-[11px]">Acceptance: ≤ 2.0 %</td>
                     </tr>
                     <tr className="border-b border-zinc-200">
                       <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">Mean / SD at 125 ppm</td>
-                      <td className="p-2 font-mono border-r border-zinc-200">{isProtocol ? '' : data.range.stats.mean125}</td>
+                      <td className="p-2 font-mono border-r border-zinc-200">{isProtocol ? '—' : data.range?.stats?.mean125}</td>
                       <td className="p-2 text-zinc-500 text-[11px]">Record value</td>
                     </tr>
                     <tr>
                       <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">% RSD at 125 ppm</td>
-                      <td className="p-2 font-mono font-bold border-r border-zinc-200 text-emerald-700">{isProtocol ? 'To be evaluated' : `${data.range.stats.rsd125} %`}</td>
+                      <td className="p-2 font-mono font-bold border-r border-zinc-200 text-emerald-700">{isProtocol ? 'To be evaluated' : `${renderPct(data.range?.stats?.rsd125)}`}</td>
                       <td className="p-2 text-zinc-700 font-medium text-[11px]">Acceptance: ≤ 2.0 %</td>
                     </tr>
                   </tbody>
@@ -1405,7 +1484,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
 
               <div className="p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs">
                 <strong>Conclusion: </strong>
-                <span className="text-zinc-700">{isProtocol ? data.range.stats.conclusionProtocol : data.range.stats.conclusionReport}</span>
+                <span className="text-zinc-700">{isProtocol ? data.range?.stats?.conclusionProtocol : data.range?.stats?.conclusionReport}</span>
               </div>
             </div>
           </div>
@@ -1438,13 +1517,13 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.precision.rows.map((row, idx) => (
+                    {data.precision?.rows?.map((row, idx) => (
                       <tr key={idx} className="border-b border-zinc-200 last:border-b-0 hover:bg-zinc-50">
                         <td className="p-2 text-center border-r border-zinc-200 font-mono">{row.srNo}</td>
                         <td className="p-2 font-mono text-[11px] border-r border-zinc-200">{row.sampleId}</td>
-                        <td className="p-2 text-center border-r border-zinc-200 font-mono">{isProtocol ? '' : row.amountUsedMg}</td>
-                        <td className="p-2 text-right border-r border-zinc-200 font-mono">{isProtocol ? '' : typeof row.sampleArea === 'number' ? row.sampleArea.toLocaleString() : row.sampleArea}</td>
-                        <td className="p-2 text-center font-mono font-medium">{isProtocol ? '' : `${row.contentPercentLa} %`}</td>
+                        <td className="p-2 text-center border-r border-zinc-200 font-mono">{isProtocol ? '—' : row.amountUsedMg}</td>
+                        <td className="p-2 text-right border-r border-zinc-200 font-mono">{isProtocol ? '—' : typeof row.sampleArea === 'number' ? row.sampleArea.toLocaleString() : row.sampleArea}</td>
+                        <td className="p-2 text-center font-mono font-medium">{isProtocol ? '—' : `${renderPct(row.contentPercentLa)}`}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1457,12 +1536,12 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                   <tbody>
                     <tr className="border-b border-zinc-200">
                       <td className="w-1/2 bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">Mean Content (% of LA)</td>
-                      <td className="p-2 font-mono font-bold border-r border-zinc-200">{isProtocol ? '' : `${data.precision.stats.meanContent} %`}</td>
+                      <td className="p-2 font-mono font-bold border-r border-zinc-200">{isProtocol ? '—' : `${renderPct(data.precision?.stats?.meanContent)}`}</td>
                       <td className="p-2 text-zinc-500 text-[11px]">Record value</td>
                     </tr>
                     <tr>
                       <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">% RSD of Content</td>
-                      <td className="p-2 font-mono font-bold border-r border-zinc-200 text-emerald-700">{isProtocol ? 'To be evaluated' : `${data.precision.stats.rsdContent} %`}</td>
+                      <td className="p-2 font-mono font-bold border-r border-zinc-200 text-emerald-700">{isProtocol ? 'To be evaluated' : `${renderPct(data.precision?.stats?.rsdContent)}`}</td>
                       <td className="p-2 text-zinc-700 font-medium text-[11px]">Acceptance: NMT 2.0 %</td>
                     </tr>
                   </tbody>
@@ -1471,7 +1550,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
 
               <div className="p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs mb-6">
                 <strong>Conclusion: </strong>
-                <span className="text-zinc-700">{isProtocol ? data.precision.stats.conclusionProtocol : data.precision.stats.conclusionReport}</span>
+                <span className="text-zinc-700">{isProtocol ? data.precision?.stats?.conclusionProtocol : data.precision?.stats?.conclusionReport}</span>
               </div>
             </div>
 
@@ -1498,15 +1577,15 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.intermediatePrecision.rows.map((row, idx) => (
+                    {data.intermediatePrecision?.rows?.map((row, idx) => (
                       <tr key={idx} className="border-b border-zinc-200 last:border-b-0 hover:bg-zinc-50">
                         <td className="p-1.5 text-center border-r border-zinc-200 font-mono">{row.srNo}</td>
-                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono">{isProtocol ? '' : row.analyst1AmountMg}</td>
-                        <td className="p-1.5 text-right border-r border-zinc-200 font-mono">{isProtocol ? '' : typeof row.analyst1Area === 'number' ? row.analyst1Area.toLocaleString() : row.analyst1Area}</td>
-                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono">{isProtocol ? '' : `${row.analyst1PercentLa} %`}</td>
-                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono">{isProtocol ? '' : row.analyst2AmountMg}</td>
-                        <td className="p-1.5 text-right border-r border-zinc-200 font-mono">{isProtocol ? '' : typeof row.analyst2Area === 'number' ? row.analyst2Area.toLocaleString() : row.analyst2Area}</td>
-                        <td className="p-1.5 text-center font-mono">{isProtocol ? '' : `${row.analyst2PercentLa} %`}</td>
+                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono">{isProtocol ? '—' : row.analyst1AmountMg}</td>
+                        <td className="p-1.5 text-right border-r border-zinc-200 font-mono">{isProtocol ? '—' : typeof row.analyst1Area === 'number' ? row.analyst1Area.toLocaleString() : row.analyst1Area}</td>
+                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono">{isProtocol ? '—' : `${renderPct(row.analyst1PercentLa)}`}</td>
+                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono">{isProtocol ? '—' : row.analyst2AmountMg}</td>
+                        <td className="p-1.5 text-right border-r border-zinc-200 font-mono">{isProtocol ? '—' : typeof row.analyst2Area === 'number' ? row.analyst2Area.toLocaleString() : row.analyst2Area}</td>
+                        <td className="p-1.5 text-center font-mono">{isProtocol ? '—' : `${renderPct(row.analyst2PercentLa)}`}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1519,22 +1598,22 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                   <tbody>
                     <tr className="border-b border-zinc-200">
                       <td className="w-1/2 bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">Mean % LA — Analyst 1 / Analyst 2</td>
-                      <td className="p-2 font-mono border-r border-zinc-200">{isProtocol ? '' : `${data.intermediatePrecision.stats.analyst1Mean} % / ${data.intermediatePrecision.stats.analyst2Mean} %`}</td>
+                      <td className="p-2 font-mono border-r border-zinc-200">{isProtocol ? '—' : `${renderPct(data.intermediatePrecision?.stats?.analyst1Mean)} / ${renderPct(data.intermediatePrecision?.stats?.analyst2Mean)}`}</td>
                       <td className="p-2 text-zinc-500 text-[11px]">Record value</td>
                     </tr>
                     <tr className="border-b border-zinc-200">
                       <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">% RSD — Analyst 1</td>
-                      <td className="p-2 font-mono font-bold border-r border-zinc-200 text-emerald-700">{isProtocol ? 'To be evaluated' : `${data.intermediatePrecision.stats.analyst1Rsd} %`}</td>
+                      <td className="p-2 font-mono font-bold border-r border-zinc-200 text-emerald-700">{isProtocol ? 'To be evaluated' : `${renderPct(data.intermediatePrecision?.stats?.analyst1Rsd)}`}</td>
                       <td className="p-2 text-zinc-700 font-medium text-[11px]">Acceptance: NMT 2.0 %</td>
                     </tr>
                     <tr className="border-b border-zinc-200">
                       <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">% RSD — Analyst 2</td>
-                      <td className="p-2 font-mono font-bold border-r border-zinc-200 text-emerald-700">{isProtocol ? 'To be evaluated' : `${data.intermediatePrecision.stats.analyst2Rsd} %`}</td>
+                      <td className="p-2 font-mono font-bold border-r border-zinc-200 text-emerald-700">{isProtocol ? 'To be evaluated' : `${renderPct(data.intermediatePrecision?.stats?.analyst2Rsd)}`}</td>
                       <td className="p-2 text-zinc-700 font-medium text-[11px]">Acceptance: NMT 2.0 %</td>
                     </tr>
                     <tr>
                       <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">Cumulative % RSD (twelve results)</td>
-                      <td className="p-2 font-mono font-bold border-r border-zinc-200 text-emerald-700">{isProtocol ? 'To be evaluated' : `${data.intermediatePrecision.stats.cumulativeRsd} %`}</td>
+                      <td className="p-2 font-mono font-bold border-r border-zinc-200 text-emerald-700">{isProtocol ? 'To be evaluated' : `${renderPct(data.intermediatePrecision?.stats?.cumulativeRsd)}`}</td>
                       <td className="p-2 text-zinc-700 font-medium text-[11px]">Acceptance: NMT 2.0 %</td>
                     </tr>
                   </tbody>
@@ -1543,7 +1622,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
 
               <div className="p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs">
                 <strong>Conclusion: </strong>
-                <span className="text-zinc-700">{isProtocol ? data.intermediatePrecision.stats.conclusionProtocol : data.intermediatePrecision.stats.conclusionReport}</span>
+                <span className="text-zinc-700">{isProtocol ? data.intermediatePrecision?.stats?.conclusionProtocol : data.intermediatePrecision?.stats?.conclusionReport}</span>
               </div>
             </div>
           </div>
@@ -1576,14 +1655,14 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.accuracy.rows.map((row, idx) => (
+                    {data.accuracy?.rows?.map((row, idx) => (
                       <tr key={idx} className="border-b border-zinc-200 last:border-b-0 hover:bg-zinc-50">
                         <td className="p-1.5 text-center border-r border-zinc-200 font-mono">{row.srNo}</td>
                         <td className="p-1.5 text-center border-r border-zinc-200 font-semibold">{row.levelPpm}</td>
-                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono">{isProtocol ? '' : row.spikedMg}</td>
-                        <td className="p-1.5 text-right border-r border-zinc-200 font-mono">{isProtocol ? '' : typeof row.sampleArea === 'number' ? row.sampleArea.toLocaleString() : row.sampleArea}</td>
-                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono">{isProtocol ? '' : row.amountRecoveredMg}</td>
-                        <td className="p-1.5 text-center font-mono font-bold text-emerald-700">{isProtocol ? '' : `${row.percentRecovery} %`}</td>
+                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono">{isProtocol ? '—' : row.spikedMg}</td>
+                        <td className="p-1.5 text-right border-r border-zinc-200 font-mono">{isProtocol ? '—' : typeof row.sampleArea === 'number' ? row.sampleArea.toLocaleString() : row.sampleArea}</td>
+                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono">{isProtocol ? '—' : row.amountRecoveredMg}</td>
+                        <td className="p-1.5 text-center font-mono font-bold text-emerald-700">{isProtocol ? '—' : `${renderPct(row.percentRecovery)}`}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1596,22 +1675,22 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                   <tbody>
                     <tr className="border-b border-zinc-200">
                       <td className="w-1/2 bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">Mean % Recovery — 75 ppm</td>
-                      <td className="p-2 font-mono font-bold border-r border-zinc-200 text-emerald-700">{isProtocol ? '' : `${data.accuracy.stats.meanRecovery75} %`}</td>
+                      <td className="p-2 font-mono font-bold border-r border-zinc-200 text-emerald-700">{isProtocol ? '—' : `${renderPct(data.accuracy?.stats?.meanRecovery75)}`}</td>
                       <td className="p-2 text-zinc-700 font-medium text-[11px]">Acceptance: 98.0 % to 102.0 %</td>
                     </tr>
                     <tr className="border-b border-zinc-200">
                       <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">Mean % Recovery — 100 ppm</td>
-                      <td className="p-2 font-mono font-bold border-r border-zinc-200 text-emerald-700">{isProtocol ? '' : `${data.accuracy.stats.meanRecovery100} %`}</td>
+                      <td className="p-2 font-mono font-bold border-r border-zinc-200 text-emerald-700">{isProtocol ? '—' : `${renderPct(data.accuracy?.stats?.meanRecovery100)}`}</td>
                       <td className="p-2 text-zinc-700 font-medium text-[11px]">Acceptance: 98.0 % to 102.0 %</td>
                     </tr>
                     <tr className="border-b border-zinc-200">
                       <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">Mean % Recovery — 125 ppm</td>
-                      <td className="p-2 font-mono font-bold border-r border-zinc-200 text-emerald-700">{isProtocol ? '' : `${data.accuracy.stats.meanRecovery125} %`}</td>
+                      <td className="p-2 font-mono font-bold border-r border-zinc-200 text-emerald-700">{isProtocol ? '—' : `${renderPct(data.accuracy?.stats?.meanRecovery125)}`}</td>
                       <td className="p-2 text-zinc-700 font-medium text-[11px]">Acceptance: 98.0 % to 102.0 %</td>
                     </tr>
                     <tr>
                       <td className="bg-zinc-50 font-semibold p-2 border-r border-zinc-200 text-zinc-700">% RSD of Recovery</td>
-                      <td className="p-2 font-mono font-bold border-r border-zinc-200 text-emerald-700">{isProtocol ? 'To be evaluated' : `${data.accuracy.stats.overallRsd} %`}</td>
+                      <td className="p-2 font-mono font-bold border-r border-zinc-200 text-emerald-700">{isProtocol ? 'To be evaluated' : `${renderPct(data.accuracy?.stats?.overallRsd)}`}</td>
                       <td className="p-2 text-zinc-700 font-medium text-[11px]">Acceptance: NMT 2.0 %</td>
                     </tr>
                   </tbody>
@@ -1620,7 +1699,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
 
               <div className="p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs">
                 <strong>Conclusion: </strong>
-                <span className="text-zinc-700">{isProtocol ? data.accuracy.stats.conclusionProtocol : data.accuracy.stats.conclusionReport}</span>
+                <span className="text-zinc-700">{isProtocol ? data.accuracy?.stats?.conclusionProtocol : data.accuracy?.stats?.conclusionReport}</span>
               </div>
             </div>
           </div>
@@ -1654,13 +1733,13 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.robustness.rows.map((row, idx) => (
+                    {data.robustness?.rows?.map((row, idx) => (
                       <tr key={idx} className="border-b border-zinc-200 last:border-b-0 hover:bg-zinc-50">
                         <td className="p-1.5 font-medium border-r border-zinc-200 text-zinc-900">{row.conditionVaried}</td>
                         <td className="p-1.5 text-center border-r border-zinc-200 font-mono">{isProtocol ? '—' : `${row.retentionTimeMin} min`}</td>
                         <td className="p-1.5 text-center border-r border-zinc-200 font-mono">{isProtocol ? '—' : row.tailingFactor}</td>
                         <td className="p-1.5 text-center border-r border-zinc-200 font-mono">{isProtocol ? '—' : row.theoreticalPlates}</td>
-                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono font-bold text-emerald-700">{isProtocol ? 'To be evaluated' : `${row.rsdPercent} %`}</td>
+                        <td className="p-1.5 text-center border-r border-zinc-200 font-mono font-bold text-emerald-700">{isProtocol ? 'To be evaluated' : `${renderPct(row.rsdPercent)}`}</td>
                         <td className="p-1.5 text-center font-semibold text-emerald-700">{isProtocol ? '—' : row.remark}</td>
                       </tr>
                     ))}
@@ -1670,7 +1749,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
 
               <div className="p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs mb-6">
                 <strong>Conclusion: </strong>
-                <span className="text-zinc-700">{isProtocol ? data.robustness.conclusionProtocol : data.robustness.conclusionReport}</span>
+                <span className="text-zinc-700">{isProtocol ? data.robustness?.conclusionProtocol : data.robustness?.conclusionReport}</span>
               </div>
             </div>
 
@@ -1701,7 +1780,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.solutionStability.rowsRoomTemp.map((row, idx) => (
+                    {data.solutionStability?.rowsRoomTemp?.map((row, idx) => (
                       <tr key={idx} className="border-b border-zinc-200 last:border-b-0 hover:bg-zinc-50">
                         <td className="p-1.5 font-medium border-r border-zinc-200 text-zinc-900">{row.timePoint}</td>
                         <td className="p-1.5 text-right border-r border-zinc-200 font-mono">{isProtocol ? '—' : typeof row.standardArea === 'number' ? row.standardArea.toLocaleString() : row.standardArea}</td>
@@ -1734,7 +1813,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.solutionStability.rowsRefrigerated.map((row, idx) => (
+                    {data.solutionStability?.rowsRefrigerated?.map((row, idx) => (
                       <tr key={idx} className="border-b border-zinc-200 last:border-b-0 hover:bg-zinc-50">
                         <td className="p-1.5 font-medium border-r border-zinc-200 text-zinc-900">{row.timePoint}</td>
                         <td className="p-1.5 text-right border-r border-zinc-200 font-mono">{isProtocol ? '—' : typeof row.standardArea === 'number' ? row.standardArea.toLocaleString() : row.standardArea}</td>
@@ -1751,7 +1830,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
 
               <div className="p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs">
                 <strong>Conclusion: </strong>
-                <span className="text-zinc-700">{isProtocol ? data.solutionStability.conclusionProtocol : data.solutionStability.conclusionReport}</span>
+                <span className="text-zinc-700">{isProtocol ? data.solutionStability?.conclusionProtocol : data.solutionStability?.conclusionReport}</span>
               </div>
             </div>
           </div>
@@ -1788,7 +1867,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.completionRecord.map((rec, idx) => (
+                    {data.completionRecord?.map((rec, idx) => (
                       <tr key={idx} className="border-b border-zinc-200 last:border-b-0 hover:bg-zinc-50">
                         <td className="p-2 font-medium border-r border-zinc-200 text-zinc-900">{rec.particulars}</td>
                         <td className="p-2 border-r border-zinc-200 text-zinc-700">{isProtocol ? rec.detailsProtocol : rec.detailsReport}</td>
@@ -1816,7 +1895,7 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.abbreviations.map((abb, idx) => (
+                    {data.abbreviations?.map((abb, idx) => (
                       <tr key={idx} className="border-b border-zinc-200 last:border-b-0 hover:bg-zinc-50">
                         <td className="p-2 font-bold font-mono border-r border-zinc-200 text-zinc-900">{abb.abbreviation}</td>
                         <td className="p-2 text-zinc-700">{abb.expansion}</td>
@@ -1836,6 +1915,13 @@ export const DissolutionDocumentViewer: React.FC<DissolutionDocumentViewerProps>
         </section>
 
       </div>
+
+      <FooterDateModal
+        isOpen={isFooterDateModalOpen}
+        onClose={() => setIsFooterDateModalOpen(false)}
+        footerData={activeFooterData}
+        onSave={handleUpdateFooter}
+      />
     </div>
   );
 };

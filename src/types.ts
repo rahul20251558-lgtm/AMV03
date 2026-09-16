@@ -1,7 +1,7 @@
 export type DocumentType = 'protocol' | 'report';
 export type DataMode = 'TEMPLATE' | 'DEMO';
-export type ThemeFormat = 'blue' | 'simple'; // 'blue' is Executive Blue (#1F4E79), 'simple' is Simple Format (No Color)
-export type ValidationMethodType = 'assay' | 'related_substances' | 'dissolution';
+export type ThemeFormat = 'blue' | 'simple' | 'westcoast'; // 'blue' is Executive Blue (#1F4E79), 'simple' is Simple Format (No Color), 'westcoast' is Official Westcoast Format (matching PDF)
+export type ValidationMethodType = 'assay' | 'related_substances' | 'dissolution' | 'microbial_limit_test';
 export type FontFamilyType = 'Times New Roman' | 'Arial' | 'Calibri' | 'Segoe UI' | 'Cambria' | 'Georgia';
 export type FontSizePt = 9 | 10 | 11 | 12 | 13 | 14 | 16;
 
@@ -9,6 +9,21 @@ export interface SignOffPerson {
   name: string;
   designation: string;
   date: string;
+}
+
+export interface FooterSignOffColumn {
+  title: string;
+  designation: string;
+  date: string;
+  name?: string;
+}
+
+export interface FooterSignOffData {
+  preparedBy: FooterSignOffColumn;
+  checkedBy: FooterSignOffColumn;
+  qaInCharge: FooterSignOffColumn;
+  plantHead: FooterSignOffColumn;
+  formatNo: string;
 }
 
 export interface SignOffGrid {
@@ -34,6 +49,9 @@ export interface ChromatographicConditions {
 export interface SolutionPreparation {
   standardSolution: string;
   sampleSolution: string;
+  standardPreparation?: string;
+  samplePreparation?: string;
+  placeboPreparation?: string;
 }
 
 export interface ChemicalRequirement {
@@ -44,7 +62,7 @@ export interface ChemicalRequirement {
 }
 
 export interface EquipmentRequirement {
-  srNo: number;
+  srNo: number | string;
   name: string;
   idNo: string;
   calibrationDate: string;
@@ -52,7 +70,7 @@ export interface EquipmentRequirement {
 }
 
 export interface ValidationParameterSummary {
-  srNo: number;
+  srNo: number | string;
   parameter: string;
   acceptanceCriteria: string;
   verificationRequirement: string; // for protocol: "To be verified as per protocol criteria"
@@ -60,20 +78,20 @@ export interface ValidationParameterSummary {
 }
 
 export interface SystemSuitabilityRow {
-  injectionNo: number;
-  peakArea: number;
-  tailingFactor: number;
-  theoreticalPlates: number;
+  injectionNo: number | string;
+  peakArea: number | string;
+  tailingFactor: number | string;
+  theoreticalPlates: number | string;
 }
 
 export interface SystemSuitabilityData {
   injections: SystemSuitabilityRow[];
-  meanArea: number;
-  rsdArea: number;
-  meanTailing: number;
-  rsdTailing: number;
-  meanPlates: number;
-  rsdPlates: number;
+  meanArea: number | string;
+  rsdArea: number | string;
+  meanTailing: number | string;
+  rsdTailing: number | string;
+  meanPlates: number | string;
+  rsdPlates: number | string;
   acceptanceTextProtocol: string;
   acceptanceTextReport: string;
 }
@@ -91,18 +109,18 @@ export interface SpecificityData {
 }
 
 export interface LinearityLevelRow {
-  levelPercent: number;
-  concentration: number; // µg/mL
-  meanArea: number;
-  percentOf100Response: number;
+  levelPercent: number | string;
+  concentration: number | string; // µg/mL
+  meanArea: number | string;
+  percentOf100Response: number | string;
 }
 
 export interface LinearityRegression {
-  correlationR: number;
-  rSquared: number;
-  slope: number;
-  yIntercept: number;
-  yInterceptBiasPercent: number;
+  correlationR: number | string;
+  rSquared: number | string;
+  slope: number | string;
+  yIntercept: number | string;
+  yInterceptBiasPercent: number | string;
 }
 
 export interface LinearityData {
@@ -113,49 +131,49 @@ export interface LinearityData {
 }
 
 export interface AccuracyRecoveryRow {
-  levelPercent: number;
-  expNo: number;
-  amountAdded: number; // mg
-  amountRecovered: number; // mg
-  percentRecovery: number;
+  levelPercent: number | string;
+  expNo: number | string;
+  amountAdded: number | string; // mg
+  amountRecovered: number | string; // mg
+  percentRecovery: number | string;
 }
 
 export interface AccuracyData {
   rows: AccuracyRecoveryRow[];
-  meanRecoveryAllLevels: number;
-  rsdAllLevels: number;
+  meanRecoveryAllLevels: number | string;
+  rsdAllLevels: number | string;
   acceptanceTextProtocol: string;
   conclusionReport: string;
 }
 
 export interface PrecisionRow {
   sampleNo: string;
-  analyst1Assay: number;
-  analyst2Assay: number;
+  analyst1Assay: number | string;
+  analyst2Assay: number | string;
   statisticalEvaluation: string;
 }
 
 export interface PrecisionData {
   rows: PrecisionRow[];
-  analyst1Mean: number;
-  analyst1Rsd: number;
-  analyst1Sd: number;
-  analyst2Mean: number;
-  analyst2Rsd: number;
-  analyst2Sd: number;
-  cumulativeMean: number;
-  cumulativeSd: number;
-  cumulativeRsd: number;
-  diffBetweenMeans: number;
+  analyst1Mean: number | string;
+  analyst1Rsd: number | string;
+  analyst1Sd: number | string;
+  analyst2Mean: number | string;
+  analyst2Rsd: number | string;
+  analyst2Sd: number | string;
+  cumulativeMean: number | string;
+  cumulativeSd: number | string;
+  cumulativeRsd: number | string;
+  diffBetweenMeans: number | string;
   acceptanceTextProtocol: string;
   conclusionReport: string;
 }
 
 export interface RobustnessRow {
   conditionVaried: string;
-  rsdPercent: number;
-  tailingFactor: number;
-  theoreticalPlates: number;
+  rsdPercent: number | string;
+  tailingFactor: number | string;
+  theoreticalPlates: number | string;
 }
 
 export interface RobustnessData {
@@ -167,8 +185,8 @@ export interface RobustnessData {
 
 export interface SolutionStabilityRow {
   timePoint: string;
-  standardArea: number;
-  sampleArea: number;
+  standardArea: number | string;
+  sampleArea: number | string;
   diffPercent: string;
 }
 
@@ -196,8 +214,8 @@ export interface RevisionHistoryItem {
 }
 
 export interface AMVDocumentData {
-  potencyDecimal?: number;
-  saltFactor?: number;
+  potencyDecimal?: number | string;
+  saltFactor?: number | string;
 
   companyName: string;
   companyAddress: string;
@@ -329,7 +347,7 @@ export interface RSValidationParameterCriteria {
 }
 
 export interface RSSystemSuitabilityRow {
-  srNo: number;
+  srNo: number | string;
   weightMg: number | string;
   retentionTime?: number | string;
   peakArea: number | string;
@@ -339,13 +357,13 @@ export interface RSSystemSuitabilityRow {
 }
 
 export interface RSSystemSuitabilityStats {
-  meanArea: number;
-  sdArea: number;
-  rsdArea: number;
-  tailingFactor: number;
-  theoreticalPlates: number;
+  meanArea: number | string;
+  sdArea: number | string;
+  rsdArea: number | string;
+  tailingFactor: number | string;
+  theoreticalPlates: number | string;
   theoreticalPlatesCriteria?: string;
-  resolution: number;
+  resolution: number | string;
   conclusionProtocol: string;
   conclusionReport: string;
 }
@@ -359,37 +377,37 @@ export interface RSSpecificityRow {
 
 export interface RSLinearityLevelRow {
   levelName: string;
-  nominalPpm: number;
+  nominalPpm: number | string;
   weightTakenMg: number | string;
   finalDilution: string;
   meanArea: number | string;
 }
 
 export interface RSLinearityRegression {
-  rSquared: number;
-  slope: number;
-  yIntercept: number;
-  sdYIntercepts: number;
+  rSquared: number | string;
+  slope: number | string;
+  yIntercept: number | string;
+  sdYIntercepts: number | string;
   conclusionProtocol: string;
   conclusionReport: string;
 }
 
 export interface RSRangeRow {
-  srNo: number;
-  levelPpm: number;
+  srNo: number | string;
+  levelPpm: number | string;
   sampleId: string;
   peakArea: number | string;
 }
 
 export interface RSRangeLevelStat {
-  levelPpm: number;
-  mean: number;
-  sd: number;
-  rsd: number;
+  levelPpm: number | string;
+  mean: number | string;
+  sd: number | string;
+  rsd: number | string;
 }
 
 export interface RSPrecisionRow {
-  srNo: number;
+  srNo: number | string;
   sampleId: string;
   volumeUsed: string;
   peakArea: number | string;
@@ -397,40 +415,40 @@ export interface RSPrecisionRow {
 }
 
 export interface RSPrecisionStats {
-  meanContent: number;
-  sd: number;
-  rsd: number;
+  meanContent: number | string;
+  sd: number | string;
+  rsd: number | string;
   conclusionProtocol: string;
   conclusionReport: string;
 }
 
 export interface RSLodLoqConfirmationRow {
-  srNo: number;
+  srNo: number | string;
   level: string;
-  concentrationPpm: number;
+  concentrationPpm: number | string;
   peakArea: number | string;
   snRatio: number | string;
 }
 
 export interface RSLoqPrecisionRow {
-  srNo: number;
+  srNo: number | string;
   peakArea: number | string;
   contentPercentLa: number | string;
   remark: string;
 }
 
 export interface RSLoqStats {
-  meanArea: number;
-  sdArea: number;
-  rsdArea: number;
-  meanContent: number;
-  rsdContent: number;
+  meanArea: number | string;
+  sdArea: number | string;
+  rsdArea: number | string;
+  meanContent: number | string;
+  rsdContent: number | string;
   conclusionProtocol: string;
   conclusionReport: string;
 }
 
 export interface RSIntermediatePrecisionRow {
-  srNo: number;
+  srNo: number | string;
   analyst1Volume: string;
   analyst1Area: number | string;
   analyst1Content: number | string;
@@ -440,23 +458,23 @@ export interface RSIntermediatePrecisionRow {
 }
 
 export interface RSIntermediatePrecisionStats {
-  analyst1Mean: number;
-  analyst1Sd: number;
-  analyst1Rsd: number;
-  analyst2Mean: number;
-  analyst2Sd: number;
-  analyst2Rsd: number;
-  cumulativeMean: number;
-  cumulativeSd: number;
-  cumulativeRsd: number;
-  diffBetweenMeans: number;
+  analyst1Mean: number | string;
+  analyst1Sd: number | string;
+  analyst1Rsd: number | string;
+  analyst2Mean: number | string;
+  analyst2Sd: number | string;
+  analyst2Rsd: number | string;
+  cumulativeMean: number | string;
+  cumulativeSd: number | string;
+  cumulativeRsd: number | string;
+  diffBetweenMeans: number | string;
   conclusionProtocol: string;
   conclusionReport: string;
 }
 
 export interface RSAccuracyRecoveryRow {
-  srNo: number;
-  levelPpm: number;
+  srNo: number | string;
+  levelPpm: number | string;
   standardSpikedMg: number | string;
   sampleArea: number | string;
   amountRecoveredMg: number | string;
@@ -464,16 +482,16 @@ export interface RSAccuracyRecoveryRow {
 }
 
 export interface RSAccuracyLevelStat {
-  levelPpm: number;
-  meanRecovery: number;
-  sdRecovery: number;
-  rsdRecovery: number;
+  levelPpm: number | string;
+  meanRecovery: number | string;
+  sdRecovery: number | string;
+  rsdRecovery: number | string;
 }
 
 export interface RSAccuracyStats {
   levelStats: RSAccuracyLevelStat[];
-  overallMeanRecovery: number;
-  overallRsd: number;
+  overallMeanRecovery: number | string;
+  overallRsd: number | string;
   conclusionProtocol: string;
   conclusionReport: string;
 }
@@ -489,8 +507,8 @@ export interface RSCompletionRecordItem {
 }
 
 export interface RSAMVDocumentData {
-  potencyDecimal?: number;
-  saltFactor?: number;
+  potencyDecimal?: number | string;
+  saltFactor?: number | string;
 
   companyName: string;
   documentTitle: string; // e.g. "ANALYTICAL METHOD VALIDATION PROTOCOL" or "REPORT"
@@ -658,7 +676,7 @@ export interface DissolutionValidationParameterCriteria {
 }
 
 export interface DissolutionSystemSuitabilityRow {
-  srNo: number;
+  srNo: number | string;
   weightMg: number | string;
   retentionTime?: number | string;
   peakArea: number | string;
@@ -680,7 +698,7 @@ export interface DissolutionSystemSuitabilityStats {
 
 export interface DissolutionLinearityLevelRow {
   levelName: string;
-  nominalPpm: number;
+  nominalPpm: number | string;
   weightMg: number | string;
   finalDilution: string;
   meanArea: number | string;
@@ -695,8 +713,8 @@ export interface DissolutionLinearityRegression {
 }
 
 export interface DissolutionRangeRow {
-  srNo: number;
-  levelPpm: number;
+  srNo: number | string;
+  levelPpm: number | string;
   sampleId: string;
   peakArea: number | string;
 }
@@ -713,7 +731,7 @@ export interface DissolutionRangeStats {
 }
 
 export interface DissolutionPrecisionRow {
-  srNo: number;
+  srNo: number | string;
   sampleId: string;
   amountUsedMg: number | string;
   sampleArea: number | string;
@@ -729,7 +747,7 @@ export interface DissolutionPrecisionStats {
 }
 
 export interface DissolutionIntermediatePrecisionRow {
-  srNo: number;
+  srNo: number | string;
   analyst1AmountMg: number | string;
   analyst1Area: number | string;
   analyst1PercentLa: number | string;
@@ -749,8 +767,8 @@ export interface DissolutionIntermediatePrecisionStats {
 }
 
 export interface DissolutionAccuracyRow {
-  srNo: number;
-  levelPpm: number;
+  srNo: number | string;
+  levelPpm: number | string;
   spikedMg: number | string;
   sampleArea: number | string;
   amountRecoveredMg: number | string;
@@ -793,8 +811,8 @@ export interface DissolutionSpecificityData {
   conclusionReport: string;
   degradationAssessment: string;
   degradantName?: string;
-  degradantRt?: number;
-  degradantRrt?: number;
+  degradantRt?: number | string;
+  degradantRrt?: number | string;
   stressIntroParagraph?: string;
 }
 
@@ -863,14 +881,14 @@ export interface DissolutionCalculationFormula {
   formula: string;
   description: string;
   workedExample: {
-    sampleArea: number;
-    standardArea: number;
-    standardConcUgMl: number;
-    mediumVolumeMl: number;
-    dilutionFactor: number;
-    labelClaimMg: number;
-    calculatedPercent: number;
-    calculatedMg: number;
+    sampleArea: number | string;
+    standardArea: number | string;
+    standardConcUgMl: number | string;
+    mediumVolumeMl: number | string;
+    dilutionFactor: number | string;
+    labelClaimMg: number | string;
+    calculatedPercent: number | string;
+    calculatedMg: number | string;
     formulaSubstitution: string;
     resultStatement: string;
     complianceStatement: string;
@@ -878,8 +896,8 @@ export interface DissolutionCalculationFormula {
 }
 
 export interface DissolutionSpecificationLimits {
-  qValue: number;
-  timeMinutes: number;
+  qValue: number | string;
+  timeMinutes: number | string;
   s1Criteria: string;
   s2Criteria: string;
   s3Criteria: string;
@@ -888,9 +906,9 @@ export interface DissolutionSpecificationLimits {
 
 export interface DissolutionFilterSuitabilityRow {
   discardVolumeMl: string;
-  sampleArea: number;
-  percentRecovery: number;
-  percentDiff: number;
+  sampleArea: number | string;
+  percentRecovery: number | string;
+  percentDiff: number | string;
   compliance: string;
 }
 
@@ -898,7 +916,7 @@ export interface DissolutionFilterSuitabilityData {
   filterType: string;
   poreSize: string;
   manufacturer: string;
-  centrifugedArea: number;
+  centrifugedArea: number | string;
   rows: DissolutionFilterSuitabilityRow[];
   acceptanceCriteria: string;
   recommendedDiscardVolume: string;
@@ -907,7 +925,7 @@ export interface DissolutionFilterSuitabilityData {
 }
 
 export interface DissolutionReviewChecklistItem {
-  srNo: number;
+  srNo: number | string;
   category: string;
   reviewItem: string;
   gmpRequirement: string;
@@ -919,13 +937,13 @@ export interface DissolutionAnnexureItem {
   annexureNo: string;
   title: string;
   contents: string;
-  totalPages: number;
+  totalPages: number | string;
   status: string;
 }
 
 export interface DissolutionAMVDocumentData {
-  potencyDecimal?: number;
-  saltFactor?: number;
+  potencyDecimal?: number | string;
+  saltFactor?: number | string;
 
   companyName: string;
   documentTitle: string; // "ANALYTICAL METHOD VERIFICATION PROTOCOL" or "REPORT"
@@ -971,7 +989,7 @@ export interface DissolutionAMVDocumentData {
   validationParameters: DissolutionValidationParameterCriteria[];
 
   systemSuitability: {
-    standardConcUgMl?: number;
+    standardConcUgMl?: number | string;
     injections: DissolutionSystemSuitabilityRow[];
     stats: DissolutionSystemSuitabilityStats;
   };
@@ -991,7 +1009,7 @@ export interface DissolutionAMVDocumentData {
   filterSuitability?: DissolutionFilterSuitabilityData;
 
   precision: {
-    nominalConcentrationUgMl?: number;
+    nominalConcentrationUgMl?: number | string;
     rows: DissolutionPrecisionRow[];
     stats: DissolutionPrecisionStats;
   };
@@ -1002,7 +1020,7 @@ export interface DissolutionAMVDocumentData {
   };
 
   accuracy: {
-    nominalConcentrationUgMl?: number;
+    nominalConcentrationUgMl?: number | string;
     rows: DissolutionAccuracyRow[];
     stats: DissolutionAccuracyStats;
   };
@@ -1030,14 +1048,15 @@ export interface DissolutionAMVDocumentData {
 
 
 export interface RawInjection {
-  srNo: number;
+  srNo: number | string;
   sampleName: string;
-  weightMg?: number;        // primary
-  dilutionMl?: number;      // primary
-  peakArea: number;         // primary
-  isPeakArea?: number;      // internal standard area (GC/RS methods ke liye MUST)
-  retentionTimeMin: number;
-  tailingFactor?: number;   // instrument se aaya raw value
-  theoreticalPlates?: number;
-  signalToNoise?: number;
+  weightMg?: number | string;        // primary
+  dilutionMl?: number | string;      // primary
+  peakArea: number | string;         // primary
+  isPeakArea?: number | string;      // internal standard area (GC/RS methods ke liye MUST)
+  retentionTimeMin: number | string;
+  tailingFactor?: number | string;   // instrument se aaya raw value
+  theoreticalPlates?: number | string;
+  signalToNoise?: number | string;
 }
+export * from './types_mlt';

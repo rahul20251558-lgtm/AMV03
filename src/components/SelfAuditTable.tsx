@@ -43,7 +43,7 @@ export const SelfAuditTable: React.FC<SelfAuditTableProps> = ({
               </tr>
             </thead>
             <tbody>
-              {pendingItems.map((item, idx) => (
+              {(pendingItems || []).map((item, idx) => (
                 <tr key={idx} className="border-b border-amber-200">
                   <td className="p-2 border border-amber-200 font-medium text-zinc-800">{item.section}</td>
                   <td className="p-2 border border-amber-200 font-mono text-zinc-900 font-semibold">{item.field}</td>
@@ -88,7 +88,7 @@ export const SelfAuditTable: React.FC<SelfAuditTableProps> = ({
               </tr>
             </thead>
             <tbody>
-              {checks.map((c, i) => (
+              {(checks || []).map((c, i) => (
                 <tr key={c.id} className={i % 2 === 1 ? 'bg-zinc-50' : 'bg-white'}>
                   <td className="p-1.5 border border-zinc-200 text-center font-mono font-medium text-zinc-600">
                     {c.id}

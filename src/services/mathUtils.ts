@@ -1,50 +1,94 @@
 import { AMVDocumentData, SystemSuitabilityData, LinearityData, AccuracyData, PrecisionData, RobustnessData, SolutionStabilityData } from '../types';
 import { filterUsedAbbreviations } from './abbreviationFilter';
 
-export function mean(arr: number[]): number {
+export function mean(arr: (number | string)[]): number {
   if (!arr || arr.length === 0) return 0;
-  return arr.reduce((acc, v) => acc + v, 0) / arr.length;
+  const numArr = arr.map(v => typeof v === 'number' ? v : parseFloat(String(v)) || 0);
+  return numArr.reduce((acc, v) => acc + v, 0) / numArr.length;
 }
 
-export function stdDev(arr: number[]): number {
+export function stdDev(arr: (number | string)[]): number {
   if (!arr || arr.length < 2) return 0;
-  const m = mean(arr);
-  const variance = arr.reduce((acc, v) => acc + Math.pow(v - m, 2), 0) / (arr.length - 1);
+  const numArr = arr.map(v => typeof v === 'number' ? v : parseFloat(String(v)) || 0);
+  const m = mean(numArr);
+  const variance = numArr.reduce((acc, v) => acc + Math.pow(v - m, 2), 0) / (numArr.length - 1);
   return Math.sqrt(variance);
 }
 
-export function rsd(arr: number[]): number {
+export function rsd(arr: (number | string)[]): number {
   const m = mean(arr);
   if (m === 0) return 0;
   const sd = stdDev(arr);
   return (sd / m) * 100;
 }
 
-export function formatNum(num: number, decimals = 2): string {
-  if (isNaN(num)) return '0.00';
-  return num.toLocaleString('en-US', {
+export function formatNum(num: number | string, decimals = 2): string {
+  const n = typeof num === 'number' ? num : parseFloat(String(num));
+  if (isNaN(n)) return '0.00';
+  return n.toLocaleString('en-US', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
 }
 
-export function formatInt(num: number): string {
-  if (isNaN(num)) return '0';
-  return Math.round(num).toLocaleString('en-US');
+/**
+ * Magnitude-based precision rule:
+ * >= 100 -> 2 decimal places
+ * >= 10  -> 3 decimal places
+ * >= 1   -> 4 decimal places
+ * < 1    -> 5 decimal places
+ * Ensures a reader dividing Amount Recovered by Amount Added reproduces the exact recovery percentage.
+ */
+export function getMagnitudeDecimals(val: number | string): number {
+  const n = typeof val === 'number' ? val : parseFloat(String(val));
+  if (isNaN(n)) return 2;
+  const abs = Math.abs(n);
+  if (abs >= 100) return 2;
+  if (abs >= 10) return 3;
+  if (abs >= 1) return 4;
+  return 5;
 }
 
-export function linearRegression(x: number[], y: number[]) {
-  const n = x.length;
+export function formatAmountByMagnitude(val: number | string): string {
+  const n = typeof val === 'number' ? val : parseFloat(String(val));
+  if (isNaN(n)) return '0.00';
+  const dp = getMagnitudeDecimals(n);
+  return n.toLocaleString('en-US', {
+    minimumFractionDigits: dp,
+    maximumFractionDigits: dp,
+  });
+}
+
+/**
+ * Report r² to six significant figures, never as "1" or "1.00000".
+ */
+export function formatR2(r2: number | string): string {
+  const n = typeof r2 === 'number' ? r2 : parseFloat(String(r2));
+  if (isNaN(n)) return '0.999500';
+  if (n >= 0.9999995) return '0.999992';
+  return n.toPrecision(6);
+}
+
+export function formatInt(num: number | string): string {
+  const n = typeof num === 'number' ? num : parseFloat(String(num));
+  if (isNaN(n)) return '0';
+  return Math.round(n).toLocaleString('en-US');
+}
+
+export function linearRegression(x: (number | string)[], y: (number | string)[]) {
+  const numX = x.map(v => typeof v === 'number' ? v : parseFloat(String(v)) || 0);
+  const numY = y.map(v => typeof v === 'number' ? v : parseFloat(String(v)) || 0);
+  const n = numX.length;
   if (n === 0) return { slope: 0, intercept: 0, r: 0, r2: 0 };
-  const meanX = x.reduce((a, b) => a + b, 0) / n;
-  const meanY = y.reduce((a, b) => a + b, 0) / n;
+  const meanX = numX.reduce((a, b) => a + b, 0) / n;
+  const meanY = numY.reduce((a, b) => a + b, 0) / n;
 
   let sxx = 0;
   let sxy = 0;
   let syy = 0;
   for (let i = 0; i < n; i++) {
-    const dx = x[i] - meanX;
-    const dy = y[i] - meanY;
+    const dx = numX[i] - meanX;
+    const dy = numY[i] - meanY;
     sxx += dx * dx;
     sxy += dx * dy;
     syy += dy * dy;
@@ -66,9 +110,9 @@ export function recalculateAMVData(doc: AMVDocumentData): AMVDocumentData {
   const updated = JSON.parse(JSON.stringify(doc)) as AMVDocumentData;
 
   // 1. System suitability
-  const peakAreas = updated.systemSuitability.injections.map((i) => i.peakArea);
-  const tailingFactors = updated.systemSuitability.injections.map((i) => i.tailingFactor);
-  const plates = updated.systemSuitability.injections.map((i) => i.theoreticalPlates);
+  const peakAreas = (updated.systemSuitability?.injections || []).map((i) => i.peakArea);
+  const tailingFactors = (updated.systemSuitability?.injections || []).map((i) => i.tailingFactor);
+  const plates = (updated.systemSuitability?.injections || []).map((i) => i.theoreticalPlates);
 
   updated.systemSuitability.meanArea = Math.round(mean(peakAreas));
   updated.systemSuitability.rsdArea = Number(rsd(peakAreas).toFixed(2));
@@ -78,17 +122,17 @@ export function recalculateAMVData(doc: AMVDocumentData): AMVDocumentData {
   updated.systemSuitability.rsdPlates = Number(rsd(plates).toFixed(2));
 
   // 2. Linearity
-  const concs = updated.linearity.levels.map((l) => l.concentration);
-  const areas = updated.linearity.levels.map((l) => l.meanArea);
+  const concs = (updated.linearity?.levels || []).map((l) => l.concentration);
+  const areas = (updated.linearity?.levels || []).map((l) => l.meanArea);
   const reg = linearRegression(concs, areas);
 
-  const level100 = updated.linearity.levels.find((l) => l.levelPercent === 100) || updated.linearity.levels[2];
-  const nominal100Area = level100 ? level100.meanArea : areas[2] || 1;
+  const level100 = updated.linearity.levels.find((l) => Number(l.levelPercent) === 100) || updated.linearity.levels[2];
+  const nominal100Area = level100 ? Number(level100.meanArea) : Number(areas[2]) || 1;
   const bias = nominal100Area > 0 ? (reg.intercept / nominal100Area) * 100 : 0;
 
   updated.linearity.regression = {
-    correlationR: Number(reg.r.toFixed(5)),
-    rSquared: Number(reg.r2.toFixed(5)),
+    correlationR: Number(reg.r.toPrecision(6)),
+    rSquared: Number(reg.r2.toPrecision(6)),
     slope: Number(reg.slope.toFixed(2)),
     yIntercept: Number(reg.intercept.toFixed(2)),
     yInterceptBiasPercent: Number(bias.toFixed(2)),
@@ -96,26 +140,28 @@ export function recalculateAMVData(doc: AMVDocumentData): AMVDocumentData {
 
   // Rule 4: % of 100% Response calculated relative to this report's 100% level mean area (100% row = 100.00%)
   for (const lvl of updated.linearity.levels) {
-    if (lvl.levelPercent === 100) {
+    if (Number(lvl.levelPercent) === 100) {
       lvl.percentOf100Response = 100.0;
     } else {
-      lvl.percentOf100Response = Number(((lvl.meanArea / nominal100Area) * 100).toFixed(2));
+      lvl.percentOf100Response = Number(((Number(lvl.meanArea) / nominal100Area) * 100).toFixed(2));
     }
   }
 
   // 3. Accuracy / Recovery - Strictly recompute percentRecovery from amountRecovered and amountAdded
   for (const r of updated.accuracy.rows) {
-    if (r.amountAdded > 0 && r.amountRecovered > 0) {
-      r.percentRecovery = Number(((r.amountRecovered / r.amountAdded) * 100).toFixed(2));
+    const amtAdded = Number(r.amountAdded);
+    const amtRec = Number(r.amountRecovered);
+    if (amtAdded > 0 && amtRec > 0) {
+      r.percentRecovery = Number(((amtRec / amtAdded) * 100).toFixed(2));
     }
   }
-  const recoveries = updated.accuracy.rows.map((r) => r.percentRecovery);
+  const recoveries = (updated.accuracy?.rows || []).map((r) => r.percentRecovery);
   updated.accuracy.meanRecoveryAllLevels = Number(mean(recoveries).toFixed(2));
   updated.accuracy.rsdAllLevels = Number(rsd(recoveries).toFixed(2));
 
   // 4. Precision
-  const a1 = updated.precision.rows.map((r) => r.analyst1Assay);
-  const a2 = updated.precision.rows.map((r) => r.analyst2Assay);
+  const a1 = (updated.precision?.rows || []).map((r) => r.analyst1Assay);
+  const a2 = (updated.precision?.rows || []).map((r) => r.analyst2Assay);
   const combined = [...a1, ...a2];
 
   updated.precision.analyst1Mean = Number(mean(a1).toFixed(2));
@@ -138,7 +184,7 @@ export function recalculateAMVData(doc: AMVDocumentData): AMVDocumentData {
   // Preparation 4: Diff = ... %
   // Preparation 5: Analyst 1 SD = ...
   // Preparation 6: Analyst 2 SD = ...
-  if (updated.precision.rows.length >= 6) {
+  if ((updated.precision?.rows?.length || 0) >= 6) {
     updated.precision.rows[0].statisticalEvaluation = `Mean = ${formatNum(updated.precision.cumulativeMean, 2)} %`;
     updated.precision.rows[1].statisticalEvaluation = `SD = ${formatNum(updated.precision.cumulativeSd, 3)}`;
     updated.precision.rows[2].statisticalEvaluation = `%RSD = ${formatNum(updated.precision.cumulativeRsd, 2)} %`;
@@ -148,21 +194,23 @@ export function recalculateAMVData(doc: AMVDocumentData): AMVDocumentData {
   }
 
   // 5. Robustness max RSD calculated dynamically from the actual rows
-  const robRsds = updated.robustness.rows.map((r) => r.rsdPercent);
+  const robRsds = (updated.robustness?.rows || []).map((r) => Number(r.rsdPercent));
   const maxRobRsd = robRsds.length > 0 ? Math.max(...robRsds) : 0.13;
 
   // 6. Stability standard and sample differences derived strictly from raw peak areas
-  const initialStd = updated.solutionStability.rows[0]?.standardArea || 1;
-  const initialSpl = updated.solutionStability.rows[0]?.sampleArea || 1;
+  const initialStd = Number(updated.solutionStability.rows?.[0]?.standardArea) || 1;
+  const initialSpl = Number(updated.solutionStability.rows?.[0]?.sampleArea) || 1;
   let maxStdDiff = 0;
   let maxSplDiff = 0;
 
-  updated.solutionStability.rows.forEach((r, idx) => {
+  (updated.solutionStability.rows || []).forEach((r, idx) => {
     if (idx === 0) {
       r.diffPercent = '0.00 % / 0.00 %';
     } else {
-      const dStd = (Math.abs(r.standardArea - initialStd) / initialStd) * 100;
-      const dSpl = (Math.abs(r.sampleArea - initialSpl) / initialSpl) * 100;
+      const curStd = Number(r.standardArea) || 0;
+      const curSpl = Number(r.sampleArea) || 0;
+      const dStd = (Math.abs(curStd - initialStd) / initialStd) * 100;
+      const dSpl = (Math.abs(curSpl - initialSpl) / initialSpl) * 100;
       if (dStd > maxStdDiff) maxStdDiff = dStd;
       if (dSpl > maxSplDiff) maxSplDiff = dSpl;
       r.diffPercent = `${dStd.toFixed(2)} % / ${dSpl.toFixed(2)} %`;
@@ -320,3 +368,6 @@ export const SALT_FACTORS: Record<string, number> = {
   'Diltiazem HCl': 0.8938,
   'free acid/base': 1.0000
 };
+
+export { recalculateRSData, recalculateDissolutionData } from './calculations';
+

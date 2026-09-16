@@ -14,6 +14,7 @@ export interface UniqueCodes {
   companyName?: string;
   companyAddress?: string;
   documentNo: string;
+  reportNo?: string;
   validationBatchNo: string;
   standardLotNo: string;
   referenceStandardLot: string;
@@ -68,7 +69,37 @@ function hashString(str: string): number {
   return Math.abs(hash);
 }
 
-export function getBaseMonograph(productName: string): MonographDefinition {
+
+export function generateUniqueValidationCodes(productName: string): UniqueCodes & { batchNo: string } {
+  const hash = hashString(productName);
+  
+  const pad = (n: number) => n.toString().padStart(3, '0');
+  
+  const docBase = Math.abs(hash) % 10000;
+  const documentNo = `AMV-UNK-2604-${pad(docBase)}`;
+  
+  const batchBase = Math.abs(hash) % 1000;
+  const validationBatchNo = `B${pad(batchBase)}`;
+  const standardLotNo = `RS${pad(batchBase)}`;
+  const referenceStandardLot = `REF-${pad(batchBase)}`;
+  
+  return {
+    documentNo,
+    validationBatchNo,
+    batchNo: validationBatchNo,
+    standardLotNo,
+    referenceStandardLot,
+    effectiveDate: '01-Jan-2026',
+    supersedes: 'Nil',
+    preparedDate: '01-Jan-2026',
+    reviewedDate: '01-Jan-2026',
+    approvedDate: '01-Jan-2026'
+  };
+}
+
+export function getBaseMonograph
+
+(productName: string): MonographDefinition {
   const norm = productName.toLowerCase();
   const doseMatch = productName.match(/(\d+(?:\.\d+)?)\s*(mg|g|mcg|µg)/i);
   const explicitDose = doseMatch ? parseFloat(doseMatch[1]) : null;
@@ -289,7 +320,7 @@ export function getBaseMonograph(productName: string): MonographDefinition {
       },
       retentionTimeMin: 4.48,
       targetNominalWeight: 40,
-      nominalArea: 3120400,
+      nominalArea: 3120000,
       workingConcNum: 0.2,
       flowRateNum: 1.5,
       columnTempNum: 30,
@@ -353,7 +384,7 @@ export function getBaseMonograph(productName: string): MonographDefinition {
       },
       retentionTimeMin: 7.22,
       targetNominalWeight: 20,
-      nominalArea: 2050800,
+      nominalArea: 2080000,
       workingConcNum: 0.04,
       flowRateNum: 1,
       columnTempNum: 30,
@@ -773,7 +804,7 @@ export function getBaseMonograph(productName: string): MonographDefinition {
       },
       retentionTimeMin: 8.62,
       targetNominalWeight: 20,
-      nominalArea: 1720300,
+      nominalArea: 1720.00,
       workingConcNum: 0.02,
       flowRateNum: 1,
       columnTempNum: 30,
@@ -813,506 +844,120 @@ export function getBaseMonograph(productName: string): MonographDefinition {
     };
   }
   const hash = hashString(productName);
-  const cleaned = productName.replace(/tablets?|capsules?|injections?|gastro-resistant|delayed-release|\d+\s*mg|\d+\s*g/gi, "").trim() || "Active Pharmaceutical Ingredient";
+  const cleaned = productName.replace(/tablets?|capsules?|injections?|gastro-resistant|delayed-release|\d+\s*mg|\d+\s*g/gi, '').trim() || "Active Pharmaceutical Ingredient";
   const doseValue = explicitDose ?? 50;
   const doseUnit = explicitUnit ?? "mg";
   const rtSeed = 3.8 + hash % 60 / 10;
   const wavelengthList = [215, 220, 225, 230, 238, 245, 254, 260, 275, 280, 290, 310];
   const wavelength = wavelengthList[hash % wavelengthList.length];
-  const flowRates = [1, 1.2, 1.5, 0.8];
-  const flowRate = flowRates[hash % flowRates.length];
-  const temps = [25, 30, 35, 40];
-  const colTemp = temps[hash % temps.length];
-  const baseArea = 16e5 + hash % 180 * 1e4;
-  const nominalWeight = doseValue <= 10 ? 10 : doseValue <= 50 ? 25 : 50;
-  const workingConc = doseValue <= 10 ? 0.01 : doseValue <= 50 ? 0.02 : 0.05;
-  const bufferPHList = [2.5, 3, 3.5, 4.5, 6, 6.8, 7];
-  const bufferPH = bufferPHList[hash % bufferPHList.length];
+  
+  const blankField = "__________ [ENTER RAW DATA]";
   return {
     activeSubstance: cleaned,
     labelClaim: doseMatch ? `${doseValue} ${doseUnit} ${cleaned} per dosage unit` : productName,
     reference: `USP/BP Monograph for ${productName}, USP <621>, USP <1225>, ICH Q2(R2)`,
     chromatographicConditions: {
-      column: `USP L1 C18 column (4.6 mm x ${doseValue > 100 ? "250" : "150"} mm, 5 \xB5m)`,
-      mobilePhase: `Acetonitrile : 0.02 M Potassium Dihydrogen Phosphate Buffer pH ${bufferPH.toFixed(1)} (45:55 v/v)`,
-      flowRate: `${flowRate.toFixed(1)} mL/min`,
-      detectionWavelength: `UV at ${wavelength} nm`,
-      injectionVolume: "10 \xB5L",
-      columnTemperature: `${colTemp} \xB0C`,
-      runTime: `${(rtSeed * 1.8).toFixed(1)} min`,
-      diluent: "Mobile Phase",
-      workingConcentration: `${workingConc} mg/mL (${Math.round(workingConc * 1e3)} \xB5g/mL)`,
-      approxRetentionTime: `${rtSeed.toFixed(1)} min`,
-      note: `Dissolve 2.72 g KH2PO4 in 1000 mL HPLC grade water, adjust pH to ${bufferPH.toFixed(1)} \xB1 0.05 with dilute H3PO4.`
+      column: blankField,
+      mobilePhase: blankField,
+      flowRate: blankField,
+      detectionWavelength: blankField,
+      injectionVolume: blankField,
+      columnTemperature: blankField,
+      runTime: blankField,
+      diluent: blankField,
+      workingConcentration: blankField,
+      approxRetentionTime: blankField,
+      note: blankField
     },
     solutionPreparation: {
-      standardSolution: `Weigh accurately ${nominalWeight.toFixed(1)} mg of ${cleaned} RS into a 100 mL volumetric flask, dissolve and dilute with diluent. Dilute 5.0 mL to 50 mL with diluent.`,
-      sampleSolution: `Weigh 20 dosage units, calculate average unit weight, finely powder. Transfer powder equivalent to ${nominalWeight.toFixed(1)} mg ${cleaned} into 100 mL flask, add 70 mL diluent, sonicate 20 min, dilute to mark, filter through 0.45 \xB5m filter. Dilute 5.0 mL to 50 mL.`
+      standardSolution: blankField,
+      sampleSolution: blankField
     },
-    retentionTimeMin: Number(rtSeed.toFixed(2)),
-    targetNominalWeight: nominalWeight,
-    nominalArea: baseArea,
-    workingConcNum: workingConc,
-    flowRateNum: flowRate,
-    columnTempNum: colTemp,
-    mobilePhaseBufferPH: bufferPH,
-    reagents: ["Acetonitrile", "Potassium Dihydrogen Phosphate", "Phosphoric Acid", "Milli-Q Water"]
+    retentionTimeMin: 5.0, // Placeholder
+    targetNominalWeight: 50,
+    nominalArea: 189e4,
+    workingConcNum: 0.05,
+    flowRateNum: 1.0, // Placeholder
+    columnTempNum: 30, // Placeholder
+    mobilePhaseBufferPH: 4.0, // Placeholder
+    reagents: ["Acetonitrile", "Milli-Q Water", blankField]
   };
 }
-export function buildFullAMVDataFromMonograph(productName, mono, existingCodes, fpsOverrides?: any) {
-  const codes = {
-    ...generateUniqueValidationCodes(productName),
-    ...existingCodes || {}
-  };
-  const extracted = extractDynamicLabelClaim(productName, '', fpsOverrides?.targetApi || mono.activeSubstance, mono.labelClaim);
-  let dynamicLabelClaim = extracted.labelClaim;
-  let dynamicActiveSubstance = extracted.activeSubstance;
-  const baseArea = mono.nominalArea;
-  const rt = mono.retentionTimeMin;
-  const nominalWeight = extracted.numericStrength || mono.targetNominalWeight;
-  const workingConc = mono.workingConcNum || 0.05;
-  const flow = mono.flowRateNum || 1;
-  const temp = mono.columnTempNum || 30;
-  const pH = mono.mobilePhaseBufferPH;
-  const runKey = `${productName.toLowerCase()}_wt${nominalWeight}_area${baseArea}`;
-  const ssMath = generateSystemSuitabilityInjections(runKey, baseArea, nominalWeight, 5);
-  const randSS = createSeededRandom(`${runKey}_ss_plates`);
-  const ssInjections = ssMath.injections.map((inj, idx) => ({
-    injectionNo: inj.srNo,
-    peakArea: inj.peakArea,
-    tailingFactor: Number((1.12 + (randSS() - 0.5) * 0.04).toFixed(2)),
-    theoreticalPlates: Math.round(3800 + (randSS() - 0.5) * 120)
-  }));
-  const specificityRows = [
-    { solution: "Blank Diluent", retentionTime: "N/A", interference: "None" },
-    { solution: "Placebo Solution", retentionTime: "N/A", interference: "None" },
-    { solution: "Standard Solution", retentionTime: `${rt.toFixed(2)} min`, interference: "None" },
-    { solution: "Sample Solution", retentionTime: `${(rt + 0.01).toFixed(2)} min`, interference: "None" }
-  ];
-  const nominalPpm = workingConc < 1 ? workingConc * 1e3 : workingConc;
-  const linMath = generateLinearityData(runKey, nominalPpm, baseArea, [50, 80, 100, 120, 150]);
-  const lvl100 = linMath.levels.find((lvl) => lvl.nominalPercent === 100) || linMath.levels[2];
-  const area100 = lvl100.peakArea;
-  const linearityLevels = linMath.levels.map((lvl) => ({
-    levelPercent: lvl.nominalPercent,
-    concentration: Number(lvl.concentrationPpm.toFixed(2)),
-    meanArea: lvl.peakArea,
-    percentOf100Response: lvl.nominalPercent === 100 ? 100.0 : Number(((lvl.peakArea / area100) * 100).toFixed(2))
-  }));
-  const accMath = generateAccuracyRecoveryData(runKey, nominalWeight, [50, 100, 150], baseArea);
-  let expCounter = 1;
-  const accRows = [];
-  for (const lvl of accMath.levels) {
-    for (const rep of lvl.replicates) {
-      accRows.push({
-        levelPercent: lvl.levelPercent,
-        expNo: expCounter++,
-        amountAdded: rep.amountAddedMg,
-        amountRecovered: rep.amountRecoveredMg,
-        percentRecovery: rep.percentRecovery
-      });
-    }
-  }
-  
-  const P = fpsOverrides?.potencyDecimal || 1.0;
-  const F = fpsOverrides?.saltFactor || 1.0;
-  const A_std = ssMath.meanArea;
-  
-  const ctxPrec = {
-    targetPct: 100,
-    LC_mg: nominalWeight,
-    A_std: A_std,
-    W_S: nominalWeight,
-    D_S: 100,
-    D_T: 100,
-    W_T: nominalWeight,
-    AVG_WT: nominalWeight,
-    P: P,
-    F: F,
-    methodType: 'assay' as const
-  };
-  const precMath = generatePrecisionData(runKey, nominalWeight, baseArea, 100, false, ctxPrec);
 
-  const precisionRows = precMath.analyst1.rows.map((r, i) => ({
-    sampleNo: `Preparation ${r.determinationNo}`,
-    analyst1Assay: r.percentAssayOrDissolved,
-    analyst2Assay: precMath.analyst2.rows[i].percentAssayOrDissolved,
-    statisticalEvaluation: ""
-  }));
-  const randRob = createSeededRandom(`${runKey}_robustness`);
-  const robustnessRows = [
-    {
-      conditionVaried: `Flow Rate: ${(flow - 0.1).toFixed(1)} mL/min`,
-      rsdPercent: Number((0.11 + (randRob() - 0.5) * 0.04).toFixed(2)),
-      tailingFactor: Number((1.14 + (randRob() - 0.5) * 0.03).toFixed(2)),
-      theoreticalPlates: Math.round(3910 + (randRob() - 0.5) * 120)
-    },
-    {
-      conditionVaried: `Flow Rate: ${(flow + 0.1).toFixed(1)} mL/min`,
-      rsdPercent: Number((0.09 + (randRob() - 0.5) * 0.03).toFixed(2)),
-      tailingFactor: Number((1.13 + (randRob() - 0.5) * 0.03).toFixed(2)),
-      theoreticalPlates: Math.round(3780 + (randRob() - 0.5) * 120)
-    },
-    {
-      conditionVaried: `Col Temp: ${temp - 3} \xB0C`,
-      rsdPercent: Number((0.1 + (randRob() - 0.5) * 0.04).toFixed(2)),
-      tailingFactor: Number((1.15 + (randRob() - 0.5) * 0.03).toFixed(2)),
-      theoreticalPlates: Math.round(3820 + (randRob() - 0.5) * 120)
-    },
-    {
-      conditionVaried: `Col Temp: ${temp + 3} \xB0C`,
-      rsdPercent: Number((0.08 + (randRob() - 0.5) * 0.03).toFixed(2)),
-      tailingFactor: Number((1.14 + (randRob() - 0.5) * 0.03).toFixed(2)),
-      theoreticalPlates: Math.round(3870 + (randRob() - 0.5) * 120)
-    },
-    {
-      conditionVaried: pH !== void 0 ? `Mobile Phase pH: ${(pH - 0.2).toFixed(1)}` : "Mobile Phase Organic: -2% v/v",
-      rsdPercent: Number((0.12 + (randRob() - 0.5) * 0.04).toFixed(2)),
-      tailingFactor: Number((1.16 + (randRob() - 0.5) * 0.03).toFixed(2)),
-      theoreticalPlates: Math.round(3790 + (randRob() - 0.5) * 120)
-    },
-    {
-      conditionVaried: pH !== void 0 ? `Mobile Phase pH: ${(pH + 0.2).toFixed(1)}` : "Mobile Phase Organic: +2% v/v",
-      rsdPercent: Number((0.1 + (randRob() - 0.5) * 0.04).toFixed(2)),
-      tailingFactor: Number((1.13 + (randRob() - 0.5) * 0.03).toFixed(2)),
-      theoreticalPlates: Math.round(3890 + (randRob() - 0.5) * 120)
-    }
-  ];
-  const randStab = createSeededRandom(`${runKey}_stability`);
-  const stabilityRows = [
-    {
-      timePoint: "Initial (0 h)",
-      standardArea: baseArea,
-      sampleArea: Math.round(baseArea * (1 + (randStab() - 0.5) * 8e-4)),
-      diffPercent: "0.00 % / 0.00 %"
-    },
-    {
-      timePoint: "3 h",
-      standardArea: Math.round(baseArea * (1 - 15e-5 - randStab() * 2e-4)),
-      sampleArea: Math.round(baseArea * (1 - 1e-4 - randStab() * 2e-4)),
-      diffPercent: "0.02 % / 0.03 %"
-    },
-    {
-      timePoint: "6 h",
-      standardArea: Math.round(baseArea * (1 - 5e-4 - randStab() * 4e-4)),
-      sampleArea: Math.round(baseArea * (1 - 3e-4 - randStab() * 4e-4)),
-      diffPercent: "0.06 % / 0.05 %"
-    },
-    {
-      timePoint: "12 h",
-      standardArea: Math.round(baseArea * (1 - 9e-4 - randStab() * 6e-4)),
-      sampleArea: Math.round(baseArea * (1 - 7e-4 - randStab() * 6e-4)),
-      diffPercent: "0.11 % / 0.10 %"
-    },
-    {
-      timePoint: "18 h",
-      standardArea: Math.round(baseArea * (1 - 13e-4 - randStab() * 8e-4)),
-      sampleArea: Math.round(baseArea * (1 - 11e-4 - randStab() * 8e-4)),
-      diffPercent: "0.15 % / 0.14 %"
-    },
-    {
-      timePoint: "24 h",
-      standardArea: Math.round(baseArea * (1 - 19e-4 - randStab() * 1e-3)),
-      sampleArea: Math.round(baseArea * (1 - 16e-4 - randStab() * 1e-3)),
-      diffPercent: "0.22 % / 0.19 %"
-    }
-  ];
-  const reagentNames = mono.reagents && mono.reagents.length > 0 ? mono.reagents : ["Acetonitrile", "Potassium Dihydrogen Phosphate", "Phosphoric Acid", "Milli-Q Water"];
-  const reagents = reagentNames.map((name, idx) => ({
-    name,
-    grade: name.includes("Water") || name.includes("Acetonitrile") || name.includes("Methanol") ? "HPLC Grade" : "AR Grade",
-    make: idx % 2 === 0 ? "Merck" : "Sigma-Aldrich",
-    batchNo: `B${102900 + idx * 17}`
-  }));
-  reagents.push({
-    name: `${dynamicActiveSubstance} RS (Lot: ${codes.referenceStandardLot}, Potency: 99.82 % as-is, Valid through: 31-Dec-2027)`,
-    grade: "USP Reference Standard",
-    make: "USP / Official Reference Standard",
-    batchNo: codes.referenceStandardLot
-  });
-  const equipment = [
-    {
-      srNo: 1,
-      name: "HPLC System with UV / PDA detector \u2014 System-I (Analyst 1)",
-      idNo: "HPLC/QC/001",
-      calibrationDate: "15-Jan-2026",
-      dueDate: "14-Jan-2027"
-    },
-    {
-      srNo: 2,
-      name: "HPLC System with UV / PDA detector \u2014 System-II (Analyst 2)",
-      idNo: "HPLC/QC/002",
-      calibrationDate: "20-Feb-2026",
-      dueDate: "19-Feb-2027"
-    },
-    {
-      srNo: 3,
-      name: `Column \u2014 Lot A (${mono.chromatographicConditions.column})`,
-      idNo: "COL/HPLC/001",
-      calibrationDate: "Not applicable \u2013 PQ",
-      dueDate: "Not applicable"
-    },
-    {
-      srNo: 4,
-      name: `Column \u2014 Lot B (${mono.chromatographicConditions.column})`,
-      idNo: "COL/HPLC/002",
-      calibrationDate: "Not applicable \u2013 PQ",
-      dueDate: "Not applicable"
-    },
-    {
-      srNo: 5,
-      name: "Analytical Balance (Micro & Semi-micro)",
-      idNo: "BAL/QC/001",
-      calibrationDate: "10-Mar-2026",
-      dueDate: "09-Mar-2027"
-    },
-    {
-      srNo: 6,
-      name: "Ultrasonic Bath with degasser",
-      idNo: "USB/QC/001",
-      calibrationDate: "05-Apr-2026",
-      dueDate: "04-Apr-2027"
-    },
-    {
-      srNo: 7,
-      name: "Digital pH Meter (with 3-point calibration)",
-      idNo: "PH/QC/001",
-      calibrationDate: "12-Apr-2026",
-      dueDate: "11-Apr-2027"
-    },
-    {
-      srNo: 8,
-      name: "Karl Fischer Titrator (Volumetric)",
-      idNo: "KF/QC/001",
-      calibrationDate: "18-Apr-2026",
-      dueDate: "17-Apr-2027"
-    }
-  ];
-  const protocolNumber = codes.documentNo;
-  const reportNumber = codes.documentNo.includes("/AMV/") ? codes.documentNo.replace("/AMV/", "/AMVR/") : `${codes.documentNo}/R`;
-  const doc = {
-    companyName: existingCodes?.companyName || "WESTCOAST PHARMACEUTICAL WORKS LTD.",
-    companyAddress: existingCodes?.companyAddress || "GOTA, Ahmedabad, Gujarat, India",
-    documentNo: codes.documentNo,
-    reportNo: reportNumber,
-    protocolDate: codes.preparedDate || "01-Apr-2026",
-    reportDate: (existingCodes as any)?.reportDate || codes.approvedDate || "20-Apr-2026",
-    productName,
-    activeSubstance: dynamicActiveSubstance,
-    labelClaim: dynamicLabelClaim,
-    testParameter: "Assay by HPLC",
-    reference: mono.reference,
-    batchNoUsed: codes.validationBatchNo,
-    effectiveDate: (existingCodes as any)?.reportDate || codes.effectiveDate || "20-Apr-2026",
-    supersedes: codes.supersedes,
-    signOffs: {
-      preparedBy: {
-        name: "Sahil Panchal",
-        designation: "QC. Chemist (Analyst \u2013 QC)",
-        date: codes.preparedDate
-      },
-      reviewedBy: {
-        name: "Anil Parmar",
-        designation: "QC. In-charge (Manager \u2013 QC)",
-        date: codes.reviewedDate
-      },
-      approvedBy: {
-        name: "Hardik Shah",
-        designation: "QA In-charge (Head \u2013 QA)",
-        date: (existingCodes as any)?.reportDate || codes.approvedDate || "20-Apr-2026"
-      }
-    },
-    objective: `To validate the HPLC analytical method for quantification of ${dynamicActiveSubstance} in ${productName} in compliance with ICH Q2(R2) and USP <1225> guidelines.`,
-    scope: `This protocol applies to the validation of the HPLC Assay method for ${productName} manufactured at ${existingCodes?.companyName || "Westcoast Pharmaceutical Works Ltd."}.`,
-    verificationDetails: {
-      reference: mono.reference,
-      typeOfVerification: "Verification of a compendial assay procedure under actual conditions of use, as per USP <1225> and ICH Q2(R2)",
-      testToBeVerified: `Assay by HPLC (${dynamicActiveSubstance} content)`,
-      verificationTeam: "Analyst 1: Sahil Panchal (Chemist, QC); Analyst 2: Smit Patel (Executive, QC); Supervisor: Anil Parmar (Manager, QC)",
-      experimentalDetails: `Specificity, system suitability, linearity (50 % to 150 %), accuracy / recovery (50 %, 100 %, 150 % or 80 %, 100 %, 120 %), range (80 %, 100 %, 120 %), precision (repeatability) and intermediate precision (six determinations each by 2 analysts on 2 instruments on 2 different days), robustness and stability of analytical solutions up to 24 hours, executed on batch ${codes.validationBatchNo} with the corresponding placebo blend.`
-    },
-    chromatographicConditions: mono.chromatographicConditions,
-    solutionPreparation: mono.solutionPreparation,
-    calculationFormula: {
-      assayFormula: "Assay (%) = (AT / AS) * (WS / DS) * (DT / WT) * (AVG_WT / LC) * P * 100",
-      contentFormula: "Content (mg/tablet) = Assay (%) * Label Claim (mg) / 100",
-      notes: [
-        "• AT = Peak area of analyte in sample chromatogram",
-        "• AS = Mean peak area of analyte in standard chromatograms",
-        `• WS = Weight of ${dynamicActiveSubstance} working standard taken (${nominalWeight.toFixed(2)} mg)`,
-        "• DS = Standard solution final dilution volume (100.0 mL)",
-        "• DT = Sample solution final dilution volume (100.0 mL)",
-        "• WT = Weight of powdered dosage unit sample taken (mg)",
-        "• AVG_WT = Average weight of 20 dosage units (mg)",
-        `• LC = Label claim of ${dynamicActiveSubstance} per unit (${dynamicLabelClaim.match(/(\d+(?:\.\d+)?)\s*(mg|g|mcg|µg)/i)?.[0] || `${nominalWeight.toFixed(2)} mg`})`,
-        `• P = Numerical decimal purity of Reference Standard = 0.9982 (99.82 % on as-is basis, from RS Certificate of Analysis Lot: ${codes.referenceStandardLot})`
-      ]
-    },
-    reagentsAndStandards: reagents,
-    equipment,
-    validationParameters: [],
-    // Populated dynamically in recalculateAMVData
-    systemSuitability: {
-      injections: ssInjections,
-      meanArea: 0,
-      rsdArea: 0,
-      meanTailing: 0,
-      rsdTailing: 0,
-      meanPlates: 0,
-      rsdPlates: 0,
-      acceptanceTextProtocol: "Acceptance Criteria: %RSD of Peak Area <= 2.0%, Tailing Factor <= 2.0, Theoretical Plates >= 2000. (Observed Result: To be recorded upon execution)",
-      acceptanceTextReport: "Acceptance: %RSD of Peak Area <= 2.0%, Tailing Factor <= 2.0, Theoretical Plates >= 2000. Result: Complies with ICH / USP criteria"
-    },
-    specificity: {
-      rows: specificityRows,
-      acceptanceTextProtocol: "Acceptance Criteria: No interfering peak from blank or placebo matrix shall co-elute with the active substance peak. Peak purity shall be verified.",
-      conclusionReport: `Conclusion: No peak interference observed at ${dynamicActiveSubstance} retention time (${rt.toFixed(2)} min) in blank or placebo chromatograms. Peak purity confirmed by PDA detector.`
-    },
-    linearity: {
-      levels: linearityLevels,
-      regression: {
-        correlationR: 0.99993,
-        rSquared: 0.9999,
-        slope: Math.round(baseArea / nominalPpm),
-        yIntercept: -1.45,
-        yInterceptBiasPercent: 0
-      },
-      acceptanceTextProtocol: "Acceptance Criteria: Correlation coefficient (r) shall be \u2265 0.999 (r\xB2 \u2265 0.998). The y-intercept bias shall be within \xB12.0% of nominal response.",
-      conclusionReport: "Conclusion: Method demonstrates linear response from 50% to 150% of nominal concentration with r \u2265 0.999."
-    },
-    accuracy: {
-      rows: accRows,
-      meanRecoveryAllLevels: 99.9,
-      rsdAllLevels: 0.19,
-      acceptanceTextProtocol: "Acceptance Criteria: Mean recovery at each concentration level shall be between 98.0% and 102.0%. Overall % RSD across 9 determinations shall be NMT 2.0%.",
-      conclusionReport: "Conclusion: Mean recovery at each level was between 98.0% and 102.0% with an overall %RSD of 0.42%, confirming high method accuracy."
-    },
-    precision: {
-      rows: precisionRows,
-      analyst1Mean: 99.98,
-      analyst1Sd: 0.319,
-      analyst1Rsd: 0.32,
-      analyst2Mean: 99.88,
-      analyst2Sd: 0.397,
-      analyst2Rsd: 0.4,
-      cumulativeMean: 99.93,
-      cumulativeSd: 0.347,
-      cumulativeRsd: 0.35,
-      diffBetweenMeans: 0.1,
-      acceptanceTextProtocol: "Acceptance Criteria: % RSD of six assay results for Analyst 1 and Analyst 2 shall be NMT 2.0%. Overall cumulative % RSD (n=12) shall be NMT 2.0%. Absolute difference between means shall be NMT 1.5%.",
-      conclusionReport: "Conclusion: Repeatability %RSD is 0.33% and Intermediate Precision cumulative %RSD (n=12) is 0.37%, demonstrating excellent method precision."
-    },
-    robustness: {
-      instructionParagraph: pH !== void 0 ? "Evaluate system suitability under deliberately varied HPLC conditions (Flow rate \xB10.1 mL/min, Column Temp \xB13\xB0C, Mobile phase pH \xB10.2)." : "Evaluate system suitability under deliberately varied HPLC conditions (Flow rate \xB10.1 mL/min, Column Temp \xB13\xB0C, Mobile phase composition \xB12% v/v).",
-      rows: robustnessRows,
-      acceptanceTextProtocol: "Acceptance Criteria: System suitability criteria (%RSD NMT 2.0%, Tailing NMT 2.0, Plates NLT 2000) shall be complied with under all varied conditions.",
-      conclusionReport: "Conclusion: Deliberate minor variations in flow rate, temperature, and mobile phase did not significantly impact system suitability or test results."
-    },
-    solutionStability: {
-      rows: stabilityRows,
-      acceptanceTextProtocol: "Acceptance Criteria: The cumulative percentage difference in peak response for standard and sample solutions over 24 hours shall not exceed 2.0%.",
-      conclusionReport: "Conclusion: Standard and sample solutions are stable at room temperature (25 deg C) for up to 24 hours with peak area variations < 1.0%."
-    },
-    reviewChecklist: [
-      { particulars: "Raw data, calculations & chromatograms reviewed", compliance: "Yes \u2013 Reviewed & verified" },
-      { particulars: "Electronic audit trail reviewed", compliance: "Yes \u2013 Compliant with 21 CFR Part 11" },
-      { particulars: "Deviation / OOS raised", compliance: "NIL (No deviation or OOS encountered)" },
-      {
-        particulars: "Annexures attached",
-        compliance: "Annexure I to Annexure VIII (Chromatograms, Calibration Plots & Raw Logs)"
-      }
-    ],
-    abbreviations: [
-      { abbreviation: "AMV", expansion: "Analytical Method Validation" },
-      { abbreviation: "HPLC", expansion: "High Performance Liquid Chromatography" },
-      { abbreviation: "ICH", expansion: "International Council for Harmonisation" },
-      { abbreviation: "USP", expansion: "United States Pharmacopeia" },
-      { abbreviation: "%RSD", expansion: "Relative Standard Deviation" },
-      { abbreviation: "QC / QA", expansion: "Quality Control / Quality Assurance" },
-      { abbreviation: "PDA", expansion: "Photodiode Array" },
-      { abbreviation: "KF", expansion: "Karl Fischer (water determination)" },
-      { abbreviation: "ACN", expansion: "Acetonitrile" },
-      { abbreviation: "mcg/mL / \xB5g/mL", expansion: "Microgram per millilitre" },
-      { abbreviation: "\xB5V\xB7s", expansion: "Microvolt second (peak area unit)" },
-      { abbreviation: "NMT", expansion: "Not More Than" },
-      { abbreviation: "NLT", expansion: "Not Less Than" },
-      { abbreviation: "RT", expansion: "Retention Time" },
-      { abbreviation: "STP", expansion: "Standard Test Procedure" },
-      { abbreviation: "S/N", expansion: "Signal-to-Noise Ratio" },
-      { abbreviation: "WS / RS", expansion: "Working Standard / Reference Standard" },
-      { abbreviation: "OOS", expansion: "Out of Specification" }
-    ],
-    revisionHistory: [
-      {
-        version: "00",
-        effectiveDate: "01-Apr-2026",
-        docNumber: protocolNumber,
-        reason: `Analytical Method Validation Protocol issued as ${protocolNumber} for ${productName} by HPLC (Approved: 31-Mar-2026)`
-      },
-      {
-        version: "01",
-        effectiveDate: codes.effectiveDate || "21-Apr-2026",
-        docNumber: reportNumber,
-        reason: `Executed Analytical Method Validation Report issued as ${reportNumber} for ${productName} by HPLC (Approved: 20-Apr-2026). Validates chromatographic parameters (Retention Time ~${mono.chromatographicConditions.approxRetentionTime}, detection wavelength ${mono.chromatographicConditions.detectionWavelength}, column ${mono.chromatographicConditions.column}, mobile phase ${mono.chromatographicConditions.mobilePhase}, column temperature ${mono.chromatographicConditions.columnTemperature}) with full system suitability, linearity, precision, and accuracy under ICH Q2(R2).`
-      }
-    ]
-  };
-  return postProcessSanitizeDocument(recalculateAMVData(doc), 'assay');
+export function getMethodDocumentNumber(baseDocNo: string, method: string, isReport: boolean = false): string {
+  let clean = (baseDocNo || 'AMV-UNK-2604-101').replace(/\/R$/i, '').replace(/-R$/i, '');
+  clean = clean.replace(/-(ASSAY|RS|DIS|DISS|MLT)/gi, '');
+  let tag = 'ASSAY';
+  if (method === 'related_substances') tag = 'RS';
+  else if (method === 'dissolution') tag = 'DIS';
+  else if (method === 'microbial_limit_test') tag = 'MLT';
+  let fullCode = clean;
+  if (clean.startsWith('AMV-')) {
+    fullCode = clean.replace('AMV-', `AMV-${tag}-`);
+  } else if (clean.startsWith('AMVER-')) {
+    fullCode = clean.replace('AMVER-', `AMVER-${tag}-`);
+  } else if (clean.startsWith('WC/QC/AMV-')) {
+    fullCode = clean.replace('WC/QC/AMV-', `WC/QC/AMV-${tag}-`);
+  } else if (clean.startsWith('WC/QC/AMV/')) {
+    fullCode = clean.replace('WC/QC/AMV/', `WC/QC/AMV-${tag}/`);
+  } else {
+    fullCode = `${clean}-${tag}`;
+  }
+  return isReport ? `${fullCode}/R` : fullCode;
 }
 
-export function generateUniqueValidationCodes(productName: string): UniqueCodes {
-  // Derive prefix from product name
-  const words = productName.split(/[\s,-]+/).filter(w => /^[a-zA-Z]+$/.test(w) && w.toLowerCase() !== 'tablets' && w.toLowerCase() !== 'capsules');
-  let code = 'UNK';
-  if (words.length > 0) {
-    if (words.length >= 2 && words[0].length >= 2 && words[1].length >= 1) {
-       code = words[0].substring(0, 2).toUpperCase() + words[1].substring(0, 1).toUpperCase();
-    } else {
-       code = words[0].substring(0, 3).toUpperCase();
-    }
-  }
-
-  // Sequence based on Date for uniqueness when refreshed/generated
-  const now = new Date();
-  const yymm = now.getFullYear().toString().substring(2) + (now.getMonth() + 1).toString().padStart(2, '0');
+export function generateAMVDataForProduct(productName: string, overrides?: any): AMVDocumentData {
+  const base = getBaseMonograph(productName);
+  const blankField = "__________ [ENTER RAW DATA]";
   
-  // Use a short random string or milliseconds portion for the seq
-  // So it doesn't just stick to the same default for all products.
-  const seq = Math.floor(Math.random() * 899) + 100; // 100 to 999
-
-  const docNo = `AMV-${code}-${yymm}-${seq}`;
-  const batchNo = `VAL-${code}-${yymm}${seq}`;
-  const stdLot = `RS-${code}-${yymm}`;
-
   return {
-    documentNo: docNo,
-    validationBatchNo: batchNo,
-    standardLotNo: stdLot,
-    referenceStandardLot: stdLot,
-    effectiveDate: "21-Apr-2026",
-    supersedes: "New Method Protocol",
-    preparedDate: "15-Apr-2026",
-    reviewedDate: "18-Apr-2026",
-    approvedDate: "20-Apr-2026"
-  };
+    documentNo: overrides?.documentNo || blankField,
+    reportNo: overrides?.reportNo || blankField,
+    productName: productName,
+    labelClaim: base.labelClaim,
+    batchNo: overrides?.validationBatchNo || blankField,
+    validationBatchNo: overrides?.validationBatchNo || blankField,
+    standardLotNo: overrides?.standardLotNo || blankField,
+    companyName: overrides?.companyName || blankField,
+    reportDate: overrides?.reportDate || blankField,
+    effectiveDate: overrides?.effectiveDate || blankField,
+    protocolNo: overrides?.protocolNo || blankField,
+    preparedDate: overrides?.preparedDate || blankField,
+    reviewedDate: overrides?.reviewedDate || blankField,
+    approvedDate: overrides?.approvedDate || blankField,
+    
+    testParameter: "Assay by HPLC",
+    reference: base.reference,
+    technique: "HPLC",
+    detector: "UV",
+    column: base.chromatographicConditions.column,
+    mobilePhase: base.chromatographicConditions.mobilePhase,
+    flowRate: base.chromatographicConditions.flowRate,
+    detectionWavelength: base.chromatographicConditions.detectionWavelength,
+    injectionVolume: base.chromatographicConditions.injectionVolume,
+    columnTemperature: base.chromatographicConditions.columnTemperature,
+    runTime: base.chromatographicConditions.runTime,
+    diluent: base.chromatographicConditions.diluent,
+    workingConcentration: base.chromatographicConditions.workingConcentration,
+    approxRetentionTime: base.chromatographicConditions.approxRetentionTime,
+    
+    solutionPreparation: base.solutionPreparation,
+    
+    systemSuitability: { rows: [], acceptanceTextProtocol: blankField, conclusionReport: blankField },
+    specificity: { rows: [], acceptanceTextProtocol: blankField, conclusionReport: blankField },
+    linearity: { levels: [], regression: { correlationR: 0.999, rSquared: 0.999, slope: 1, yIntercept: 0, yInterceptBiasPercent: 0 }, acceptanceTextProtocol: blankField, conclusionReport: blankField },
+    accuracy: { rows: [], meanRecoveryAllLevels: 100, rsdAllLevels: 1, acceptanceTextProtocol: blankField, conclusionReport: blankField },
+    precision: { rows: [], analyst1Mean: 100, analyst1Sd: 1, analyst1Rsd: 1, acceptanceTextProtocol: blankField, conclusionReport: blankField },
+    intermediatePrecision: { rows: [], analyst2Mean: 100, analyst2Sd: 1, analyst2Rsd: 1, overallMean: 100, overallSd: 1, overallRsd: 1, meanDifference: 0, acceptanceTextProtocol: blankField, conclusionReport: blankField },
+    range: { statementProtocol: blankField, statementReport: blankField },
+    robustness: { conditions: [], acceptanceTextProtocol: blankField, conclusionReport: blankField },
+    solutionStability: { timepoints: [], stdRsdLimit: 2, smpRsdLimit: 2, stdDiffLimit: 2, smpDiffLimit: 2, acceptanceTextProtocol: blankField, conclusionReport: blankField },
+    systemSuitabilityInitial: { rows: [], acceptanceTextProtocol: blankField, conclusionReport: blankField }
+  } as any;
 }
 
-export function generateAMVDataForProduct(
-  productName: string,
-  existingCodes?: Partial<UniqueCodes>,
-  fpsOverrides?: any
-) {
-  const mono = getBaseMonograph(productName);
-  if (fpsOverrides) {
-    if (fpsOverrides.column) mono.chromatographicConditions.column = fpsOverrides.column;
-    if (fpsOverrides.mobilePhase) mono.chromatographicConditions.mobilePhase = fpsOverrides.mobilePhase;
-    if (fpsOverrides.flowRate) mono.chromatographicConditions.flowRate = fpsOverrides.flowRate;
-    if (fpsOverrides.wavelength) mono.chromatographicConditions.detectionWavelength = fpsOverrides.wavelength;
-    if (fpsOverrides.injectionVolume) mono.chromatographicConditions.injectionVolume = fpsOverrides.injectionVolume;
-    if (fpsOverrides.columnTemperature) mono.chromatographicConditions.columnTemperature = fpsOverrides.columnTemperature;
-    if (fpsOverrides.runTime) mono.chromatographicConditions.runTime = fpsOverrides.runTime;
-    if (fpsOverrides.diluent) mono.chromatographicConditions.diluent = fpsOverrides.diluent;
-    if (fpsOverrides.workingConcentration) mono.chromatographicConditions.workingConcentration = fpsOverrides.workingConcentration;
-  }
-  return buildFullAMVDataFromMonograph(productName, mono, existingCodes, fpsOverrides?.fpsOverrides?.targetApi);
+
+export function buildFullAMVDataFromMonograph(productName: string, mono: MonographDefinition, overrides?: any): any {
+  return generateAMVDataForProduct(productName, overrides);
 }
+

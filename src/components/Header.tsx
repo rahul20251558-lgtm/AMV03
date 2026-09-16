@@ -17,6 +17,7 @@ interface HeaderProps {
   onFontFamilyChange: (font: FontFamilyType) => void;
   onFontSizeChange: (size: FontSizePt) => void;
   onDownloadDocx: () => void;
+  onSelfTest?: () => void;
   onPrint: () => void;
   onOpenAuditGate?: () => void;
   onOpenSSOTModal?: () => void;
@@ -38,6 +39,7 @@ export const Header: React.FC<HeaderProps> = ({
   onFontFamilyChange,
   onFontSizeChange,
   onDownloadDocx,
+  onSelfTest,
   onPrint,
   onOpenAuditGate,
   onOpenSSOTModal,
@@ -89,6 +91,18 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="inline-flex rounded-lg border border-blue-200 bg-blue-50/60 p-1 text-xs font-medium">
               <button
                 type="button"
+                onClick={() => onValidationMethodChange('assay')}
+                className={`px-3 py-1.5 rounded-md transition-colors ${
+                  validationMethod === 'assay'
+                    ? 'bg-[#1F4E79] text-white shadow-xs font-semibold'
+                    : 'text-zinc-700 hover:text-zinc-900'
+                }`}
+                title="Assay by HPLC Validation Protocol & Report format"
+              >
+                Assay (HPLC)
+              </button>
+              <button
+                type="button"
                 onClick={() => onValidationMethodChange('dissolution')}
                 className={`px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 ${
                   validationMethod === 'dissolution'
@@ -114,41 +128,44 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => onValidationMethodChange('assay')}
-                className={`px-3 py-1.5 rounded-md transition-colors ${
-                  validationMethod === 'assay'
+                onClick={() => onValidationMethodChange('microbial_limit_test')}
+                className={`px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 ${
+                  validationMethod === 'microbial_limit_test'
                     ? 'bg-[#1F4E79] text-white shadow-xs font-semibold'
                     : 'text-zinc-700 hover:text-zinc-900'
                 }`}
-                title="Assay by HPLC Validation Protocol & Report format"
+                title="Microbial Limit Test (MLT) Verification Protocol & Report format"
               >
-                Assay (HPLC)
+                <span>Microbial Limit Test</span>
               </button>
             </div>
 
-            {/* Document Mode Toggle */}
-            <div className="inline-flex rounded-lg border border-zinc-200 bg-zinc-100 p-1 text-xs font-medium">
+
+            {/* PROTOCOL / REPORT Mode Selector */}
+            <div className="inline-flex rounded-lg border border-purple-200 bg-purple-50 p-1 text-xs font-medium">
               <button
                 type="button"
+                title="PROTOCOL Mode (Data cells em dashes, blank execution dates, no compliance flags)"
                 onClick={() => onDocTypeChange('protocol')}
-                className={`px-3 py-1.5 rounded-md transition-colors ${
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-colors ${
                   activeDocType === 'protocol'
-                    ? 'bg-white text-zinc-900 shadow-xs font-semibold'
+                    ? 'bg-purple-600 text-white shadow-xs font-semibold'
                     : 'text-zinc-600 hover:text-zinc-900'
                 }`}
               >
-                Protocol
+                <span>PROTOCOL</span>
               </button>
               <button
                 type="button"
+                title="REPORT Mode (Executed data cells filled, results evaluated against criteria)"
                 onClick={() => onDocTypeChange('report')}
-                className={`px-3 py-1.5 rounded-md transition-colors ${
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-colors ${
                   activeDocType === 'report'
-                    ? 'bg-white text-zinc-900 shadow-xs font-semibold'
+                    ? 'bg-purple-600 text-white shadow-xs font-semibold'
                     : 'text-zinc-600 hover:text-zinc-900'
                 }`}
               >
-                Report
+                <span>REPORT</span>
               </button>
             </div>
 
@@ -210,6 +227,19 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="w-2.5 h-2.5 rounded-full bg-zinc-300 inline-block"></span>
                 Simple Format
               </button>
+              <button
+                type="button"
+                title="Official Westcoast Pharmaceutical Format (Exact PDF layout & font)"
+                onClick={() => onThemeChange('westcoast')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-colors ${
+                  theme === 'westcoast'
+                    ? 'bg-amber-800 text-white shadow-xs font-semibold'
+                    : 'text-zinc-600 hover:text-zinc-900'
+                }`}
+              >
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block"></span>
+                Westcoast Format
+              </button>
             </div>
 
             {/* Typography Controls: Font Family & Font Size (matching uploaded image: Times New Roman 12) */}
@@ -247,6 +277,16 @@ export const Header: React.FC<HeaderProps> = ({
             )}
 
             {/* Compliance Gate Status & Audit Modal Launcher */}
+            {onSelfTest && validationMethod === 'microbial_limit_test' && (
+              <button
+                type="button"
+                onClick={onSelfTest}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition-colors"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Self-Test</span>
+              </button>
+            )}
             {onOpenAuditGate && (
               <button
                 type="button"

@@ -1,3 +1,4 @@
+import { validateMLT, runMLTSelfTest } from "./services/mltValidation";
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { RefreshCw, CheckCircle2, Sparkles } from 'lucide-react';
 import {
@@ -10,18 +11,24 @@ import {
   FontFamilyType,
   FontSizePt,
   DataMode,
+  FooterSignOffData,
 } from './types';
+import { DEFAULT_FOOTER_SIGN_OFF } from './components/SignOffFooter';
 import {
   generateAMVDataForProduct,
   generateUniqueValidationCodes,
+  getMethodDocumentNumber,
 } from './services/pharmaDatabase';
 import { buildFullRSAMVData } from './services/rsPharmaDatabase';
-import { buildFullDissolutionAMVData } from './services/dissolutionPharmaDatabase';
-import { computePctDissolved, computeAssayPct, computeImpPct, SALT_FACTORS, recalculateAMVData } from './services/mathUtils';
+import { generateMLTAMVDataForProduct } from './services/mltPharmaDatabase';
+import { MLTDocumentData } from './types';
+import { buildFullDissolutionAMVData, getDissolutionMonograph } from './services/dissolutionPharmaDatabase';
+import { computePctDissolved, computeAssayPct, computeImpPct, SALT_FACTORS, recalculateAMVData, recalculateRSData, recalculateDissolutionData } from './services/mathUtils';
 import { extractDynamicLabelClaim } from './services/pharmaMathEngine';
 import { generateAndDownloadAMVDocx } from './services/amvDocxGenerator';
 import { generateAndDownloadRSAMVDocx } from './services/rsDocxGenerator';
 import { generateAndDownloadDissolutionDocx } from './services/dissolutionDocxGenerator';
+import { generateAndDownloadMLTDocx } from './services/mltDocxGenerator';
 import { runPreOutputAuditGate, ComplianceGateResult } from './services/complianceAuditGate';
 import { synchronizeDocumentReportDates } from './services/postGenerationSanitizer';
 import { extractSSOTBlock } from './services/selfAuditEngine';
@@ -31,6 +38,7 @@ import { AMVInputForm } from './components/AMVInputForm';
 import { FPSExtractorModal, FPSOverrides } from './components/FPSExtractorModal';
 import { AMVDocumentViewer } from './components/AMVDocumentViewer';
 import { RSAMVDocumentViewer } from './components/RSAMVDocumentViewer';
+import { MLTDocumentViewer } from './components/MLTDocumentViewer';
 import { DissolutionDocumentViewer } from './components/DissolutionDocumentViewer';
 import { ComplianceAuditModal } from './components/ComplianceAuditModal';
 import { MajorChangePromptModal } from './components/MajorChangePromptModal';
@@ -53,15 +61,17 @@ export function App() {
   const [productName, setProductName] = useState('Tibolone Tablets BP 2.5 mg');
   const initialCodes = generateUniqueValidationCodes('Tibolone Tablets BP 2.5 mg');
   const [documentNo, setDocumentNo] = useState(initialCodes.documentNo);
+  const [supersedes, setSupersedes] = useState('');
   const [batchNo, setBatchNo] = useState(initialCodes.validationBatchNo);
   const [standardLot, setStandardLot] = useState(initialCodes.standardLotNo);
   const [companyName, setCompanyName] = useState('WESTCOAST PHARMACEUTICAL WORKS LTD.');
   const [reportDate, setReportDate] = useState('20-Apr-2026');
-  const [docType, setDocType] = useState<DocumentType>('report');
+  const [docType, setDocType] = useState<DocumentType>('protocol');
   const [theme, setTheme] = useState<ThemeFormat>('blue'); // 'blue' (Executive Blue) or 'simple' (Simple Format No Color)
   const [fontFamily, setFontFamily] = useState<FontFamilyType>('Times New Roman'); // Matches authentic monograph
   const [fontSize, setFontSize] = useState<FontSizePt>(12); // Standard 12pt pharma standard
   const [dataMode, setDataMode] = useState<DataMode>('DEMO'); // 'TEMPLATE' (default blank raw data) or 'DEMO' (verified analytical demonstration with watermark)
+  const [footerSignOffData, setFooterSignOffData] = useState<FooterSignOffData>(DEFAULT_FOOTER_SIGN_OFF);
   
     const [validationResults, setValidationResults] = useState<string[]>([]);
   const [selfTestResults, setSelfTestResults] = useState<string[]>([]);
@@ -106,37 +116,52 @@ export function App() {
 
   const [pendingExport, setPendingExport] = useState<'protocol' | 'report' | 'both' | null>(null);
 
+  const initialBaseDocNo = initialCodes.documentNo || 'WC/QC/AMV/0316';
+
   // Initialize authentic Dissolution document state (Single Shared Product: Tibolone Tablets BP 2.5 mg)
-  const [dissolutionData, setDissolutionData] = useState<DissolutionAMVDocumentData>(() =>
-    buildFullDissolutionAMVData('Tibolone Tablets BP 2.5 mg', {
-      protocolNo: 'WC/QC/AMV/0316',
+  const [dissolutionData, setDissolutionData] = useState<DissolutionAMVDocumentData>(() => {
+    const dissDoc = getMethodDocumentNumber(initialBaseDocNo, 'dissolution');
+    return buildFullDissolutionAMVData('Tibolone Tablets BP 2.5 mg', {
+      protocolNo: dissDoc,
+      reportNo: `${dissDoc}/R`,
       batchNo: 'TB2501',
       companyName: 'WESTCOAST PHARMACEUTICAL WORKS LTD.',
       reportDate: '20-Apr-2026',
-    })
-  );
+    });
+  });
 
   // Initialize authentic RS document state for the same shared product
-  const [rsData, setRsData] = useState<RSAMVDocumentData>(() =>
-    buildFullRSAMVData('Tibolone Tablets BP 2.5 mg', {
-      protocolNo: 'WC/QC/AMV/0316',
+  const [rsData, setRsData] = useState<RSAMVDocumentData>(() => {
+    const rsDoc = getMethodDocumentNumber(initialBaseDocNo, 'related_substances');
+    return buildFullRSAMVData('Tibolone Tablets BP 2.5 mg', {
+      protocolNo: rsDoc,
+      reportNo: `${rsDoc}/R`,
       batchNo: 'TB2501',
       companyName: 'WESTCOAST PHARMACEUTICAL WORKS LTD.',
       reportDate: '20-Apr-2026',
-    })
-  );
+    });
+  });
 
   // Initialize authentic Assay document state for the same shared product
-  const [assayData, setAssayData] = useState<AMVDocumentData>(() =>
-    generateAMVDataForProduct('Tibolone Tablets BP 2.5 mg', {
-      documentNo: initialCodes.documentNo,
-      validationBatchNo: initialCodes.validationBatchNo,
-      standardLotNo: initialCodes.standardLotNo,
-      companyName: 'WESTCOAST PHARMACEUTICAL WORKS LTD.',
-      reportDate: '20-Apr-2026',
-      effectiveDate: '20-Apr-2026',
-    })
-  );
+  const [assayData, setAssayData] = useState<AMVDocumentData>(() => {
+    const assayDoc = getMethodDocumentNumber(initialBaseDocNo, 'assay');
+    return recalculateAMVData(
+      generateAMVDataForProduct('Tibolone Tablets BP 2.5 mg', {
+        documentNo: assayDoc,
+        reportNo: `${assayDoc}/R`,
+        validationBatchNo: initialCodes.validationBatchNo,
+        standardLotNo: initialCodes.standardLotNo,
+        companyName: 'WESTCOAST PHARMACEUTICAL WORKS LTD.',
+        reportDate: '20-Apr-2026',
+        effectiveDate: '20-Apr-2026',
+      })
+    );
+  });
+
+  const [mltData, setMltData] = useState<MLTDocumentData>(() => {
+    const mltDoc = getMethodDocumentNumber(initialBaseDocNo, 'microbial_limit_test');
+    return synchronizeDocumentReportDates(generateMLTAMVDataForProduct(productName, batchNo, { documentNo: mltDoc, protocolNo: mltDoc, reportNo: `${mltDoc}/R`, supersedes, companyName, reportDate, effectiveDate: reportDate } as any), reportDate);
+  });
 
   // Dedicated reactive field handlers to instantly reflect user input changes across ALL active documents
   const handleCompanyNameChange = (newCompany: string) => {
@@ -146,11 +171,24 @@ export function App() {
     setAssayData((prev) => ({ ...prev, companyName: newCompany }));
   };
 
+  const handleSupersedesChange = (newSupersedes: string) => {
+    setSupersedes(newSupersedes);
+    setDissolutionData((prev) => ({ ...prev, supersedes: newSupersedes }));
+    setRsData((prev) => ({ ...prev, supersedes: newSupersedes }));
+    setAssayData((prev) => ({ ...prev, supersedes: newSupersedes }));
+    setMltData((prev) => ({ ...prev, supersedes: newSupersedes }));
+  };
   const handleDocumentNoChange = (newDocNo: string) => {
     setDocumentNo(newDocNo);
-    setDissolutionData((prev) => ({ ...prev, protocolNo: newDocNo }));
-    setRsData((prev) => ({ ...prev, protocolNo: newDocNo }));
-    setAssayData((prev) => ({ ...prev, documentNo: newDocNo }));
+    const dissDoc = getMethodDocumentNumber(newDocNo, 'dissolution');
+    const rsDoc = getMethodDocumentNumber(newDocNo, 'related_substances');
+    const assayDoc = getMethodDocumentNumber(newDocNo, 'assay');
+    const mltDoc = getMethodDocumentNumber(newDocNo, 'microbial_limit_test');
+
+    setDissolutionData((prev) => ({ ...prev, protocolNo: dissDoc, reportNo: `${dissDoc}/R` }));
+    setRsData((prev) => ({ ...prev, protocolNo: rsDoc, reportNo: `${rsDoc}/R` }));
+    setAssayData((prev) => ({ ...prev, documentNo: assayDoc, reportNo: `${assayDoc}/R` }));
+    setMltData((prev) => ({ ...prev, protocolNo: mltDoc, reportNo: `${mltDoc}/R` }));
   };
 
   const handleBatchNoChange = (newBatchNo: string) => {
@@ -164,7 +202,7 @@ export function App() {
     setStandardLot(newLot);
     setAssayData((prev) => ({
       ...prev,
-      reagentsAndStandards: prev.reagentsAndStandards.map((r) =>
+      reagentsAndStandards: (prev?.reagentsAndStandards || []).map((r) =>
         r.name.includes('Standard') || r.name.includes('WS') || r.name.includes('RS')
           ? { ...r, batchNo: newLot }
           : r
@@ -177,6 +215,7 @@ export function App() {
     setDissolutionData((prev) => synchronizeDocumentReportDates(prev, newDate));
     setRsData((prev) => synchronizeDocumentReportDates(prev, newDate));
     setAssayData((prev) => synchronizeDocumentReportDates(prev, newDate));
+    setMltData((prev) => synchronizeDocumentReportDates(prev, newDate));
   };
 
   // Handle switching between Dissolution, Related Substances, and Assay methods
@@ -216,7 +255,16 @@ export function App() {
       : (productName.trim() || 'Tibolone Tablets BP 2.5 mg');
       
     const activeDocumentNo = targetDocumentNo || documentNo;
+    
+    const activeMethod = targetMethod || validationMethod;
+    const strengthMatch = activeProduct.match(/([0-9.]+)\s*(mg|g|mcg|µg|ml|%|w\/v|w\/w)/i);
+    const activeStrength = strengthMatch ? strengthMatch[0] : '';
+    
+    // Add local codes to get batchNo
+    const localCodes = generateUniqueValidationCodes(activeProduct);
+
     const checkResult = checkReportNoExists(activeDocumentNo, activeProduct);
+
     if (checkResult.exists) {
       const confirmMsg = `Report No. "${activeDocumentNo}" is already used by a DIFFERENT product ("${checkResult.existingProductName}").
 
@@ -236,7 +284,6 @@ Do you want to automatically switch to the suggested Report No.?`;
     // Save report record
     saveReportRecord(activeDocumentNo, activeProduct);
 
-    const activeMethod = targetMethod || validationMethod;
     const activeOverrides = customOverrides !== undefined ? customOverrides : fpsOverrides;
 
     // Clear any previous timers
@@ -273,42 +320,62 @@ Do you want to automatically switch to the suggested Report No.?`;
     generationTimerRef.current = setTimeout(() => {
       try {
         clearTimeout(step3Timer);
-        const localDiss = buildFullDissolutionAMVData(activeProduct, {
+        const dissDocNo = getMethodDocumentNumber(cleanDocNo, 'dissolution');
+        const rsDocNo = getMethodDocumentNumber(cleanDocNo, 'related_substances');
+        const assayDocNo = getMethodDocumentNumber(cleanDocNo, 'assay');
+        const mltDocNo = getMethodDocumentNumber(cleanDocNo, 'microbial_limit_test');
+
+        const localDiss = recalculateDissolutionData(
+          buildFullDissolutionAMVData(activeProduct, {
             targetApi,
-          verifiedMonograph: activeOverrides ? {
-            ...activeOverrides,
-            ...(activeOverrides.diluent ? { medium: activeOverrides.diluent } : {}),
-          } : undefined,
-          protocolNo: cleanDocNo,
-          batchNo: codes.validationBatchNo,
-          companyName,
-          reportDate,
-        });
+            verifiedMonograph: activeOverrides ? {
+              ...activeOverrides,
+              ...(activeOverrides.diluent ? { medium: activeOverrides.diluent } : {}),
+            } : undefined,
+            protocolNo: dissDocNo,
+            reportNo: `${dissDocNo}/R`,
+            batchNo: codes.validationBatchNo,
+            companyName,
+            reportDate,
+          })
+        );
         setDissolutionData(localDiss);
 
-        const localRS = buildFullRSAMVData(activeProduct, {
+        const localRS = recalculateRSData(
+          buildFullRSAMVData(activeProduct, {
             targetApi,
-          verifiedMonograph: activeOverrides ? activeOverrides : undefined,
-          protocolNo: cleanDocNo,
-          batchNo: codes.validationBatchNo,
-          companyName,
-          reportDate,
-        });
+            verifiedMonograph: activeOverrides ? activeOverrides : undefined,
+            protocolNo: rsDocNo,
+            reportNo: `${rsDocNo}/R`,
+            batchNo: codes.validationBatchNo,
+            companyName,
+            reportDate,
+          })
+        );
         setRsData(localRS);
 
         const localData = generateAMVDataForProduct(activeProduct, {
-          documentNo: cleanDocNo,
+          documentNo: assayDocNo,
+          reportNo: `${assayDocNo}/R`,
           validationBatchNo: codes.validationBatchNo,
           standardLotNo: codes.standardLotNo,
           companyName,
           reportDate,
           effectiveDate: reportDate,
-        }, { ...activeOverrides, targetApi });
+          ...activeOverrides,
+          targetApi
+        });
         const recalculated = recalculateAMVData(localData);
         setAssayData(recalculated);
 
+        const localMLT = generateMLTAMVDataForProduct(activeProduct, codes.validationBatchNo, { protocolNo: mltDocNo, reportNo: `${mltDocNo}/R`, companyName, reportDate } as any);
+        setMltData(synchronizeDocumentReportDates(localMLT, reportDate) as any);
+
         if (activeMethod === 'dissolution') {
-          checkAndPromptMajorChanges(localDiss, 'dissolution', activeProduct);
+        checkAndPromptMajorChanges(localDiss, 'dissolution', activeProduct);
+
+        } else if (activeMethod === 'microbial_limit_test') {
+          // No major changes prompt for MLT currently
         } else if (activeMethod === 'related_substances') {
           checkAndPromptMajorChanges(localRS, 'related_substances', activeProduct);
         } else {
@@ -343,6 +410,10 @@ Do you want to automatically switch to the suggested Report No.?`;
     const activeProduct = (detectedProductName && detectedProductName.trim().length > 0)
       ? detectedProductName.trim()
       : productName;
+
+    if (activeProduct && activeProduct !== productName) {
+      setProductName(activeProduct);
+    }
 
     triggerGenerateAMV(activeProduct, validationMethod, overrides, undefined);
   };
@@ -381,45 +452,45 @@ Do you want to automatically switch to the suggested Report No.?`;
   const handleApplyRevisionReason = (newReason: string) => {
     if (validationMethod === 'dissolution') {
       setDissolutionData((prev) => {
-        const revs = [...prev.revisionHistory];
+        const revs = [...(prev?.revisionHistory || [])];
         if (revs.length > 0) {
           revs[revs.length - 1] = { ...revs[revs.length - 1], reason: newReason };
         } else {
           revs.push({
             version: '01',
-            effectiveDate: prev.reportDate || '21-Apr-2026',
+            effectiveDate: prev?.reportDate || '21-Apr-2026',
             reason: newReason,
-            docNumber: prev.reportNo || prev.protocolNo,
+            docNumber: prev?.reportNo || prev?.protocolNo,
           });
         }
         return { ...prev, revisionHistory: revs };
       });
     } else if (validationMethod === 'related_substances') {
       setRsData((prev) => {
-        const revs = [...prev.revisionHistory];
+        const revs = [...(prev?.revisionHistory || [])];
         if (revs.length > 0) {
           revs[revs.length - 1] = { ...revs[revs.length - 1], reason: newReason };
         } else {
           revs.push({
             version: '01',
-            effectiveDate: prev.reportDate || '17/07/2024',
+            effectiveDate: prev?.reportDate || '17/07/2024',
             reason: newReason,
-            docNumber: prev.reportNo || prev.protocolNo,
+            docNumber: prev?.reportNo || prev?.protocolNo,
           });
         }
         return { ...prev, revisionHistory: revs };
       });
     } else {
       setAssayData((prev) => {
-        const revs = [...prev.revisionHistory];
+        const revs = [...(prev?.revisionHistory || [])];
         if (revs.length > 0) {
           revs[revs.length - 1] = { ...revs[revs.length - 1], reason: newReason };
         } else {
           revs.push({
             version: '01',
-            effectiveDate: prev.effectiveDate || '21-Apr-2026',
+            effectiveDate: prev?.effectiveDate || '21-Apr-2026',
             reason: newReason,
-            docNumber: prev.reportNo || prev.documentNo,
+            docNumber: prev?.reportNo || prev?.documentNo,
           });
         }
         return { ...prev, revisionHistory: revs };
@@ -438,6 +509,7 @@ Do you want to automatically switch to the suggested Report No.?`;
   const getCurrentDocData = () => {
     if (validationMethod === 'dissolution') return dissolutionData;
     if (validationMethod === 'related_substances') return rsData;
+    if (validationMethod === 'microbial_limit_test') return mltData as any;
     return assayData;
   };
 
@@ -460,14 +532,15 @@ Do you want to automatically switch to the suggested Report No.?`;
   const auditResult = useMemo(() => {
     const data = getCurrentDocData();
     return runPreOutputAuditGate(data, validationMethod);
-  }, [dissolutionData, rsData, assayData, validationMethod, auditNonce]);
+  }, [dissolutionData, rsData, assayData, mltData, validationMethod, auditNonce]);
 
   // Single Source of Truth (SSOT) Parameters (§1.2)
   const currentSSOT = useMemo(() => {
     return extractSSOTBlock(getCurrentDocData(), validationMethod);
-  }, [dissolutionData, rsData, assayData, validationMethod]);
+  }, [dissolutionData, rsData, assayData, mltData, validationMethod]);
 
   const handleReAudit = () => {
+    setMltData((prev) => synchronizeDocumentReportDates(prev, reportDate));
     setAuditNonce((n) => n + 1);
   };
 
@@ -482,7 +555,9 @@ Do you want to automatically switch to the suggested Report No.?`;
       }
     }
 
-    if (!auditResult.passed) {
+
+    let passed = auditResult.passed;
+    if (!passed) {
       setPendingExport(targetExport);
       setIsAuditModalOpen(true);
       return false;
@@ -494,41 +569,50 @@ Do you want to automatically switch to the suggested Report No.?`;
   const handleDownloadProtocol = async () => {
     if (!verifyComplianceGate('protocol')) return;
     if (validationMethod === 'dissolution') {
-      await generateAndDownloadDissolutionDocx(dissolutionData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode });
+      await generateAndDownloadDissolutionDocx(dissolutionData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode, footerSignOffData });
+    } else if (validationMethod === 'microbial_limit_test') {
+      await generateAndDownloadMLTDocx(mltData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode, footerSignOffData });
     } else if (validationMethod === 'related_substances') {
-      await generateAndDownloadRSAMVDocx(rsData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode });
+      await generateAndDownloadRSAMVDocx(rsData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode, footerSignOffData });
     } else {
-      await generateAndDownloadAMVDocx(assayData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode });
+      await generateAndDownloadAMVDocx(assayData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode, footerSignOffData });
     }
   };
 
   const handleDownloadReport = async () => {
     if (!verifyComplianceGate('report')) return;
     if (validationMethod === 'dissolution') {
-      await generateAndDownloadDissolutionDocx(dissolutionData, { docType: 'report', theme, fontFamily, fontSize, dataMode });
+      await generateAndDownloadDissolutionDocx(dissolutionData, { docType: 'report', theme, fontFamily, fontSize, dataMode, footerSignOffData });
+    } else if (validationMethod === 'microbial_limit_test') {
+      await generateAndDownloadMLTDocx(mltData, { docType: 'report', theme, fontFamily, fontSize, dataMode, footerSignOffData });
     } else if (validationMethod === 'related_substances') {
-      await generateAndDownloadRSAMVDocx(rsData, { docType: 'report', theme, fontFamily, fontSize, dataMode });
+      await generateAndDownloadRSAMVDocx(rsData, { docType: 'report', theme, fontFamily, fontSize, dataMode, footerSignOffData });
     } else {
-      await generateAndDownloadAMVDocx(assayData, { docType: 'report', theme, fontFamily, fontSize, dataMode });
+      await generateAndDownloadAMVDocx(assayData, { docType: 'report', theme, fontFamily, fontSize, dataMode, footerSignOffData });
     }
   };
 
   const handleDownloadBoth = async () => {
     if (!verifyComplianceGate('both')) return;
     if (validationMethod === 'dissolution') {
-      await generateAndDownloadDissolutionDocx(dissolutionData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode });
+      await generateAndDownloadDissolutionDocx(dissolutionData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode, footerSignOffData });
       setTimeout(async () => {
-        await generateAndDownloadDissolutionDocx(dissolutionData, { docType: 'report', theme, fontFamily, fontSize, dataMode });
+        await generateAndDownloadDissolutionDocx(dissolutionData, { docType: 'report', theme, fontFamily, fontSize, dataMode, footerSignOffData });
+      }, 600);
+    } else if (validationMethod === 'microbial_limit_test') {
+      await generateAndDownloadMLTDocx(mltData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode, footerSignOffData });
+      setTimeout(async () => {
+        await generateAndDownloadMLTDocx(mltData, { docType: 'report', theme, fontFamily, fontSize, dataMode, footerSignOffData });
       }, 600);
     } else if (validationMethod === 'related_substances') {
-      await generateAndDownloadRSAMVDocx(rsData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode });
+      await generateAndDownloadRSAMVDocx(rsData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode, footerSignOffData });
       setTimeout(async () => {
-        await generateAndDownloadRSAMVDocx(rsData, { docType: 'report', theme, fontFamily, fontSize, dataMode });
+        await generateAndDownloadRSAMVDocx(rsData, { docType: 'report', theme, fontFamily, fontSize, dataMode, footerSignOffData });
       }, 600);
     } else {
-      await generateAndDownloadAMVDocx(assayData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode });
+      await generateAndDownloadAMVDocx(assayData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode, footerSignOffData });
       setTimeout(async () => {
-        await generateAndDownloadAMVDocx(assayData, { docType: 'report', theme, fontFamily, fontSize, dataMode });
+        await generateAndDownloadAMVDocx(assayData, { docType: 'report', theme, fontFamily, fontSize, dataMode, footerSignOffData });
       }, 600);
     }
   };
@@ -561,6 +645,10 @@ Do you want to automatically switch to the suggested Report No.?`;
     setDissolutionData(updated);
   };
 
+  const handleUpdateMLTData = (updated: MLTDocumentData) => {
+    setMltData(updated);
+  };
+
   return (
     <div className="min-h-screen bg-zinc-100/70 text-zinc-900 pb-16">
       {/* Header */}
@@ -581,6 +669,12 @@ Do you want to automatically switch to the suggested Report No.?`;
         }
         onPrint={() => window.print()}
         onOpenAuditGate={handleOpenAuditGate}
+        onSelfTest={() => {
+          if (validationMethod === 'microbial_limit_test') {
+            const r = runMLTSelfTest();
+            setSelfTestResults(r);
+          }
+        }}
         onOpenSSOTModal={() => setIsSSOTModalOpen(true)}
         onOpenPromptModal={() => setIsPromptModalOpen(true)}
         auditPassed={auditResult ? auditResult.passed : true}
@@ -593,6 +687,8 @@ Do you want to automatically switch to the suggested Report No.?`;
           productName={productName}
           onProductNameChange={handleProductNameChange}
           documentNo={documentNo}
+          supersedes={supersedes}
+          onSupersedesChange={handleSupersedesChange}
           onDocumentNoChange={handleDocumentNoChange}
           batchNo={batchNo}
           onBatchNoChange={handleBatchNoChange}
@@ -746,6 +842,28 @@ Do you want to automatically switch to the suggested Report No.?`;
               onDownloadReport={handleDownloadReport}
               onDownloadBoth={handleDownloadBoth}
               onUpdateData={handleUpdateDissolutionData}
+              footerSignOffData={footerSignOffData}
+              onUpdateFooterSignOffData={setFooterSignOffData}
+            />
+          
+          ) : validationMethod === 'microbial_limit_test' ? (
+            <MLTDocumentViewer seed={productName+batchNo} 
+              data={mltData}
+              docType={docType}
+              theme={theme}
+              dataMode={dataMode}
+              fontFamily={fontFamily}
+              fontSize={fontSize}
+              onFontFamilyChange={setFontFamily}
+              onFontSizeChange={setFontSize}
+              onDocTypeChange={setDocType}
+              onThemeChange={setTheme}
+              onDownloadProtocol={handleDownloadProtocol}
+              onDownloadReport={handleDownloadReport}
+              onDownloadBoth={handleDownloadBoth}
+              onUpdateData={handleUpdateMLTData}
+              footerSignOffData={footerSignOffData}
+              onUpdateFooterSignOffData={setFooterSignOffData}
             />
           ) : validationMethod === 'related_substances' ? (
             <RSAMVDocumentViewer seed={productName+batchNo} 
@@ -763,6 +881,8 @@ Do you want to automatically switch to the suggested Report No.?`;
               onDownloadReport={handleDownloadReport}
               onDownloadBoth={handleDownloadBoth}
               onUpdateData={handleUpdateRSData}
+              footerSignOffData={footerSignOffData}
+              onUpdateFooterSignOffData={setFooterSignOffData}
             />
           ) : (
             <AMVDocumentViewer seed={productName+batchNo} 
@@ -780,6 +900,8 @@ Do you want to automatically switch to the suggested Report No.?`;
               onDownloadReport={handleDownloadReport}
               onDownloadBoth={handleDownloadBoth}
               onUpdateData={handleUpdateAssayData}
+              footerSignOffData={footerSignOffData}
+              onUpdateFooterSignOffData={setFooterSignOffData}
             />
           )}
         </div>

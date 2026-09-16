@@ -124,7 +124,7 @@ export const MajorChangePromptModal: React.FC<MajorChangePromptModalProps> = ({
                 <div className="col-span-3">New Document Value</div>
                 <div className="col-span-3">Shift / Variation</div>
               </div>
-              {diffs.map((d, i) => (
+              {(diffs || []).map((d, i) => (
                 <div key={i} className="grid grid-cols-12 p-2.5 items-center hover:bg-white transition-colors">
                   <div className="col-span-3 font-semibold text-zinc-900 flex items-center space-x-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
@@ -207,7 +207,7 @@ export const MajorChangePromptModal: React.FC<MajorChangePromptModalProps> = ({
                   </p>
                 ) : (
                   <ul className="list-disc list-inside space-y-0.5 text-amber-800 text-[11px]">
-                    {validation.issues.map((issue, idx) => (
+                    {(validation?.issues || []).map((issue, idx) => (
                       <li key={idx}>{issue}</li>
                     ))}
                   </ul>

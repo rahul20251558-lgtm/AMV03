@@ -655,8 +655,12 @@ Return ONLY a valid JSON object matching this structure:
   return res.json({ overrides: {}, success: false });
 });
 
+app.post("/api/log-error", express.json(), (req, res) => { console.log("CLIENT ERROR:", req.body.error); res.json({ success: true }); });
 // Vite Middleware & Static Serving
 async function startServer() {
+  const publicPath = path.join(process.cwd(), 'public');
+  app.use(express.static(publicPath));
+
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
@@ -678,3 +682,4 @@ async function startServer() {
 }
 
 startServer();
+

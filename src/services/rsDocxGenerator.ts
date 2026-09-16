@@ -15,7 +15,9 @@ import {
   PageBreak,
 } from 'docx';
 import { saveAs } from 'file-saver';
-import { RSAMVDocumentData, DocumentType, ThemeFormat } from '../types';
+import { RSAMVDocumentData, DocumentType, ThemeFormat, FooterSignOffData } from '../types';
+import { createDocxSignOffFooter } from './docxSignOffFooter';
+import { getWestCoastStampUint8Array } from '../utils/stampUtils';
 
 export interface RSDocxOptions {
   docType: DocumentType;
@@ -23,6 +25,7 @@ export interface RSDocxOptions {
   fontFamily?: string;
   fontSize?: number;
   dataMode?: 'TEMPLATE' | 'DEMO';
+  footerSignOffData?: FooterSignOffData;
 }
 
 export async function generateAndDownloadRSAMVDocx(
@@ -32,6 +35,7 @@ export async function generateAndDownloadRSAMVDocx(
   const { docType, theme } = options;
   const isProtocol = docType === 'protocol';
   const isBlue = theme === 'blue';
+  const isWestcoast = theme === 'westcoast';
 
   // Times New Roman (12pt default) matching authentic regulatory monograph
   const FONT_FAMILY = options.fontFamily || 'Times New Roman';
@@ -208,50 +212,52 @@ export async function generateAndDownloadRSAMVDocx(
     : (data.reportNo || (data.protocolNo.includes('/AMV/') ? data.protocolNo.replace('/AMV/', '/AMVR/') : `${data.protocolNo}/R`));
 
   // ================= PAGE 1 =================
-  // Company Header
-  docElements.push(
-    new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { before: 40, after: 30 },
-      children: [
-        new TextRun({
-          text: data.companyName,
-          bold: true,
-          size: 28,
-          font: FONT_FAMILY,
-          color: navyTextColor,
-        }),
-      ],
-    }),
-    new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { before: 10, after: 100 },
-      children: [
-        new TextRun({
-          text: isProtocol
-            ? 'ANALYTICAL METHOD VALIDATION PROTOCOL'
-            : 'ANALYTICAL METHOD VALIDATION REPORT',
-          bold: true,
-          size: 24,
-          font: FONT_FAMILY,
-          color: navyTextColor,
-        }),
-      ],
-    }),
-    new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { before: 0, after: 140 },
-      children: [
-        new TextRun({
-          text: data.subTitle,
-          bold: true,
-          size: 22,
-          font: FONT_FAMILY,
-          color: '4B5563',
-        }),
-      ],
-    })
-  );
+  // Company Header (Skip for westcoast, already included in the table)
+  if (!isWestcoast) {
+    docElements.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 40, after: 30 },
+        children: [
+          new TextRun({
+            text: data.companyName,
+            bold: true,
+            size: 28,
+            font: FONT_FAMILY,
+            color: navyTextColor,
+          }),
+        ],
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 10, after: 100 },
+        children: [
+          new TextRun({
+            text: isProtocol
+              ? 'ANALYTICAL METHOD VALIDATION PROTOCOL'
+              : 'ANALYTICAL METHOD VALIDATION REPORT',
+            bold: true,
+            size: 24,
+            font: FONT_FAMILY,
+            color: navyTextColor,
+          }),
+        ],
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 0, after: 140 },
+        children: [
+          new TextRun({
+            text: data.subTitle,
+            bold: true,
+            size: 22,
+            font: FONT_FAMILY,
+            color: '4B5563',
+          }),
+        ],
+      })
+    );
+  }
 
   // If DEMO mode, add prominent regulatory disclaimer callout
   if (options.dataMode === 'DEMO') {
@@ -272,76 +278,185 @@ export async function generateAndDownloadRSAMVDocx(
     );
   }
 
-  // Metadata Table
-  const metaColWidths = [2800, 7106];
-  const metaRows: TableRow[] = [
-    createRow([
-      createDataCell(isProtocol ? 'Protocol No.' : 'Report No.', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
-      createDataCell(singleDocNumber, AlignmentType.LEFT, true, undefined, 7106),
-    ]),
-    createRow([
-      createDataCell(isProtocol ? 'Protocol Date' : 'Report Date', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
-      createDataCell(isProtocol ? data.protocolDate : data.reportDate, AlignmentType.LEFT, false, undefined, 7106),
-    ]),
-    createRow([
-      createDataCell('Product Name', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
-      createDataCell(data.productName, AlignmentType.LEFT, true, undefined, 7106),
-    ]),
-    createRow([
-      createDataCell('Label Claim', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
-      createDataCell(data.labelClaim, AlignmentType.LEFT, false, undefined, 7106),
-    ]),
-    createRow([
-      createDataCell('Test Parameter', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
-      createDataCell(data.testParameter, AlignmentType.LEFT, false, undefined, 7106),
-    ]),
-    createRow([
-      createDataCell('Reference', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
-      createDataCell(data.reference, AlignmentType.LEFT, false, undefined, 7106),
-    ]),
-    createRow([
-      createDataCell(isProtocol ? 'Batch No. to be used' : 'Batch No. used', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
-      createDataCell(isProtocol ? '' : data.batchNoUsed, AlignmentType.LEFT, true, undefined, 7106),
-    ]),
-  ];
-  docElements.push(createDocxTable(metaColWidths, metaRows));
+  if (isWestcoast) {
+    // Westcoast EXACT Format Layout
+    const wcMetaColWidths = [1800, 3106, 2000, 3000]; // 4 cols, total 9906
+    
+    // Custom cell creator for the Westcoast metadata table
+    const createWCCell = (text: string, colSpan: number, bold: boolean, align: (typeof AlignmentType)[keyof typeof AlignmentType] = AlignmentType.LEFT, width?: number) => {
+      return new TableCell({
+        columnSpan: colSpan,
+        borders: cellBorder,
+        margins: cellMargins,
+        width: width ? { size: width, type: WidthType.DXA } : undefined,
+        children: [
+          new Paragraph({
+            alignment: align,
+            spacing: { before: 40, after: 40 },
+            children: [
+              new TextRun({
+                text: text || ' ',
+                bold: bold,
+                size: TABLE_CELL_SIZE,
+                font: FONT_FAMILY,
+                color: '000000',
+              })
+            ]
+          })
+        ]
+      });
+    };
 
-  // Approval Table (4 Persons matching PDF)
-  docElements.push(createSectionHeader('APPROVALS / SIGN-OFF', 140, 60));
-  const signColWidths = [2200, 2600, 2600, 2506];
-  const signRows: TableRow[] = [
+    const wcMetaTable = new Table({
+      width: { size: 9906, type: WidthType.DXA },
+      rows: [
+        new TableRow({
+          children: [
+            createWCCell(`ANALYTICAL METHOD VERIFICATION ${isProtocol ? 'PROTOCOL' : 'REPORT'}\n(For Related Substance Method)`, 4, true, AlignmentType.CENTER)
+          ]
+        }),
+        new TableRow({
+          children: [
+            createWCCell('Product Name', 1, true),
+            createWCCell(data.productName, 3, false)
+          ]
+        }),
+        new TableRow({
+          children: [
+            createWCCell('Test', 1, true),
+            createWCCell(data.testParameter, 3, false)
+          ]
+        }),
+        new TableRow({
+          children: [
+            createWCCell(isProtocol ? 'Protocol No.' : 'Report No.', 1, true, AlignmentType.LEFT, 1800),
+            createWCCell(singleDocNumber, 1, false, AlignmentType.LEFT, 3106),
+            createWCCell(isProtocol ? 'Protocol Date' : 'Report Date', 1, true, AlignmentType.LEFT, 2000),
+            createWCCell(isProtocol ? data.protocolDate : data.reportDate, 1, false, AlignmentType.LEFT, 3000)
+          ]
+        })
+      ]
+    });
+    
+    docElements.push(wcMetaTable);
+    docElements.push(new Paragraph({ spacing: { before: 400, after: 0 } })); // spacer
+
+    docElements.push(new Paragraph({ children: [new PageBreak()] }));
+
+
+  } else {
+    // Normal / Blue Meta format
+  
+    // Metadata Table
+    const metaColWidths = [2800, 7106];
+    
+    const metaRows: TableRow[] = [
+      createRow([
+        createDataCell(isProtocol ? 'Protocol No.' : 'Report No.', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
+        createDataCell(singleDocNumber, AlignmentType.LEFT, true, undefined, 7106),
+      ]),
+      createRow([
+        createDataCell(isProtocol ? 'Protocol Date' : 'Report Date', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
+        createDataCell(isProtocol ? data.protocolDate : data.reportDate, AlignmentType.LEFT, false, undefined, 7106),
+      ]),
+      createRow([
+        createDataCell('Product Name', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
+        createDataCell(data.productName, AlignmentType.LEFT, true, undefined, 7106),
+      ]),
+      createRow([
+        createDataCell('Label Claim', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
+        createDataCell(data.labelClaim, AlignmentType.LEFT, false, undefined, 7106),
+      ]),
+      createRow([
+        createDataCell('Test Parameter', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
+        createDataCell(data.testParameter, AlignmentType.LEFT, false, undefined, 7106),
+      ]),
+      createRow([
+        createDataCell('Reference', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
+        createDataCell(data.reference, AlignmentType.LEFT, false, undefined, 7106),
+      ]),
+      createRow([
+        createDataCell(isProtocol ? 'Batch No. to be used' : 'Batch No. used', AlignmentType.LEFT, true, metaLabelBgColor, 2800),
+        createDataCell(isProtocol ? '—' : data.batchNoUsed, AlignmentType.LEFT, true, undefined, 7106),
+      ]),
+    ];
+    docElements.push(createDocxTable(metaColWidths, metaRows));
+  
+    // Approval Table (4 Persons matching PDF)
+    docElements.push(createSectionHeader('APPROVALS / SIGN-OFF', 140, 60));
+    const signColWidths = [2200, 2600, 2600, 2506];
+    const signRows: TableRow[] = [
+      createRow([
+        createHeaderCell('Activity', 2200),
+        createHeaderCell('Designation', 2600),
+        createHeaderCell('Name', 2600),
+        createHeaderCell('Signature & Date', 2506),
+      ], true),
+      createRow([
+        createDataCell('Prepared By', AlignmentType.LEFT, true, undefined, 2200),
+        createDataCell(data.signOffs?.preparedBy?.designation, AlignmentType.LEFT, false, undefined, 2600),
+        createDataCell(data.signOffs?.preparedBy?.name, AlignmentType.LEFT, false, undefined, 2600),
+        createDataCell(isProtocol ? `${data.signOffs?.preparedBy?.name} / ${data.signOffs?.preparedBy?.dateProtocol || data.protocolDate}` : `${data.signOffs?.preparedBy?.name} / ${data.signOffs?.preparedBy?.dateReport || data.signOffs?.preparedBy?.date}`, AlignmentType.CENTER, false, undefined, 2506),
+      ]),
+      createRow([
+        createDataCell('Checked By', AlignmentType.LEFT, true, undefined, 2200),
+        createDataCell(data.signOffs?.checkedBy?.designation, AlignmentType.LEFT, false, undefined, 2600),
+        createDataCell(data.signOffs?.checkedBy?.name, AlignmentType.LEFT, false, undefined, 2600),
+        createDataCell(isProtocol ? `${data.signOffs?.checkedBy?.name} / ${data.signOffs?.checkedBy?.dateProtocol || data.protocolDate}` : `${data.signOffs?.checkedBy?.name} / ${data.signOffs?.checkedBy?.dateReport || data.signOffs?.checkedBy?.date}`, AlignmentType.CENTER, false, undefined, 2506),
+      ]),
+      createRow([
+        createDataCell('Reviewed By', AlignmentType.LEFT, true, undefined, 2200),
+        createDataCell(data.signOffs?.reviewedBy?.designation, AlignmentType.LEFT, false, undefined, 2600),
+        createDataCell(data.signOffs?.reviewedBy?.name, AlignmentType.LEFT, false, undefined, 2600),
+        createDataCell(isProtocol ? `${data.signOffs?.reviewedBy?.name} / ${data.signOffs?.reviewedBy?.dateProtocol || data.protocolDate}` : `${data.signOffs?.reviewedBy?.name} / ${data.signOffs?.reviewedBy?.dateReport || data.signOffs?.reviewedBy?.date}`, AlignmentType.CENTER, false, undefined, 2506),
+      ]),
+      createRow([
+        createDataCell('Authorised By', AlignmentType.LEFT, true, undefined, 2200),
+        createDataCell(data.signOffs?.authorisedBy?.designation, AlignmentType.LEFT, false, undefined, 2600),
+        createDataCell(data.signOffs?.authorisedBy?.name, AlignmentType.LEFT, false, undefined, 2600),
+        createDataCell(isProtocol ? `${data.signOffs?.authorisedBy?.name} / ${data.signOffs?.authorisedBy?.dateProtocol || data.protocolDate}` : `${data.signOffs?.authorisedBy?.name} / ${data.signOffs?.authorisedBy?.dateReport || data.signOffs?.authorisedBy?.date}`, AlignmentType.CENTER, false, undefined, 2506),
+      ]),
+    ];
+    docElements.push(createDocxTable(signColWidths, signRows));
+  }
+
+  // TABLE OF CONTENTS (Related Substances by HPLC)
+  docElements.push(createSectionHeader('TABLE OF CONTENTS', 140, 60));
+  const tocColWidths = [1200, 7206, 1500];
+  const tocRows: TableRow[] = [
     createRow([
-      createHeaderCell('Activity', 2200),
-      createHeaderCell('Designation', 2600),
-      createHeaderCell('Name', 2600),
-      createHeaderCell('Signature & Date', 2506),
+      createHeaderCell('Sr. No.', tocColWidths[0]),
+      createHeaderCell('Contents / Section Title', tocColWidths[1], AlignmentType.LEFT),
+      createHeaderCell('Page No.', tocColWidths[2]),
     ], true),
-    createRow([
-      createDataCell('Prepared By', AlignmentType.LEFT, true, undefined, 2200),
-      createDataCell(data.signOffs.preparedBy.designation, AlignmentType.LEFT, false, undefined, 2600),
-      createDataCell(data.signOffs.preparedBy.name, AlignmentType.LEFT, false, undefined, 2600),
-      createDataCell(isProtocol ? `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.dateProtocol || data.protocolDate}` : `${data.signOffs.preparedBy.name} / ${data.signOffs.preparedBy.dateReport || data.signOffs.preparedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
-    ]),
-    createRow([
-      createDataCell('Checked By', AlignmentType.LEFT, true, undefined, 2200),
-      createDataCell(data.signOffs.checkedBy.designation, AlignmentType.LEFT, false, undefined, 2600),
-      createDataCell(data.signOffs.checkedBy.name, AlignmentType.LEFT, false, undefined, 2600),
-      createDataCell(isProtocol ? `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.dateProtocol || data.protocolDate}` : `${data.signOffs.checkedBy.name} / ${data.signOffs.checkedBy.dateReport || data.signOffs.checkedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
-    ]),
-    createRow([
-      createDataCell('Reviewed By', AlignmentType.LEFT, true, undefined, 2200),
-      createDataCell(data.signOffs.reviewedBy.designation, AlignmentType.LEFT, false, undefined, 2600),
-      createDataCell(data.signOffs.reviewedBy.name, AlignmentType.LEFT, false, undefined, 2600),
-      createDataCell(isProtocol ? `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.dateProtocol || data.protocolDate}` : `${data.signOffs.reviewedBy.name} / ${data.signOffs.reviewedBy.dateReport || data.signOffs.reviewedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
-    ]),
-    createRow([
-      createDataCell('Authorised By', AlignmentType.LEFT, true, undefined, 2200),
-      createDataCell(data.signOffs.authorisedBy.designation, AlignmentType.LEFT, false, undefined, 2600),
-      createDataCell(data.signOffs.authorisedBy.name, AlignmentType.LEFT, false, undefined, 2600),
-      createDataCell(isProtocol ? `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.dateProtocol || data.protocolDate}` : `${data.signOffs.authorisedBy.name} / ${data.signOffs.authorisedBy.dateReport || data.signOffs.authorisedBy.date}`, AlignmentType.CENTER, false, undefined, 2506),
-    ]),
+    ...[
+      { srNo: '1.0', title: 'Objective', pageNo: 'Page 1' },
+      { srNo: '2.0', title: 'Scope', pageNo: 'Page 1' },
+      { srNo: '3.0', title: 'Reference and Validation Details', pageNo: 'Page 1' },
+      { srNo: '4.0', title: 'Analytical Method Summary (4.1 Conditions, 4.2 Gradient, 4.3 Prep, 4.4 Formulae)', pageNo: 'Page 2' },
+      { srNo: '4.6', title: 'Reagents, Reference Standards & Analytical Equipment', pageNo: 'Page 2' },
+      { srNo: '5.0', title: 'Validation Parameters and Acceptance Criteria', pageNo: 'Page 3' },
+      { srNo: '6.0', title: 'System Suitability Test (SST & Resolution)', pageNo: 'Page 3' },
+      { srNo: '7.0', title: 'Specificity / Placebo Interference & Forced Degradation', pageNo: 'Page 3' },
+      { srNo: '8.0', title: 'Linearity and Range (LOQ to 150 % of specification limit)', pageNo: 'Page 4' },
+      { srNo: '9.0', title: 'Limit of Detection (LOD) & Limit of Quantitation (LOQ)', pageNo: 'Page 4' },
+      { srNo: '10.0', title: 'Method Precision (Repeatability, n = 6)', pageNo: 'Page 4' },
+      { srNo: '11.0', title: 'Intermediate Precision / Ruggedness (Analyst-to-Analyst)', pageNo: 'Page 5' },
+      { srNo: '12.0', title: 'Accuracy / Recovery (LOQ, 50 %, 100 %, 150 % Levels)', pageNo: 'Page 5' },
+      { srNo: '13.0', title: 'Robustness (Flow Rate, Temperature, Mobile Phase, Wavelength)', pageNo: 'Page 6' },
+      { srNo: '14.0', title: 'Stability of Analytical Solutions (Standard & Sample)', pageNo: 'Page 6' },
+      { srNo: '15.0', title: 'Overall Conclusion', pageNo: 'Page 6' },
+      { srNo: '16.0', title: 'Review Checklist & Completion Record', pageNo: 'Page 7' },
+      { srNo: '17.0', title: 'List of Abbreviations & Document Revision History', pageNo: 'Page 7' },
+    ].map((item, idx) =>
+      createRow([
+        createDataCell(item.srNo, AlignmentType.CENTER, false, idx % 2 === 1 ? altRowBgColor : undefined, tocColWidths[0]),
+        createDataCell(item.title, AlignmentType.LEFT, false, idx % 2 === 1 ? altRowBgColor : undefined, tocColWidths[1]),
+        createDataCell(item.pageNo, AlignmentType.CENTER, true, idx % 2 === 1 ? altRowBgColor : undefined, tocColWidths[2]),
+      ])
+    )
   ];
-  docElements.push(createDocxTable(signColWidths, signRows));
+  docElements.push(createDocxTable(tocColWidths, tocRows));
 
   // 1. Objective & 2. Scope
   docElements.push(
@@ -388,21 +503,53 @@ export async function generateAndDownloadRSAMVDocx(
   );
 
   const c = data.methodSummary.chromatographicConditions;
-  const condColWidths = [3300, 6606];
-  const condRows: TableRow[] = [
-    createRow([createDataCell('Instrument / Detector', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.instrumentDetector || 'HPLC System with UV/PDA Detector', AlignmentType.LEFT, false, undefined, 6606)]),
-    createRow([createDataCell('Column (Stationary Phase)', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.column, AlignmentType.LEFT, false, undefined, 6606)]),
-    createRow([createDataCell('Mobile Phase', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.mobilePhase || c.carrierGasOrMobilePhase || 'Phosphate Buffer : Acetonitrile', AlignmentType.LEFT, false, undefined, 6606)]),
-    createRow([createDataCell('Flow Rate', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.flowRate || c.injectionTempOrFlowRate || '1.0 mL/min', AlignmentType.LEFT, false, undefined, 6606)]),
-    createRow([createDataCell('Detection Wavelength', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.wavelength || c.detectorTempOrWavelength || '210 nm', AlignmentType.LEFT, false, undefined, 6606)]),
-    createRow([createDataCell('Column Temperature', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.columnTemperature || '30 °C', AlignmentType.LEFT, false, undefined, 6606)]),
-    createRow([createDataCell('Injection Volume', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.injectionVolume, AlignmentType.LEFT, false, undefined, 6606)]),
-    createRow([createDataCell('Total Run Time', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.totalRunTime, AlignmentType.LEFT, false, undefined, 6606)]),
-    createRow([createDataCell('Diluent', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.diluent, AlignmentType.LEFT, false, undefined, 6606)]),
-    createRow([createDataCell('Standard / Internal Standard', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.internalStandard, AlignmentType.LEFT, false, undefined, 6606)]),
-    createRow([createDataCell('Relative Retention', AlignmentType.LEFT, true, metaLabelBgColor, 3300), createDataCell(c.relativeRetention, AlignmentType.LEFT, false, undefined, 6606)]),
-  ];
-  docElements.push(createDocxTable(condColWidths, condRows));
+  const chromParagraph1 = new Paragraph({
+    children: [
+      new TextRun({ text: "Chromatographic analysis of Related Substances (Organic Impurities) is performed utilizing an ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Instrument / Detector: ", bold: true, size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: (c.instrumentDetector || 'HPLC System equipped with UV/PDA Detector') + ". ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Chromatographic separation is achieved using a stationary phase consisting of ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Column (Stationary Phase): ", bold: true, size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: c.column + ". ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "The mobile phase system employed is ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Mobile Phase: ", bold: true, size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: (c.mobilePhase || c.carrierGasOrMobilePhase || 'Phosphate Buffer : Acetonitrile') + ". ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "The chromatographic system operates at a steady ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Flow Rate: ", bold: true, size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: (c.flowRate || c.injectionTempOrFlowRate || '1.0 mL/min') + ", ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "with spectrophotometric monitoring performed at a ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Detection Wavelength: ", bold: true, size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: (c.wavelength || c.detectorTempOrWavelength || '210 nm') + ".", size: 20, font: FONT_FAMILY }),
+    ],
+    alignment: AlignmentType.JUSTIFIED,
+    spacing: { before: 80, after: 60 },
+  });
+
+  const chromParagraph2 = new Paragraph({
+    children: [
+      new TextRun({ text: "Stationary phase temperature is maintained at a ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Column Temperature: ", bold: true, size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: (c.columnTemperature || '30 °C') + ". ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Sample introduction is performed with an ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Injection Volume: ", bold: true, size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: c.injectionVolume + ". ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "The total chromatographic ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Run Time: ", bold: true, size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: c.totalRunTime + ". ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Standard and test preparations are dissolved and diluted in ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Diluent: ", bold: true, size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: c.diluent + ". ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "The method establishes an ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Internal Standard: ", bold: true, size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: (c.internalStandard || 'N/A (External Standard Method)') + " ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "with relative retention established as ", size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: "Relative Retention: ", bold: true, size: 20, font: FONT_FAMILY }),
+      new TextRun({ text: (c.relativeRetention || 'Specified per impurity monograph relative to main active analyte peak') + ".", size: 20, font: FONT_FAMILY }),
+    ],
+    alignment: AlignmentType.JUSTIFIED,
+    spacing: { before: 60, after: 80 },
+  });
+  docElements.push(chromParagraph1, chromParagraph2);
 
   // 4.2 Mobile Phase / Gradient Programme Table
   docElements.push(createSubSectionHeader('4.2 Mobile Phase / Gradient Programme', 100, 40));
@@ -413,7 +560,7 @@ export async function generateAndDownloadRSAMVDocx(
       createHeaderCell('Mobile Phase Composition / Condition', 3500),
       createHeaderCell('Comment', 3906),
     ], true),
-    ...data.methodSummary.ovenProgramme.map((row, i) =>
+    ...(data.methodSummary?.ovenProgramme || []).map((row, i) =>
       createRow([
         createDataCell(row.timeRange, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 2500),
         createDataCell(row.temperature, AlignmentType.CENTER, true, i % 2 === 1 ? altRowBgColor : undefined, 3500),
@@ -441,7 +588,7 @@ export async function generateAndDownloadRSAMVDocx(
   const limColWidths = [6500, 3406];
   const limRows: TableRow[] = [
     createRow([createHeaderCell('Criterion', 6500), createHeaderCell('Limit', 3406)], true),
-    ...data.methodSummary.monographLimits.map((lim, i) =>
+    ...(data.methodSummary?.monographLimits || []).map((lim, i) =>
       createRow([
         createDataCell(lim.criterion, AlignmentType.LEFT, false, i % 2 === 1 ? altRowBgColor : undefined, 6500),
         createDataCell(lim.limit, AlignmentType.CENTER, true, i % 2 === 1 ? altRowBgColor : undefined, 3406),
@@ -460,7 +607,7 @@ export async function generateAndDownloadRSAMVDocx(
       createHeaderCell('Make', 1900),
       createHeaderCell('Batch No.', 2006),
     ], true),
-    ...data.methodSummary.requirements.map((req, i) =>
+    ...(data.methodSummary?.requirements || []).map((req, i) =>
       createRow([
         createDataCell(req.name, AlignmentType.LEFT, true, i % 2 === 1 ? altRowBgColor : undefined, 3300),
         createDataCell(req.grade, AlignmentType.LEFT, false, i % 2 === 1 ? altRowBgColor : undefined, 2700),
@@ -484,7 +631,7 @@ export async function generateAndDownloadRSAMVDocx(
       createHeaderCell('Acceptance Criteria', 4000),
       createHeaderCell(isProtocol ? 'Execution Status' : 'Observed Result / Compliance', 2906),
     ], true),
-    ...data.validationParameters.map((param, i) =>
+    ...(data.validationParameters || []).map((param, i) =>
       createRow([
         createDataCell(param.srNo, AlignmentType.CENTER, true, i % 2 === 1 ? altRowBgColor : undefined, 800),
         createDataCell(param.parameter, AlignmentType.LEFT, true, i % 2 === 1 ? altRowBgColor : undefined, 2200),
@@ -514,14 +661,14 @@ export async function generateAndDownloadRSAMVDocx(
       createHeaderCell('Theoretical Plates', 1600),
       createHeaderCell('Remark', 1006),
     ], true),
-    ...data.systemSuitability.injections.map((inj, i) =>
+    ...(data.systemSuitability?.injections || []).map((inj, i) =>
       createRow([
         createDataCell(inj.srNo, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1000),
-        createDataCell(isProtocol ? '' : inj.weightMg, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 2400),
-        createDataCell(isProtocol ? '' : inj.peakArea, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 2300),
-        createDataCell(isProtocol ? '' : (inj.tailingFactor ?? '1.12'), AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1600),
-        createDataCell(isProtocol ? '' : typeof inj.theoreticalPlates === 'number' ? inj.theoreticalPlates.toLocaleString() : (inj.theoreticalPlates ?? '4,850'), AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1600),
-        createDataCell(isProtocol ? '' : inj.remark, AlignmentType.LEFT, false, i % 2 === 1 ? altRowBgColor : undefined, 1006),
+        createDataCell(isProtocol ? '—' : inj.weightMg, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 2400),
+        createDataCell(isProtocol ? '—' : inj.peakArea, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 2300),
+        createDataCell(isProtocol ? '—' : (inj.tailingFactor ?? '1.12'), AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1600),
+        createDataCell(isProtocol ? '—' : typeof inj.theoreticalPlates === 'number' ? inj.theoreticalPlates.toLocaleString() : (inj.theoreticalPlates ?? '4,850'), AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1600),
+        createDataCell(isProtocol ? '—' : inj.remark, AlignmentType.LEFT, false, i % 2 === 1 ? altRowBgColor : undefined, 1006),
       ])
     ),
   ];
@@ -533,7 +680,7 @@ export async function generateAndDownloadRSAMVDocx(
   const ssStatRows: TableRow[] = [
     createRow([
       createDataCell('Mean Peak Area', AlignmentType.LEFT, true, metaLabelBgColor, 3300),
-      createDataCell(isProtocol ? '' : ssStats.meanArea, AlignmentType.CENTER, false, undefined, 3300),
+      createDataCell(isProtocol ? '—' : ssStats.meanArea, AlignmentType.CENTER, false, undefined, 3300),
       createDataCell('Acceptance: Record value', AlignmentType.LEFT, false, undefined, 3306),
     ]),
     createRow([
@@ -573,12 +720,12 @@ export async function generateAndDownloadRSAMVDocx(
       createHeaderCell('Peak Area', 2200),
       createHeaderCell('Interference Observed', 2206),
     ], true),
-    ...data.specificity.rows.map((row, i) =>
+    ...(data.specificity?.rows || []).map((row, i) =>
       createRow([
         createDataCell(row.solution, AlignmentType.LEFT, true, i % 2 === 1 ? altRowBgColor : undefined, 3300),
-        createDataCell(isProtocol ? '' : row.retentionTime, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 2200),
-        createDataCell(isProtocol ? '' : row.peakArea, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 2200),
-        createDataCell(isProtocol ? '' : row.interferenceObserved, AlignmentType.LEFT, false, i % 2 === 1 ? altRowBgColor : undefined, 2206),
+        createDataCell(isProtocol ? '—' : row.retentionTime, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 2200),
+        createDataCell(isProtocol ? '—' : row.peakArea, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 2200),
+        createDataCell(isProtocol ? '—' : row.interferenceObserved, AlignmentType.LEFT, false, i % 2 === 1 ? altRowBgColor : undefined, 2206),
       ])
     ),
   ];
@@ -605,13 +752,13 @@ export async function generateAndDownloadRSAMVDocx(
       createHeaderCell('Final Dilution', 1900),
       createHeaderCell('Mean Peak Area', 2006),
     ], true),
-    ...lin.linearityLevels.map((lvl, i) =>
+    ...(lin?.linearityLevels || []).map((lvl, i) =>
       createRow([
         createDataCell(lvl.levelName, AlignmentType.LEFT, true, i % 2 === 1 ? altRowBgColor : undefined, 2400),
         createDataCell(lvl.nominalPpm, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1800),
-        createDataCell(isProtocol ? '' : lvl.weightTakenMg, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1800),
+        createDataCell(isProtocol ? '—' : lvl.weightTakenMg, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1800),
         createDataCell(lvl.finalDilution, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1900),
-        createDataCell(isProtocol ? '' : lvl.meanArea, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 2006),
+        createDataCell(isProtocol ? '—' : lvl.meanArea, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 2006),
       ])
     ),
   ];
@@ -628,17 +775,17 @@ export async function generateAndDownloadRSAMVDocx(
     ]),
     createRow([
       createDataCell('Slope (S)', AlignmentType.LEFT, true, metaLabelBgColor, 4500),
-      createDataCell(isProtocol ? '' : reg.slope, AlignmentType.CENTER, false, undefined, 2700),
+      createDataCell(isProtocol ? '—' : reg.slope, AlignmentType.CENTER, false, undefined, 2700),
       createDataCell('Record value', AlignmentType.LEFT, false, undefined, 2706),
     ]),
     createRow([
       createDataCell('y-Intercept (c)', AlignmentType.LEFT, true, metaLabelBgColor, 4500),
-      createDataCell(isProtocol ? '' : reg.yIntercept, AlignmentType.CENTER, false, undefined, 2700),
+      createDataCell(isProtocol ? '—' : reg.yIntercept, AlignmentType.CENTER, false, undefined, 2700),
       createDataCell('Record value', AlignmentType.LEFT, false, undefined, 2706),
     ]),
     createRow([
       createDataCell('Residual SD of y-intercepts', AlignmentType.LEFT, true, metaLabelBgColor, 4500),
-      createDataCell(isProtocol ? '' : reg.sdYIntercepts, AlignmentType.CENTER, false, undefined, 2700),
+      createDataCell(isProtocol ? '—' : reg.sdYIntercepts, AlignmentType.CENTER, false, undefined, 2700),
       createDataCell('Used for LOD/LOQ', AlignmentType.LEFT, false, undefined, 2706),
     ]),
   ];
@@ -658,12 +805,12 @@ export async function generateAndDownloadRSAMVDocx(
       createHeaderCell('Sample ID', 3200),
       createHeaderCell('Peak Area', 3306),
     ], true),
-    ...lin.rangeRows.map((rng, i) =>
+    ...(lin?.rangeRows || []).map((rng, i) =>
       createRow([
         createDataCell(rng.srNo, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1200),
         createDataCell(rng.levelPpm, AlignmentType.CENTER, true, i % 2 === 1 ? altRowBgColor : undefined, 2200),
         createDataCell(rng.sampleId, AlignmentType.LEFT, false, i % 2 === 1 ? altRowBgColor : undefined, 3200),
-        createDataCell(isProtocol ? '' : rng.peakArea, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 3306),
+        createDataCell(isProtocol ? '—' : rng.peakArea, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 3306),
       ])
     ),
   ];
@@ -684,13 +831,13 @@ export async function generateAndDownloadRSAMVDocx(
       createHeaderCell('Peak Area', 2200),
       createHeaderCell('Content (% of LA)', 2006),
     ], true),
-    ...prec.rows.map((row, i) =>
+    ...(prec?.rows || []).map((row, i) =>
       createRow([
         createDataCell(row.srNo, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1200),
         createDataCell(row.sampleId, AlignmentType.LEFT, true, i % 2 === 1 ? altRowBgColor : undefined, 2500),
-        createDataCell(isProtocol ? '' : row.volumeUsed, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 2000),
-        createDataCell(isProtocol ? '' : row.peakArea, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 2200),
-        createDataCell(isProtocol ? '' : row.contentPercentLa, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 2006),
+        createDataCell(isProtocol ? '—' : row.volumeUsed, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 2000),
+        createDataCell(isProtocol ? '—' : row.peakArea, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 2200),
+        createDataCell(isProtocol ? '—' : row.contentPercentLa, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 2006),
       ])
     ),
   ];
@@ -718,12 +865,12 @@ export async function generateAndDownloadRSAMVDocx(
       createHeaderCell('Peak Area', 1800),
       createHeaderCell('S/N Ratio', 1706),
     ], true),
-    ...lod.confirmationRows.map((row, i) =>
+    ...(lod?.confirmationRows || []).map((row, i) =>
       createRow([
         createDataCell(row.srNo, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1200),
         createDataCell(row.level, AlignmentType.LEFT, true, i % 2 === 1 ? altRowBgColor : undefined, 2800),
         createDataCell(row.concentrationPpm, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 2400),
-        createDataCell(isProtocol ? '' : row.peakArea, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 1800),
+        createDataCell(isProtocol ? '—' : row.peakArea, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 1800),
         createDataCell(isProtocol ? (row.level === 'LOD' ? 'Criteria: S/N ≥ 3' : 'Criteria: S/N ≥ 10') : row.snRatio, AlignmentType.CENTER, true, i % 2 === 1 ? altRowBgColor : undefined, 1706),
       ])
     ),
@@ -741,12 +888,12 @@ export async function generateAndDownloadRSAMVDocx(
       createHeaderCell('Content (% of LA)', 2600),
       createHeaderCell('Remark', 3506),
     ], true),
-    ...lod.loqPrecisionRows.map((r, i) =>
+    ...(lod?.loqPrecisionRows || []).map((r, i) =>
       createRow([
         createDataCell(r.srNo, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1200),
-        createDataCell(isProtocol ? '' : r.peakArea, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 2600),
-        createDataCell(isProtocol ? '' : r.contentPercentLa, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 2600),
-        createDataCell(isProtocol ? '' : r.remark, AlignmentType.LEFT, false, i % 2 === 1 ? altRowBgColor : undefined, 3506),
+        createDataCell(isProtocol ? '—' : r.peakArea, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 2600),
+        createDataCell(isProtocol ? '—' : r.contentPercentLa, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 2600),
+        createDataCell(isProtocol ? '—' : r.remark, AlignmentType.LEFT, false, i % 2 === 1 ? altRowBgColor : undefined, 3506),
       ])
     ),
   ];
@@ -769,15 +916,15 @@ export async function generateAndDownloadRSAMVDocx(
       createHeaderCell('Analyst 2 Area', 1500),
       createHeaderCell('Analyst 2 % LA', 1606),
     ], true),
-    ...ip.rows.map((row, i) =>
+    ...(ip?.rows || []).map((row, i) =>
       createRow([
         createDataCell(row.srNo, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 800),
-        createDataCell(isProtocol ? '' : row.analyst1Volume, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1500),
-        createDataCell(isProtocol ? '' : row.analyst1Area, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 1500),
-        createDataCell(isProtocol ? '' : row.analyst1Content, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1500),
-        createDataCell(isProtocol ? '' : row.analyst2Volume, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1500),
-        createDataCell(isProtocol ? '' : row.analyst2Area, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 1500),
-        createDataCell(isProtocol ? '' : row.analyst2Content, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1606),
+        createDataCell(isProtocol ? '—' : row.analyst1Volume, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1500),
+        createDataCell(isProtocol ? '—' : row.analyst1Area, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 1500),
+        createDataCell(isProtocol ? '—' : row.analyst1Content, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1500),
+        createDataCell(isProtocol ? '—' : row.analyst2Volume, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1500),
+        createDataCell(isProtocol ? '—' : row.analyst2Area, AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 1500),
+        createDataCell(isProtocol ? '—' : row.analyst2Content, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1606),
       ])
     ),
   ];
@@ -802,14 +949,14 @@ export async function generateAndDownloadRSAMVDocx(
       createHeaderCell('Recovered (mg)', 1800),
       createHeaderCell('% Recovery', 1806),
     ], true),
-    ...acc.rows.map((row, i) =>
+    ...(acc?.rows || []).map((row, i) =>
       createRow([
         createDataCell(row.srNo, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 700),
-        createDataCell(`${row.levelPpm} % (${Math.round((row.levelPpm / 100) * (data.linearityAndRange.linearityLevels[2]?.nominalPpm || 300))} ppm)`, AlignmentType.CENTER, true, i % 2 === 1 ? altRowBgColor : undefined, 2000),
-        createDataCell(isProtocol ? '' : row.standardSpikedMg, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1800),
-        createDataCell(isProtocol ? '' : Number(row.sampleArea).toLocaleString(), AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 1800),
-        createDataCell(isProtocol ? '' : row.amountRecoveredMg, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1800),
-        createDataCell(isProtocol ? '' : `${row.percentRecovery} %`, AlignmentType.CENTER, true, i % 2 === 1 ? altRowBgColor : undefined, 1806),
+        createDataCell(`${row.levelPpm} % (${Math.round((Number(row.levelPpm) / 100) * Number(data.linearityAndRange.linearityLevels[2]?.nominalPpm || 300))} ppm)`, AlignmentType.CENTER, true, i % 2 === 1 ? altRowBgColor : undefined, 2000),
+        createDataCell(isProtocol ? '—' : row.standardSpikedMg, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1800),
+        createDataCell(isProtocol ? '—' : Number(row.sampleArea).toLocaleString(), AlignmentType.RIGHT, false, i % 2 === 1 ? altRowBgColor : undefined, 1800),
+        createDataCell(isProtocol ? '—' : row.amountRecoveredMg, AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 1800),
+        createDataCell(isProtocol ? '—' : `${row.percentRecovery} %`, AlignmentType.CENTER, true, i % 2 === 1 ? altRowBgColor : undefined, 1806),
       ])
     ),
   ];
@@ -818,37 +965,56 @@ export async function generateAndDownloadRSAMVDocx(
     createConclusionBlock(isProtocol ? acc.stats.conclusionProtocol : acc.stats.conclusionReport)
   );
 
-  // 13. Overall Conclusion
+  
   docElements.push(
-    createSectionHeader('13. OVERALL CONCLUSION', 120, 50),
-    createBodyText(isProtocol ? data.overallConclusionProtocol : data.overallConclusionReport)
-  );
-
-  // 14. Completion Record
-  docElements.push(createSectionHeader('14. COMPLETION RECORD', 120, 50));
-  const compColWidths = [3800, 3100, 3006];
-  const compRows: TableRow[] = [
-    createRow([
-      createHeaderCell('Particulars', 3800),
-      createHeaderCell('Details / Compliance', 3100),
-      createHeaderCell('Signature & Date', 3006),
-    ], true),
-    ...data.completionRecord.map((rec, i) =>
+    createSectionHeader('Overall Conclusion', 120, 50),
+    ...(isProtocol
+      ? [
+          new Paragraph({ spacing: { before: 120, after: 60 }, children: [new TextRun({ text: '____________________________________________________________________', size: 22, font: FONT_FAMILY })] }),
+          new Paragraph({ spacing: { before: 60, after: 60 }, children: [new TextRun({ text: '____________________________________________________________________', size: 22, font: FONT_FAMILY })] }),
+          new Paragraph({ spacing: { before: 60, after: 120 }, children: [new TextRun({ text: '____________________________________________________________________', size: 22, font: FONT_FAMILY })] }),
+          new Paragraph({ spacing: { before: 60, after: 240 }, children: [new TextRun({ text: 'To be completed by the analyst after execution.', size: 22, font: FONT_FAMILY, italics: true })] }),
+        ]
+      : [
+          new Paragraph({
+            spacing: { before: 80, after: 80 },
+            children: [
+              new TextRun({
+                text: (data as any).overallConclusion || `The analytical test method for Related Substances (Organic Impurities) in ${data.productName} by HPLC has been thoroughly validated in compliance with ICH Q2(R2) and USP <1225> guidelines. The method demonstrates high specificity with baseline separation of all specified impurities and degradation products, excellent linearity (r ≥ 0.999), sensitive LOD/LOQ below the disregard limit, robust precision (%RSD ≤ 5.0%), and confirmed solution stability for up to 24 hours. All predetermined acceptance criteria have been satisfied. The analytical method is concluded to be validated and suitable for its intended quality control purpose.`,
+                size: 22,
+                font: FONT_FAMILY
+              })
+            ]
+          }),
+        ]),
+    
+    createSectionHeader('Review Checklist', 120, 50),
+    createDocxTable([5000, 4906], [
       createRow([
-        createDataCell(rec.particulars, AlignmentType.LEFT, true, i % 2 === 1 ? altRowBgColor : undefined, 3800),
-        createDataCell(isProtocol ? (rec.detailsProtocol || '') : (rec.detailsReport || rec.details), AlignmentType.LEFT, false, i % 2 === 1 ? altRowBgColor : undefined, 3100),
-        createDataCell(isProtocol ? (rec.signatureDateProtocol || '—') : (rec.signatureDateReport || rec.signatureDate), AlignmentType.CENTER, false, i % 2 === 1 ? altRowBgColor : undefined, 3006),
+        createDataCell('Raw data & chromatograms reviewed', AlignmentType.LEFT, false, undefined, 5000),
+        createDataCell(isProtocol ? '[ ] Yes  [ ] No    Initials ____' : '[X] Yes  [ ] No    Reviewed by QC', AlignmentType.LEFT, false, undefined, 4906)
+      ]),
+      createRow([
+        createDataCell('Audit trail reviewed', AlignmentType.LEFT, false, undefined, 5000),
+        createDataCell(isProtocol ? '[ ] Yes  [ ] No    Initials ____' : '[X] Yes  [ ] No    Verified', AlignmentType.LEFT, false, undefined, 4906)
+      ]),
+      createRow([
+        createDataCell('Deviation / OOS raised', AlignmentType.LEFT, false, undefined, 5000),
+        createDataCell(isProtocol ? '[ ] None  [ ] Ref No: _________' : '[X] None  [ ] Ref No: N/A', AlignmentType.LEFT, false, undefined, 4906)
+      ]),
+      createRow([
+        createDataCell('Annexures attached', AlignmentType.LEFT, false, undefined, 5000),
+        createDataCell(isProtocol ? '____ of ____ pages' : 'Attached (Annexures 1 to 5)', AlignmentType.LEFT, false, undefined, 4906)
       ])
-    ),
-  ];
-  docElements.push(createDocxTable(compColWidths, compRows));
+    ])
+  );
 
   // 15. Abbreviations
   docElements.push(createSectionHeader('15. ABBREVIATIONS', 120, 50));
   const abbrColWidths = [2500, 7406];
   const abbrRows: TableRow[] = [
     createRow([createHeaderCell('Abbreviation', 2500), createHeaderCell('Full Form / Expansion', 7406)], true),
-    ...data.abbreviations.map((ab, i) =>
+    ...(data.abbreviations || []).map((ab, i) =>
       createRow([
         createDataCell(ab.abbreviation, AlignmentType.LEFT, true, i % 2 === 1 ? altRowBgColor : undefined, 2500),
         createDataCell(ab.expansion, AlignmentType.LEFT, false, i % 2 === 1 ? altRowBgColor : undefined, 7406),
@@ -880,7 +1046,7 @@ export async function generateAndDownloadRSAMVDocx(
         spacing: { after: 100 },
         children: [
           new TextRun({
-            text: `${data.companyName} | ${isProtocol ? 'AMV Protocol' : 'AMV Report'} (${data.productName}) — Doc No: ${singleDocNumber}`,
+            text: `${data.companyName} | ${isProtocol ? 'Related Substances Protocol' : 'Related Substances Report'} (${data.productName}) — Doc No: ${singleDocNumber}`,
             size: 16,
             font: FONT_FAMILY,
             color: '6B7280',
@@ -890,55 +1056,14 @@ export async function generateAndDownloadRSAMVDocx(
     ],
   });
 
-  const docFooter = new Footer({
-    children: [
-      ...(options.dataMode === 'DEMO'
-        ? [
-            new Paragraph({
-              alignment: AlignmentType.CENTER,
-              children: [
-                new TextRun({
-                  text: 'DEMO / FORMAT-DEMONSTRATION ONLY — NOT FOR GMP USE',
-                  size: 15,
-                  bold: true,
-                  color: 'B45309',
-                  font: FONT_FAMILY,
-                }),
-              ],
-            }),
-          ]
-        : []),
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: { before: 100 },
-        children: [
-          new TextRun({
-            text: 'Page ',
-            size: 16,
-            font: FONT_FAMILY,
-            color: '6B7280',
-          }),
-          new TextRun({
-            children: [PageNumber.CURRENT],
-            size: 16,
-            font: FONT_FAMILY,
-            color: '6B7280',
-          }),
-          new TextRun({
-            text: ' of ',
-            size: 16,
-            font: FONT_FAMILY,
-            color: '6B7280',
-          }),
-          new TextRun({
-            children: [PageNumber.TOTAL_PAGES],
-            size: 16,
-            font: FONT_FAMILY,
-            color: '6B7280',
-          }),
-        ],
-      }),
-    ],
+  const stampBytes = await getWestCoastStampUint8Array(180);
+
+  const docFooter = createDocxSignOffFooter({
+    fontFamily: FONT_FAMILY,
+    dataMode: options.dataMode,
+    footerData: options.footerSignOffData,
+    stampImageBytes: stampBytes,
+    theme: options.theme,
   });
 
   const doc = new Document({

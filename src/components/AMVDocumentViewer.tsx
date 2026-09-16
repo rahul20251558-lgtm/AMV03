@@ -8,10 +8,13 @@ import {
   FontFamilyType,
   FontSizePt,
   DataMode,
+  FooterSignOffData,
 } from '../types';
-import { formatNum, formatInt } from '../services/mathUtils';
+import { formatNum, formatInt, formatAmountByMagnitude } from '../services/mathUtils';
 import { LinearityChart } from './LinearityChart';
 import { FontAndSizeControl } from './FontAndSizeControl';
+import { SignOffFooter, DEFAULT_FOOTER_SIGN_OFF } from './SignOffFooter';
+import { FooterDateModal } from './FooterDateModal';
 import {
   Download,
   Printer,
@@ -19,6 +22,7 @@ import {
   Layers,
   ChevronDown,
   ChevronUp,
+  Calendar,
 } from 'lucide-react';
 
 interface AMVDocumentViewerProps {
@@ -36,6 +40,8 @@ interface AMVDocumentViewerProps {
   onDownloadReport: () => void;
   onDownloadBoth: () => void;
   onUpdateData?: (updated: AMVDocumentData) => void;
+  footerSignOffData?: FooterSignOffData;
+  onUpdateFooterSignOffData?: (data: FooterSignOffData) => void;
 }
 
 export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
@@ -53,11 +59,24 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
   onDownloadReport,
   onDownloadBoth,
   onUpdateData,
+  footerSignOffData,
+  onUpdateFooterSignOffData,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [showChart, setShowChart] = useState(false);
+  const [isFooterDateModalOpen, setIsFooterDateModalOpen] = useState(false);
+  const [localFooterData, setLocalFooterData] = useState<FooterSignOffData>(DEFAULT_FOOTER_SIGN_OFF);
+
+  const activeFooterData = footerSignOffData || localFooterData;
+  const handleUpdateFooter = (updated: FooterSignOffData) => {
+    setLocalFooterData(updated);
+    if (onUpdateFooterSignOffData) onUpdateFooterSignOffData(updated);
+  };
+
   const isProtocol = docType === 'protocol';
+  const renderPct = (val: any) => (val === undefined || val === null || val === '—' || val === '' || Number.isNaN(Number(val))) ? '—' : `${val} %`;
   const isBlue = theme === 'blue';
+  const isWestcoast = theme === 'westcoast';
   const currentMode: DataMode = dataMode === 'TEMPLATE' ? 'TEMPLATE' : 'DEMO';
 
   const fontStyle: React.CSSProperties = {
@@ -100,8 +119,8 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
     const updated = JSON.parse(JSON.stringify(data)) as AMVDocumentData;
     updated.accuracy.rows[index][field] = value;
     if (field === 'amountRecovered' || field === 'amountAdded') {
-      const added = updated.accuracy.rows[index].amountAdded;
-      const rec = updated.accuracy.rows[index].amountRecovered;
+      const added = Number(updated.accuracy.rows[index].amountAdded);
+      const rec = Number(updated.accuracy.rows[index].amountRecovered);
       if (added > 0) {
         updated.accuracy.rows[index].percentRecovery = Number(((rec / added) * 100).toFixed(2));
       }
@@ -119,34 +138,39 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
 
   // Running header component for pages 2 to 8
   const RunningHeader = () => (
+  isWestcoast ? (
+    <div className="text-center font-bold text-[12pt] mb-4 uppercase tracking-wider">
+      ANALYTICAL METHOD VALIDATION REPORT
+    </div>
+  ) : (
     <div className="flex justify-between items-center pb-2 mb-4 border-b border-zinc-300 text-[11px] text-zinc-500 font-sans">
       <span className="font-semibold text-zinc-700">{data.companyName}</span>
       <span>
         {isProtocol ? 'AMV Protocol' : 'AMV Report'} – {data.productName} | Doc No. {data.documentNo}
       </span>
     </div>
-  );
+  )
+);
 
-  // Running footer component for each page (Page X of 8)
+  // Running footer component for each page (Page X of 8) with official sign-off table
   const RunningFooter = ({ pageNum }: { pageNum: number }) => (
-    <div className="pt-3 mt-5 border-t border-zinc-200 text-[11px] text-zinc-400 font-sans space-y-1">
-      {dataMode === 'DEMO' && (
-        <div className="text-center font-bold text-[11px] text-amber-700 tracking-wider uppercase">
-          DEMO / FORMAT-DEMONSTRATION ONLY — NOT FOR GMP USE
-        </div>
-      )}
-      <div className="text-center">Page {pageNum} of 8</div>
-    </div>
+    <SignOffFooter theme={theme}
+      pageNum={pageNum}
+      totalPages={8}
+      dataMode={dataMode}
+      footerData={activeFooterData}
+      onUpdateFooterData={handleUpdateFooter}
+    />
   );
 
-  const c = data.chromatographicConditions;
-  const ss = data.systemSuitability;
-  const spec = data.specificity;
-  const lin = data.linearity;
-  const acc = data.accuracy;
-  const prec = data.precision;
-  const rob = data.robustness;
-  const stab = data.solutionStability;
+  const c = data.chromatographicConditions || {} as any;
+  const ss = data.systemSuitability || {} as any;
+  const spec = data.specificity || {} as any;
+  const lin = data.linearity || {} as any;
+  const acc = data.accuracy || {} as any;
+  const prec = data.precision || {} as any;
+  const rob = data.robustness || {} as any;
+  const stab = data.solutionStability || {} as any;
 
   return (
     <div style={fontStyle} className="space-y-6 text-zinc-900">
@@ -204,6 +228,18 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
               <span className="w-2 h-2 rounded-full bg-zinc-400"></span>
               Simple Format (No Color)
             </button>
+            <button
+              type="button"
+              onClick={() => onThemeChange('westcoast')}
+              className={`px-2.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                theme === 'westcoast'
+                  ? 'bg-green-700 text-white shadow-xs'
+                  : 'text-zinc-600 hover:text-zinc-900'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-green-400"></span>
+              Westcoast Format
+            </button>
           </div>
 
           {/* Typography Controls: Font Family & Font Size (matching uploaded image: Times New Roman 12) */}
@@ -213,6 +249,17 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
             onFontFamilyChange={onFontFamilyChange || (() => {})}
             onFontSizeChange={onFontSizeChange || (() => {})}
           />
+
+          {/* Quick Footer Date & Details Button */}
+          <button
+            type="button"
+            onClick={() => setIsFooterDateModalOpen(true)}
+            className="px-2.5 py-1.5 rounded-lg border border-blue-200 bg-blue-50/80 hover:bg-blue-100 text-blue-900 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="Configure Footer Sign-off Date (Applies across all pages)"
+          >
+            <Calendar className="w-3.5 h-3.5 text-blue-700" />
+            <span>Footer Date: <strong className="font-mono text-blue-950">{activeFooterData?.preparedBy?.date || '24/01/2024'}</strong></span>
+          </button>
         </div>
 
         {/* Action Buttons */}
@@ -277,67 +324,85 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
       {/* PAGE 1 OF 8: MASTHEAD, METADATA, 3-COL SIGN-OFF, SEC 1, 2, 3, 4.1 HEADING */}
       {/* ========================================================================= */}
       <div className="page-card bg-white border border-zinc-300 rounded-lg shadow-sm p-6 sm:p-8 max-w-5xl mx-auto mb-6">
-        {/* Company Title */}
-        <div className="text-center pb-1 pt-1">
-          <h1 className={`text-xl sm:text-2xl font-bold uppercase tracking-wide ${sectionHeadingClass}`}>
-            {data.companyName}
-          </h1>
-          <p className="text-xs text-zinc-600 font-medium mt-1">{data.companyAddress}</p>
-        </div>
-
-        {/* Solid Divider Line */}
-        <div className={`w-full h-1 my-3 ${isBlue ? 'bg-[#1F4E79]' : 'bg-zinc-800'}`}></div>
-
-        {/* Document Title */}
-        <div className="text-center py-1 mb-3">
-          <h2 className={`text-sm sm:text-base font-bold uppercase tracking-wider ${sectionHeadingClass}`}>
-            {isProtocol
-              ? 'ANALYTICAL METHOD VALIDATION PROTOCOL (Assay by HPLC)'
-              : 'ANALYTICAL METHOD VALIDATION REPORT (Assay by HPLC)'}
-          </h2>
-          {dataMode === 'DEMO' && (
-            <div className="inline-block mt-2 px-3 py-1 bg-amber-100 border border-amber-300 rounded text-amber-900 font-bold text-xs tracking-wider uppercase">
-              DEMO / FORMAT-DEMONSTRATION ONLY — NOT FOR GMP USE
+        {isWestcoast ? (
+          <div className="text-center pb-6 pt-2">
+            <h1 className="text-[14pt] font-bold uppercase tracking-wider mb-2 text-black">
+              {isProtocol ? 'ANALYTICAL METHOD VALIDATION PROTOCOL' : 'ANALYTICAL METHOD VALIDATION REPORT'}
+            </h1>
+            <h2 className="text-[12pt] font-bold uppercase tracking-wide text-black">
+              {data.companyName}
+            </h2>
+            {dataMode === 'DEMO' && (
+              <div className="inline-block mt-4 px-3 py-1 bg-amber-100 border border-amber-300 rounded text-amber-900 font-bold text-xs tracking-wider uppercase">
+                DEMO / FORMAT-DEMONSTRATION ONLY — NOT FOR GMP USE
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* Company Title */}
+            <div className="text-center pb-1 pt-1">
+              <h1 className={`text-xl sm:text-2xl font-bold uppercase tracking-wide ${sectionHeadingClass}`}>
+                {data.companyName}
+              </h1>
+              <p className="text-xs text-zinc-600 font-medium mt-1">{data.companyAddress}</p>
             </div>
-          )}
-        </div>
+
+            {/* Solid Divider Line */}
+            <div className={`w-full h-1 my-3 ${isBlue ? 'bg-[#1F4E79]' : 'bg-zinc-800'}`}></div>
+
+            {/* Document Title */}
+            <div className="text-center py-1 mb-3">
+              <h2 className={`text-sm sm:text-base font-bold uppercase tracking-wider ${sectionHeadingClass}`}>
+                {isProtocol
+                  ? 'ANALYTICAL METHOD VALIDATION PROTOCOL'
+                  : 'ANALYTICAL METHOD VALIDATION REPORT'}
+              </h2>
+              {dataMode === 'DEMO' && (
+                <div className="inline-block mt-2 px-3 py-1 bg-amber-100 border border-amber-300 rounded text-amber-900 font-bold text-xs tracking-wider uppercase">
+                  DEMO / FORMAT-DEMONSTRATION ONLY — NOT FOR GMP USE
+                </div>
+              )}
+            </div>
+          </>
+        )}
 
         {/* Metadata Table */}
         <div className="overflow-x-auto mb-4">
-          <table className="w-full text-xs border-collapse border border-zinc-300">
+          <table className={`w-full ${isWestcoast ? 'text-[11pt]' : 'text-xs'} border-collapse border border-zinc-300`}>
             <tbody>
               <tr>
-                <td className="w-1/3 bg-zinc-50 font-bold border border-zinc-300 px-3 py-1.5 text-zinc-700">Document No.</td>
+                <td className={`w-1/3 ${isWestcoast ? 'text-black' : 'bg-zinc-50 text-zinc-700'} font-bold border border-zinc-300 px-3 py-1.5`}>{isWestcoast ? "Report No." : "Document No."}</td>
                 <td className="w-2/3 border border-zinc-300 px-3 py-1.5 font-mono font-bold text-zinc-900">{data.documentNo}</td>
               </tr>
               <tr>
-                <td className="bg-zinc-50 font-bold border border-zinc-300 px-3 py-1.5 text-zinc-700">Product Name</td>
+                <td className={`${isWestcoast ? 'text-black' : 'bg-zinc-50 text-zinc-700'} font-bold border border-zinc-300 px-3 py-1.5`}>Product Name</td>
                 <td className="border border-zinc-300 px-3 py-1.5 font-bold text-zinc-900">{data.productName}</td>
               </tr>
               <tr>
-                <td className="bg-zinc-50 font-bold border border-zinc-300 px-3 py-1.5 text-zinc-700">Label Claim</td>
+                <td className={`${isWestcoast ? 'text-black' : 'bg-zinc-50 text-zinc-700'} font-bold border border-zinc-300 px-3 py-1.5`}>Label Claim</td>
                 <td className="border border-zinc-300 px-3 py-1.5 text-zinc-800">{data.labelClaim}</td>
               </tr>
               <tr>
-                <td className="bg-zinc-50 font-bold border border-zinc-300 px-3 py-1.5 text-zinc-700">Test Parameter</td>
+                <td className={`${isWestcoast ? 'text-black' : 'bg-zinc-50 text-zinc-700'} font-bold border border-zinc-300 px-3 py-1.5`}>Test Parameter</td>
                 <td className="border border-zinc-300 px-3 py-1.5 text-zinc-800">{data.testParameter}</td>
               </tr>
               <tr>
-                <td className="bg-zinc-50 font-bold border border-zinc-300 px-3 py-1.5 text-zinc-700">Reference</td>
+                <td className={`${isWestcoast ? 'text-black' : 'bg-zinc-50 text-zinc-700'} font-bold border border-zinc-300 px-3 py-1.5`}>Reference</td>
                 <td className="border border-zinc-300 px-3 py-1.5 text-zinc-800">{data.reference}</td>
               </tr>
               <tr>
-                <td className="bg-zinc-50 font-bold border border-zinc-300 px-3 py-1.5 text-zinc-700">Batch No. Used</td>
+                <td className={`${isWestcoast ? 'text-black' : 'bg-zinc-50 text-zinc-700'} font-bold border border-zinc-300 px-3 py-1.5`}>Batch No. Used</td>
                 <td className="border border-zinc-300 px-3 py-1.5 font-mono font-bold text-zinc-900">{data.batchNoUsed}</td>
               </tr>
               <tr>
-                <td className="bg-zinc-50 font-bold border border-zinc-300 px-3 py-1.5 text-zinc-700">Effective Date</td>
+                <td className={`${isWestcoast ? 'text-black' : 'bg-zinc-50 text-zinc-700'} font-bold border border-zinc-300 px-3 py-1.5`}>Effective Date</td>
                 <td className="border border-zinc-300 px-3 py-1.5 text-zinc-800">
                   {isProtocol ? '01-Apr-2026' : (data.effectiveDate || '21-Apr-2026')}
                 </td>
               </tr>
               <tr>
-                <td className="bg-zinc-50 font-bold border border-zinc-300 px-3 py-1.5 text-zinc-700">Supersedes</td>
+                <td className={`${isWestcoast ? 'text-black' : 'bg-zinc-50 text-zinc-700'} font-bold border border-zinc-300 px-3 py-1.5`}>Supersedes</td>
                 <td className="border border-zinc-300 px-3 py-1.5 text-zinc-800">{data.supersedes}</td>
               </tr>
             </tbody>
@@ -357,21 +422,63 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
             <tbody>
               <tr>
                 <td className="p-2 border border-zinc-300 text-xs align-top space-y-1">
-                  <div><span className="font-bold">Name:</span> {data.signOffs.preparedBy.name || ''}</div>
-                  <div><span className="font-bold">Designation:</span> {data.signOffs.preparedBy.designation || 'Analyst – QC'}</div>
-                  <div><span className="font-bold">Signature / Date:</span> {isProtocol ? '25-Mar-2026' : (data.signOffs.preparedBy.date || '15-Apr-2026')}</div>
+                  <div><span className="font-bold">Name:</span> {data.signOffs?.preparedBy?.name || ''}</div>
+                  <div><span className="font-bold">Designation:</span> {data.signOffs?.preparedBy?.designation || 'Analyst – QC'}</div>
+                  <div><span className="font-bold">Signature / Date:</span> {isProtocol ? '25-Mar-2026' : (data.signOffs?.preparedBy?.date || '15-Apr-2026')}</div>
                 </td>
                 <td className="p-2 border border-zinc-300 text-xs align-top space-y-1">
-                  <div><span className="font-bold">Name:</span> {data.signOffs.reviewedBy.name || ''}</div>
-                  <div><span className="font-bold">Designation:</span> {data.signOffs.reviewedBy.designation || 'Manager – QC'}</div>
-                  <div><span className="font-bold">Signature / Date:</span> {isProtocol ? '28-Mar-2026' : (data.signOffs.reviewedBy.date || '18-Apr-2026')}</div>
+                  <div><span className="font-bold">Name:</span> {data.signOffs?.reviewedBy?.name || ''}</div>
+                  <div><span className="font-bold">Designation:</span> {data.signOffs?.reviewedBy?.designation || 'Manager – QC'}</div>
+                  <div><span className="font-bold">Signature / Date:</span> {isProtocol ? '28-Mar-2026' : (data.signOffs?.reviewedBy?.date || '18-Apr-2026')}</div>
                 </td>
                 <td className="p-2 border border-zinc-300 text-xs align-top space-y-1">
-                  <div><span className="font-bold">Name:</span> {data.signOffs.approvedBy.name || ''}</div>
-                  <div><span className="font-bold">Designation:</span> {data.signOffs.approvedBy.designation || 'Head – QA'}</div>
-                  <div><span className="font-bold">Signature / Date:</span> {isProtocol ? '31-Mar-2026' : (data.signOffs.approvedBy.date || '20-Apr-2026')}</div>
+                  <div><span className="font-bold">Name:</span> {data.signOffs?.approvedBy?.name || ''}</div>
+                  <div><span className="font-bold">Designation:</span> {data.signOffs?.approvedBy?.designation || 'Head – QA'}</div>
+                  <div><span className="font-bold">Signature / Date:</span> {isProtocol ? '31-Mar-2026' : (data.signOffs?.approvedBy?.date || '20-Apr-2026')}</div>
                 </td>
               </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* TABLE OF CONTENTS */}
+        <div className="mb-4">
+          <h3 className={`text-xs font-bold uppercase mb-1.5 ${sectionHeadingClass}`}>
+            TABLE OF CONTENTS
+          </h3>
+          <table className="w-full text-xs border-collapse border border-zinc-300">
+            <thead>
+              <tr className={tableHeaderClass}>
+                <th className="p-1.5 border border-zinc-300 text-center w-16">Sr. No.</th>
+                <th className="p-1.5 border border-zinc-300 text-left">Contents / Section Title</th>
+                <th className="p-1.5 border border-zinc-300 text-center w-24">Page No.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                { srNo: '1.0', title: 'Objective', pageNo: 'Page 1' },
+                { srNo: '2.0', title: 'Scope', pageNo: 'Page 1' },
+                { srNo: '3.0', title: 'Reference Documents & Verification Details', pageNo: 'Page 1' },
+                { srNo: '4.0', title: 'Analytical Method Summary (4.1 Conditions, 4.2 Preparations, 4.3 Formulae)', pageNo: 'Page 2' },
+                { srNo: '4.4', title: 'Reagents, Reference Standards & Analytical Equipment', pageNo: 'Page 3' },
+                { srNo: '5.0', title: 'Validation Parameters and Acceptance Criteria', pageNo: 'Page 3' },
+                { srNo: '6.0', title: 'System Suitability Test (SST)', pageNo: 'Page 4' },
+                { srNo: '7.0', title: 'Specificity / Placebo Interference & Forced Degradation', pageNo: 'Page 4' },
+                { srNo: '8.0', title: 'Linearity and Range (50 % to 150 % of nominal conc.)', pageNo: 'Page 5' },
+                { srNo: '9.0', title: 'Accuracy / Recovery (50 %, 100 %, 150 % Levels)', pageNo: 'Page 5' },
+                { srNo: '10.0', title: 'Method Precision (Repeatability, n = 6)', pageNo: 'Page 6' },
+                { srNo: '11.0', title: 'Intermediate Precision / Ruggedness (Analyst-to-Analyst)', pageNo: 'Page 6' },
+                { srNo: '12.0', title: 'Robustness & Stability of Analytical Solutions', pageNo: 'Page 7' },
+                { srNo: '13.0', title: 'Overall Conclusion', pageNo: 'Page 7' },
+                { srNo: '14.0', title: 'Review Checklist & Completion Record', pageNo: 'Page 7' },
+                { srNo: '15.0', title: 'List of Abbreviations & Document Revision History', pageNo: 'Page 8' },
+              ]?.map((item, idx) => (
+                <tr key={idx} className={idx % 2 === 1 ? 'bg-zinc-50' : ''}>
+                  <td className="p-1 border border-zinc-300 text-center font-mono font-medium text-zinc-700">{item.srNo}</td>
+                  <td className="p-1 border border-zinc-300 text-left text-zinc-900">{item.title}</td>
+                  <td className="p-1 border border-zinc-300 text-center font-bold text-zinc-900">{item.pageNo}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -438,63 +545,21 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
       <div className="page-card bg-white border border-zinc-300 rounded-lg shadow-sm p-6 sm:p-8 max-w-5xl mx-auto mb-6">
         <RunningHeader />
 
-        {/* 4.1 Chromatographic Conditions Table */}
+        {/* 4.1 Chromatographic Conditions - Narrative Paragraph Format (No Table) */}
         <div className="mb-4">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs border-collapse border border-zinc-300">
-              <thead>
-                <tr className={tableHeaderClass}>
-                  <th className="p-2 border border-zinc-300 text-left w-1/3">Parameter</th>
-                  <th className="p-2 border border-zinc-300 text-left w-2/3">Condition</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Column</td>
-                  <td className="p-1.5 border border-zinc-300">{c.column}</td>
-                </tr>
-                <tr>
-                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Mobile Phase</td>
-                  <td className="p-1.5 border border-zinc-300">{c.mobilePhase}</td>
-                </tr>
-                <tr>
-                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Flow Rate</td>
-                  <td className="p-1.5 border border-zinc-300">{c.flowRate}</td>
-                </tr>
-                <tr>
-                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Detection Wavelength</td>
-                  <td className="p-1.5 border border-zinc-300">{c.detectionWavelength}</td>
-                </tr>
-                <tr>
-                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Injection Volume</td>
-                  <td className="p-1.5 border border-zinc-300">{c.injectionVolume}</td>
-                </tr>
-                <tr>
-                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Column Temperature</td>
-                  <td className="p-1.5 border border-zinc-300">{c.columnTemperature}</td>
-                </tr>
-                <tr>
-                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Run Time</td>
-                  <td className="p-1.5 border border-zinc-300">{c.runTime}</td>
-                </tr>
-                <tr>
-                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Diluent</td>
-                  <td className="p-1.5 border border-zinc-300">{c.diluent}</td>
-                </tr>
-                <tr>
-                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Working Concentration</td>
-                  <td className="p-1.5 border border-zinc-300">{c.workingConcentration}</td>
-                </tr>
-                <tr>
-                  <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Approx. Retention Time</td>
-                  <td className="p-1.5 border border-zinc-300 font-medium">{c.approxRetentionTime || '6.5 min'}</td>
-                </tr>
-              </tbody>
-            </table>
+          <div className="text-xs text-zinc-800 leading-relaxed space-y-2.5 p-3.5 bg-zinc-50 border border-zinc-300 rounded">
+            <p className="text-justify">
+              The high-performance liquid chromatographic (HPLC) separation is executed using a stationary phase consisting of <strong>Column:</strong> {c.column}. The mobile phase system employed is <strong>Mobile Phase:</strong> {c.mobilePhase}. The chromatographic system is operated isocratically at a controlled <strong>Flow Rate:</strong> {c.flowRate}, with spectrophotometric monitoring performed at a <strong>Detection Wavelength:</strong> {c.detectionWavelength}.
+            </p>
+            <p className="text-justify">
+              Sample introduction is carried out with an <strong>Injection Volume:</strong> {c.injectionVolume}, and thermal equilibrium of the stationary phase is maintained at a <strong>Column Temperature:</strong> {c.columnTemperature}. The total chromatographic <strong>Run Time:</strong> is established at {c.runTime}. Samples and reference standard preparations are prepared in <strong>Diluent:</strong> {c.diluent} to attain a target <strong>Working Concentration:</strong> of {c.workingConcentration}. Under these validated operational conditions, the typical chromatographic retention time for the main active analyte is approximately <strong>Approximate Retention Time:</strong> {c.approxRetentionTime || '6.5 min'}.
+            </p>
+            {c.note && (
+              <p className="text-[11px] italic text-zinc-600 bg-white p-2 border border-zinc-200 rounded">
+                <strong>Note on Mobile Phase Preparation:</strong> {c.note}
+              </p>
+            )}
           </div>
-          <p className="text-[11px] italic text-zinc-500 mt-1.5">
-            Note: {c.note || 'Dissolve 1.36 g of Potassium Dihydrogen Phosphate in 1000 mL water, adjust pH to 6.0 with 0.1M KOH.'}
-          </p>
         </div>
 
         {/* 4.2 Preparation of Solutions (Summary) */}
@@ -514,7 +579,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                     Standard Solution ({c.workingConcentration})
                   </td>
                   <td className="p-2 border border-zinc-300 text-zinc-800 leading-relaxed">
-                    {data.solutionPreparation.standardSolution}
+                    {data.solutionPreparation?.standardSolution}
                   </td>
                 </tr>
                 <tr>
@@ -522,7 +587,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                     Sample Solution ({c.workingConcentration})
                   </td>
                   <td className="p-2 border border-zinc-300 text-zinc-800 leading-relaxed">
-                    {data.solutionPreparation.sampleSolution}
+                    {data.solutionPreparation?.sampleSolution}
                   </td>
                 </tr>
               </tbody>
@@ -550,7 +615,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
               '• AVG_WT = Average weight of 20 tablets (mg)',
               `• LC = Label claim of ${data.activeSubstance} per unit (mg)`,
               `• Purity = Decimal purity of ${data.activeSubstance} reference standard`,
-            ]).map((note, i) => (
+            ])?.map((note, i) => (
               <p key={i}>{note}</p>
             ))}
           </div>
@@ -581,7 +646,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {data.reagentsAndStandards.map((r, i) => (
+                {data.reagentsAndStandards?.map((r, i) => (
                   <tr key={i}>
                     <td className="p-1.5 border border-zinc-300 font-semibold">{r.name}</td>
                     <td className="p-1.5 border border-zinc-300">{r.grade}</td>
@@ -629,7 +694,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                     Tailing factor NMT 2.0; %RSD of area NMT 2.0 % (n=5); theoretical plates NLT 2000.
                   </td>
                   <td className="p-1.5 border border-zinc-300">
-                    {isProtocol ? 'To be verified as per protocol criteria' : `Tailing ${formatNum(ss.meanTailing, 2)}; %RSD ${formatNum(ss.rsdArea, 2)} %; plates ${formatInt(ss.meanPlates)} — Complies`}
+                    {isProtocol ? 'To be verified as per protocol criteria' : `Tailing ${formatNum(ss.meanTailing, 2)}; %RSD ${renderPct(formatNum(ss.rsdArea, 2))}; plates ${formatInt(ss.meanPlates)} — Complies`}
                   </td>
                 </tr>
                 <tr>
@@ -639,7 +704,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                     Correlation coefficient (r) shall be ≥ 0.999 (r² ≥ 0.998); slope and y-intercept reported; y-intercept bias at 100 % level within ±2.0 %.
                   </td>
                   <td className="p-1.5 border border-zinc-300">
-                    {isProtocol ? 'To be verified as per protocol criteria' : `r = ${formatNum(lin.regression.correlationR, 5)}; slope ${formatNum(lin.regression.slope, 1)}; y-intercept ${formatNum(lin.regression.yIntercept, 0)}; bias ${formatNum(lin.regression.yInterceptBiasPercent, 2)} % — Complies`}
+                    {isProtocol ? 'To be verified as per protocol criteria' : `r = ${formatNum(lin.regression.correlationR, 5)}; slope ${formatNum(lin.regression.slope, 1)}; y-intercept ${formatNum(lin.regression.yIntercept, 0)}; bias ${renderPct(formatNum(lin.regression.yInterceptBiasPercent, 2))} — Complies`}
                   </td>
                 </tr>
                 <tr>
@@ -649,7 +714,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                     Mean recovery of three levels in triplicate between 98.0 % and 102.0 %; %RSD at each level NMT 2.0 %.
                   </td>
                   <td className="p-1.5 border border-zinc-300">
-                    {isProtocol ? 'To be verified as per protocol criteria' : `Mean recovery ${formatNum(acc.meanRecoveryAllLevels, 2)} % (n = 9, %RSD ${formatNum(acc.rsdAllLevels, 2)} %) — Complies`}
+                    {isProtocol ? 'To be verified as per protocol criteria' : `Mean recovery ${renderPct(formatNum(acc.meanRecoveryAllLevels, 2))} (n = 9, %RSD ${renderPct(formatNum(acc.rsdAllLevels, 2))}) — Complies`}
                   </td>
                 </tr>
               </tbody>
@@ -688,7 +753,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                     Mean recovery 98.0 % to 102.0 %; %RSD ≤ 2.0 % at each level; correlation coefficient r ≥ 0.999.
                   </td>
                   <td className="p-1.5 border border-zinc-300">
-                    {isProtocol ? 'To be verified as per protocol criteria' : `Mean recovery ${formatNum(acc.meanRecoveryAllLevels, 2)} %; %RSD ${formatNum(acc.rsdAllLevels, 2)} %; r = ${formatNum(lin.regression.correlationR, 5)} — Complies`}
+                    {isProtocol ? 'To be verified as per protocol criteria' : `Mean recovery ${renderPct(formatNum(acc.meanRecoveryAllLevels, 2))}; %RSD ${renderPct(formatNum(acc.rsdAllLevels, 2))}; r = ${formatNum(lin.regression.correlationR, 5)} — Complies`}
                   </td>
                 </tr>
                 <tr>
@@ -696,7 +761,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                   <td className="p-1.5 font-semibold bg-zinc-50 border border-zinc-300">Method Precision (Repeatability)</td>
                   <td className="p-1.5 border border-zinc-300">%RSD for six assay sample preparations NMT 2.0 %.</td>
                   <td className="p-1.5 border border-zinc-300">
-                    {isProtocol ? 'To be verified as per protocol criteria' : `Mean ${formatNum(prec.analyst1Mean, 2)} %; %RSD ${formatNum(prec.analyst1Rsd, 2)} % — Complies`}
+                    {isProtocol ? 'To be verified as per protocol criteria' : `Mean ${renderPct(formatNum(prec.analyst1Mean, 2))}; %RSD ${renderPct(formatNum(prec.analyst1Rsd, 2))} — Complies`}
                   </td>
                 </tr>
                 <tr>
@@ -706,7 +771,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                     %RSD for six results NMT 2.0 %; cumulative %RSD for twelve results NMT 2.0 %.
                   </td>
                   <td className="p-1.5 border border-zinc-300">
-                    {isProtocol ? 'To be verified as per protocol criteria' : `Analyst 2 %RSD ${formatNum(prec.analyst2Rsd, 2)} %; Cumulative %RSD ${formatNum(prec.cumulativeRsd, 2)} % (n = 12) — Complies`}
+                    {isProtocol ? 'To be verified as per protocol criteria' : `Analyst 2 %RSD ${renderPct(formatNum(prec.analyst2Rsd, 2))}; Cumulative %RSD ${renderPct(formatNum(prec.cumulativeRsd, 2))} (n = 12) — Complies`}
                   </td>
                 </tr>
                 <tr>
@@ -718,7 +783,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                   <td className="p-1.5 border border-zinc-300">
                     {isProtocol
                       ? 'To be verified as per protocol criteria'
-                      : `Maximum %RSD ${formatNum(rob.rows.length > 0 ? Math.max(...rob.rows.map((r) => r.rsdPercent)) : 0.13, 2)} %; all criteria met — Complies`}
+                      : `Maximum %RSD ${renderPct(formatNum((rob?.rows?.length || 0) > 0 ? Math.max(...rob.rows?.map((r) => r.rsdPercent)) : 0.13, 2))}; all criteria met — Complies`}
                   </td>
                 </tr>
                 <tr>
@@ -731,11 +796,11 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                     {isProtocol
                       ? 'To be verified as per protocol criteria'
                       : (() => {
-                          const initialStd = stab.rows[0]?.standardArea || 1;
-                          const initialSpl = stab.rows[0]?.sampleArea || 1;
+                          const initialStd = stab.rows?.[0]?.standardArea || 1;
+                          const initialSpl = stab.rows?.[0]?.sampleArea || 1;
                           let maxStd = 0;
                           let maxSpl = 0;
-                          stab.rows.forEach((r, i) => {
+                          stab.rows?.forEach((r, i) => {
                             if (i > 0) {
                               const dS = (Math.abs(r.standardArea - initialStd) / initialStd) * 100;
                               const dP = (Math.abs(r.sampleArea - initialSpl) / initialSpl) * 100;
@@ -743,7 +808,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                               if (dP > maxSpl) maxSpl = dP;
                             }
                           });
-                          return `Standard max diff ${formatNum(maxStd, 2)} %; Sample max diff ${formatNum(maxSpl, 2)} % (24 h) — Complies`;
+                          return `Standard max diff ${renderPct(formatNum(maxStd, 2))}; Sample max diff ${renderPct(formatNum(maxSpl, 2))} (24 h) — Complies`;
                         })()}
                   </td>
                 </tr>
@@ -772,7 +837,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {ss.injections.map((inj, idx) => (
+                {ss.injections?.map((inj, idx) => (
                   <tr key={inj.injectionNo}>
                     <td className="p-1.5 border border-zinc-300 text-center font-bold text-zinc-800">
                       {inj.injectionNo}
@@ -825,25 +890,25 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                 <tr className="bg-zinc-50 font-bold">
                   <td className="p-1.5 border border-zinc-300 text-center text-zinc-900">Mean</td>
                   <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                    {isProtocol ? '' : formatInt(ss.meanArea)}
+                    {isProtocol ? '—' : formatInt(ss.meanArea)}
                   </td>
                   <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                    {isProtocol ? '' : formatNum(ss.meanTailing, 2)}
+                    {isProtocol ? '—' : formatNum(ss.meanTailing, 2)}
                   </td>
                   <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                    {isProtocol ? '' : formatInt(ss.meanPlates)}
+                    {isProtocol ? '—' : formatInt(ss.meanPlates)}
                   </td>
                 </tr>
                 <tr className="bg-zinc-50 font-bold">
                   <td className="p-1.5 border border-zinc-300 text-center text-zinc-900">%RSD</td>
                   <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                    {isProtocol ? 'To be evaluated' : `${formatNum(ss.rsdArea, 2)} %`}
+                    {isProtocol ? 'To be evaluated' : `${renderPct(formatNum(ss.rsdArea, 2))}`}
                   </td>
                   <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                    {isProtocol ? 'To be evaluated' : `${formatNum(ss.rsdTailing, 2)} %`}
+                    {isProtocol ? 'To be evaluated' : `${renderPct(formatNum(ss.rsdTailing, 2))}`}
                   </td>
                   <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                    {isProtocol ? 'To be evaluated' : `${formatNum(ss.rsdPlates, 2)} %`}
+                    {isProtocol ? 'To be evaluated' : `${renderPct(formatNum(ss.rsdPlates, 2))}`}
                   </td>
                 </tr>
               </tbody>
@@ -852,7 +917,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
           <p className="text-xs font-bold text-zinc-800 mt-2">
             {isProtocol
               ? 'Acceptance Criteria: %RSD of Peak Area <= 2.0%, Tailing Factor <= 2.0, Theoretical Plates >= 2000. (Observed Result: To be recorded upon execution)'
-              : `Acceptance: %RSD of Peak Area <= 2.0%, Tailing Factor <= 2.0, Theoretical Plates >= 2000. (Result: Mean Area = ${formatInt(ss.meanArea)}, %RSD = ${formatNum(ss.rsdArea, 2)}%, Tailing = ${formatNum(ss.meanTailing, 2)}, Plates = ${formatInt(ss.meanPlates)} — Complies)`}
+              : `Acceptance: %RSD of Peak Area <= 2.0%, Tailing Factor <= 2.0, Theoretical Plates >= 2000. (Result: Mean Area = ${formatInt(ss.meanArea)}, %RSD = ${renderPct(formatNum(ss.rsdArea, 2))}, Tailing = ${formatNum(ss.meanTailing, 2)}, Plates = ${formatInt(ss.meanPlates)} — Complies)`}
           </p>
         </div>
 
@@ -872,14 +937,14 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {spec.rows.map((r, idx) => (
+                {spec.rows?.map((r, idx) => (
                   <tr key={idx}>
                     <td className="p-1.5 border border-zinc-300 font-semibold text-zinc-900">{r.solution}</td>
                     <td className="p-1.5 border border-zinc-300 text-center font-mono">
-                      {isProtocol ? '' : r.retentionTime}
+                      {isProtocol ? '—' : r.retentionTime}
                     </td>
                     <td className="p-1.5 border border-zinc-300 text-center">
-                      {isProtocol ? '' : r.interference}
+                      {isProtocol ? '—' : r.interference}
                     </td>
                   </tr>
                 ))}
@@ -921,7 +986,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {lin.levels.map((lvl) => (
+                {lin.levels?.map((lvl) => (
                   <tr key={lvl.levelPercent}>
                     <td className="p-1.5 border border-zinc-300 text-center font-semibold text-zinc-900">
                       {lvl.levelPercent} %
@@ -930,10 +995,10 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                       {formatNum(lvl.concentration, 2)}
                     </td>
                     <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                      {isProtocol ? '' : formatInt(lvl.meanArea)}
+                      {isProtocol ? '—' : formatInt(lvl.meanArea)}
                     </td>
                     <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                      {isProtocol ? '' : `${formatNum(lvl.percentOf100Response, 2)} %`}
+                      {isProtocol ? '—' : `${renderPct(formatNum(lvl.percentOf100Response, 2))}`}
                     </td>
                   </tr>
                 ))}
@@ -966,19 +1031,19 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                 <tr>
                   <td className="p-1.5 border border-zinc-300 font-semibold text-zinc-900">Slope</td>
                   <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                    {isProtocol ? '' : formatNum(lin.regression.slope, 2)}
+                    {isProtocol ? '—' : formatNum(lin.regression.slope, 2)}
                   </td>
                 </tr>
                 <tr>
                   <td className="p-1.5 border border-zinc-300 font-semibold text-zinc-900">y-Intercept</td>
                   <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                    {isProtocol ? '' : formatNum(lin.regression.yIntercept, 2)}
+                    {isProtocol ? '—' : formatNum(lin.regression.yIntercept, 2)}
                   </td>
                 </tr>
                 <tr>
                   <td className="p-1.5 border border-zinc-300 font-semibold text-zinc-900">y-Intercept bias as % of 100% response</td>
                   <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                    {isProtocol ? 'Criteria: NMT ±2.0%' : `${formatNum(lin.regression.yInterceptBiasPercent, 2)} %`}
+                    {isProtocol ? 'Criteria: NMT ±2.0%' : `${renderPct(formatNum(lin.regression.yInterceptBiasPercent, 2))}`}
                   </td>
                 </tr>
               </tbody>
@@ -988,7 +1053,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
           <p className="text-xs font-bold text-zinc-800 mt-2">
             {isProtocol
               ? 'Acceptance Criteria: Correlation coefficient (r) shall be ≥ 0.999; r² ≥ 0.998. The y-intercept bias shall be within ±2.0% of nominal response.'
-              : `Acceptance: Correlation coefficient r ≥ 0.999 (r² ≥ 0.998). (Result: r = ${formatNum(lin.regression.correlationR, 5)}, r² = ${formatNum(lin.regression.rSquared, 5)}, y-Intercept Bias = ${formatNum(lin.regression.yInterceptBiasPercent, 2)}% — Complies)`}
+              : `Acceptance: Correlation coefficient r ≥ 0.999 (r² ≥ 0.998). (Result: r = ${formatNum(lin.regression.correlationR, 5)}, r² = ${formatNum(lin.regression.rSquared, 5)}, y-Intercept Bias = ${renderPct(formatNum(lin.regression.yInterceptBiasPercent, 2))} — Complies)`}
           </p>
 
           {/* Interactive Linearity Plot Toggle (Browser Feature) */}
@@ -1030,7 +1095,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {acc.rows.slice(0, 6).map((row, idx) => (
+                {acc.rows?.slice(0, 6)?.map((row, idx) => (
                   <tr key={idx}>
                     <td className="p-1.5 border border-zinc-300 text-center font-semibold text-zinc-900">
                       {row.levelPercent} %
@@ -1039,7 +1104,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                       {row.expNo}
                     </td>
                     <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                      {formatNum(row.amountAdded, 2)}
+                      {formatAmountByMagnitude(row.amountAdded)}
                     </td>
                     <td className="p-1.5 border border-zinc-300 text-right font-mono">
                       {isProtocol ? (
@@ -1053,11 +1118,11 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                           className="w-20 text-right px-1 py-0.5 border rounded bg-amber-50"
                         />
                       ) : (
-                        formatNum(row.amountRecovered, 2)
+                        formatAmountByMagnitude(row.amountRecovered)
                       )}
                     </td>
                     <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                      {isProtocol ? '' : `${formatNum(row.percentRecovery, 2)} %`}
+                      {isProtocol ? '—' : `${renderPct(formatNum(row.percentRecovery, 2))}`}
                     </td>
                   </tr>
                 ))}
@@ -1089,7 +1154,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {acc.rows.slice(6, 9).map((row, idx) => {
+                {acc.rows?.slice(6, 9)?.map((row, idx) => {
                   const actualIdx = idx + 6;
                   return (
                     <tr key={actualIdx}>
@@ -1100,7 +1165,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                         {row.expNo}
                       </td>
                       <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                        {formatNum(row.amountAdded, 2)}
+                        {formatAmountByMagnitude(row.amountAdded)}
                       </td>
                       <td className="p-1.5 border border-zinc-300 text-right font-mono">
                         {isProtocol ? (
@@ -1114,11 +1179,11 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                             className="w-20 text-right px-1 py-0.5 border rounded bg-amber-50"
                           />
                         ) : (
-                          formatNum(row.amountRecovered, 2)
+                          formatAmountByMagnitude(row.amountRecovered)
                         )}
                       </td>
                       <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                        {isProtocol ? '' : `${formatNum(row.percentRecovery, 2)} %`}
+                        {isProtocol ? '—' : `${renderPct(formatNum(row.percentRecovery, 2))}`}
                       </td>
                     </tr>
                   );
@@ -1127,14 +1192,14 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                   <td className="p-1.5 border border-zinc-300 text-left" colSpan={3}>Mean % Recovery (all levels)</td>
                   <td className="p-1.5 border border-zinc-300 text-right text-zinc-600">Mean of 9 runs</td>
                   <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                    {isProtocol ? 'Criteria: 98.0 – 102.0%' : `${formatNum(acc.meanRecoveryAllLevels, 2)} %`}
+                    {isProtocol ? 'Criteria: 98.0 – 102.0%' : `${renderPct(formatNum(acc.meanRecoveryAllLevels, 2))}`}
                   </td>
                 </tr>
                 <tr className="bg-zinc-50 font-bold">
                   <td className="p-1.5 border border-zinc-300 text-left" colSpan={3}>% RSD (n = 9)</td>
                   <td className="p-1.5 border border-zinc-300 text-right text-zinc-600">NMT 2.0 %</td>
                   <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                    {isProtocol ? 'Criteria: NMT 2.0%' : `${formatNum(acc.rsdAllLevels, 2)} %`}
+                    {isProtocol ? 'Criteria: NMT 2.0%' : `${renderPct(formatNum(acc.rsdAllLevels, 2))}`}
                   </td>
                 </tr>
               </tbody>
@@ -1143,7 +1208,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
           <p className="text-xs font-bold text-zinc-800 mt-2">
             {isProtocol
               ? 'Acceptance Criteria: Mean recovery at each concentration level shall be between 98.0% and 102.0%. Overall % RSD across 9 determinations shall be NMT 2.0%.'
-              : `Acceptance: Mean recovery at each concentration level shall be 98.0%–102.0%; Overall %RSD NMT 2.0%. (Result: Mean Recovery = ${formatNum(acc.meanRecoveryAllLevels, 2)}%, Overall %RSD = ${formatNum(acc.rsdAllLevels, 2)}% — Complies)`}
+              : `Acceptance: Mean recovery at each concentration level shall be 98.0%–102.0%; Overall %RSD NMT 2.0%. (Result: Mean Recovery = ${renderPct(formatNum(acc.meanRecoveryAllLevels, 2))}, Overall %RSD = ${renderPct(formatNum(acc.rsdAllLevels, 2))} — Complies)`}
           </p>
         </div>
 
@@ -1166,7 +1231,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {prec.rows.map((row, idx) => (
+                {prec.rows?.map((row, idx) => (
                   <tr key={idx}>
                     <td className="p-1.5 border border-zinc-300 text-center font-semibold text-zinc-900">
                       {row.sampleNo}
@@ -1183,7 +1248,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                           className="w-20 text-right px-1 py-0.5 border rounded bg-amber-50"
                         />
                       ) : (
-                        `${formatNum(row.analyst1Assay, 2)} %`
+                        `${renderPct(formatNum(row.analyst1Assay, 2))}`
                       )}
                     </td>
                     <td className="p-1.5 border border-zinc-300 text-right font-mono">
@@ -1198,7 +1263,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                           className="w-20 text-right px-1 py-0.5 border rounded bg-amber-50"
                         />
                       ) : (
-                        `${formatNum(row.analyst2Assay, 2)} %`
+                        `${renderPct(formatNum(row.analyst2Assay, 2))}`
                       )}
                     </td>
                     <td className="p-1.5 border border-zinc-300 text-center text-zinc-700">
@@ -1209,25 +1274,25 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                 <tr className="bg-zinc-50 font-bold">
                   <td className="p-1.5 border border-zinc-300 text-center">Mean</td>
                   <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                    {isProtocol ? '' : `${formatNum(prec.analyst1Mean, 2)} %`}
+                    {isProtocol ? '—' : `${renderPct(formatNum(prec.analyst1Mean, 2))}`}
                   </td>
                   <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                    {isProtocol ? '' : `${formatNum(prec.analyst2Mean, 2)} %`}
+                    {isProtocol ? '—' : `${renderPct(formatNum(prec.analyst2Mean, 2))}`}
                   </td>
                   <td className="p-1.5 border border-zinc-300 text-center font-mono">
-                    {isProtocol ? 'To be calculated' : `Cum. Mean = ${formatNum(prec.cumulativeMean, 2)} %`}
+                    {isProtocol ? 'To be calculated' : `Cum. Mean = ${renderPct(formatNum(prec.cumulativeMean, 2))}`}
                   </td>
                 </tr>
                 <tr className="bg-zinc-50 font-bold">
                   <td className="p-1.5 border border-zinc-300 text-center">% RSD</td>
                   <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                    {isProtocol ? 'Criteria: NMT 2.0%' : `${formatNum(prec.analyst1Rsd, 2)} %`}
+                    {isProtocol ? 'Criteria: NMT 2.0%' : `${renderPct(formatNum(prec.analyst1Rsd, 2))}`}
                   </td>
                   <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                    {isProtocol ? 'Criteria: NMT 2.0%' : `${formatNum(prec.analyst2Rsd, 2)} %`}
+                    {isProtocol ? 'Criteria: NMT 2.0%' : `${renderPct(formatNum(prec.analyst2Rsd, 2))}`}
                   </td>
                   <td className="p-1.5 border border-zinc-300 text-center font-mono">
-                    {isProtocol ? 'Criteria: NMT 2.0%' : `Cum. %RSD = ${formatNum(prec.cumulativeRsd, 2)} %`}
+                    {isProtocol ? 'Criteria: NMT 2.0%' : `Cum. %RSD = ${renderPct(formatNum(prec.cumulativeRsd, 2))}`}
                   </td>
                 </tr>
               </tbody>
@@ -1236,7 +1301,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
           <p className="text-xs font-bold text-zinc-800 mt-2">
             {isProtocol
               ? 'Acceptance Criteria: % RSD of six assay results for Analyst 1 and Analyst 2 shall be NMT 2.0%. Overall cumulative % RSD (n=12) shall be NMT 2.0%. Absolute difference between means shall be NMT 1.5%.'
-              : `Acceptance: Analyst 1 %RSD NMT 2.0%, Analyst 2 %RSD NMT 2.0%, Cumulative %RSD NMT 2.0%, Mean Diff NMT 1.5%. (Result: A1 %RSD = ${formatNum(prec.analyst1Rsd, 2)}%, A2 %RSD = ${formatNum(prec.analyst2Rsd, 2)}%, Cum %RSD = ${formatNum(prec.cumulativeRsd, 2)}%, Diff = ${formatNum(prec.diffBetweenMeans, 2)}% — Complies)`}
+              : `Acceptance: Analyst 1 %RSD NMT 2.0%, Analyst 2 %RSD NMT 2.0%, Cumulative %RSD NMT 2.0%, Mean Diff NMT 1.5%. (Result: A1 %RSD = ${renderPct(formatNum(prec.analyst1Rsd, 2))}, A2 %RSD = ${renderPct(formatNum(prec.analyst2Rsd, 2))}, Cum %RSD = ${renderPct(formatNum(prec.cumulativeRsd, 2))}, Diff = ${renderPct(formatNum(prec.diffBetweenMeans, 2))} — Complies)`}
           </p>
         </div>
 
@@ -1258,17 +1323,17 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {rob.rows.slice(0, 4).map((row, idx) => (
+                {rob.rows?.slice(0, 4)?.map((row, idx) => (
                   <tr key={idx}>
                     <td className="p-1.5 border border-zinc-300 font-semibold text-zinc-900">{row.conditionVaried}</td>
                     <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                      {isProtocol ? '' : `${formatNum(row.rsdPercent, 2)} %`}
+                      {isProtocol ? '—' : `${renderPct(formatNum(row.rsdPercent, 2))}`}
                     </td>
                     <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                      {isProtocol ? '' : formatNum(row.tailingFactor, 2)}
+                      {isProtocol ? '—' : formatNum(row.tailingFactor, 2)}
                     </td>
                     <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                      {isProtocol ? '' : formatInt(row.theoreticalPlates)}
+                      {isProtocol ? '—' : formatInt(row.theoreticalPlates)}
                     </td>
                   </tr>
                 ))}
@@ -1299,17 +1364,17 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {rob.rows.slice(4).map((row, idx) => (
+                {rob.rows?.slice(4)?.map((row, idx) => (
                   <tr key={idx}>
                     <td className="p-1.5 border border-zinc-300 font-semibold text-zinc-900">{row.conditionVaried}</td>
                     <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                      {isProtocol ? '' : `${formatNum(row.rsdPercent, 2)} %`}
+                      {isProtocol ? '—' : `${renderPct(formatNum(row.rsdPercent, 2))}`}
                     </td>
                     <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                      {isProtocol ? '' : formatNum(row.tailingFactor, 2)}
+                      {isProtocol ? '—' : formatNum(row.tailingFactor, 2)}
                     </td>
                     <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                      {isProtocol ? '' : formatInt(row.theoreticalPlates)}
+                      {isProtocol ? '—' : formatInt(row.theoreticalPlates)}
                     </td>
                   </tr>
                 ))}
@@ -1342,17 +1407,17 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {stab.rows.map((row, idx) => (
+                {stab.rows?.map((row, idx) => (
                   <tr key={idx}>
                     <td className="p-1.5 border border-zinc-300 text-center font-semibold text-zinc-900">{row.timePoint}</td>
                     <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                      {isProtocol ? '' : formatInt(row.standardArea)}
+                      {isProtocol ? '—' : formatInt(row.standardArea)}
                     </td>
                     <td className="p-1.5 border border-zinc-300 text-right font-mono">
-                      {isProtocol ? '' : formatInt(row.sampleArea)}
+                      {isProtocol ? '—' : formatInt(row.sampleArea)}
                     </td>
                     <td className="p-1.5 border border-zinc-300 text-center font-mono">
-                      {isProtocol ? '' : row.diffPercent}
+                      {isProtocol ? '—' : row.diffPercent}
                     </td>
                   </tr>
                 ))}
@@ -1363,11 +1428,11 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
             {isProtocol
               ? 'Acceptance Criteria: The cumulative percentage difference in peak response for standard and sample solutions over 24 hours shall not exceed 2.0%.'
               : (() => {
-                  const initialStd = stab.rows[0]?.standardArea || 1;
-                  const initialSpl = stab.rows[0]?.sampleArea || 1;
+                  const initialStd = stab.rows?.[0]?.standardArea || 1;
+                  const initialSpl = stab.rows?.[0]?.sampleArea || 1;
                   let maxStd = 0;
                   let maxSpl = 0;
-                  stab.rows.forEach((r, i) => {
+                  stab.rows?.forEach((r, i) => {
                     if (i > 0) {
                       const dS = (Math.abs(r.standardArea - initialStd) / initialStd) * 100;
                       const dP = (Math.abs(r.sampleArea - initialSpl) / initialSpl) * 100;
@@ -1375,7 +1440,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                       if (dP > maxSpl) maxSpl = dP;
                     }
                   });
-                  return `Acceptance: Cumulative percentage difference in peak response over 24h shall not exceed 2.0%. (Result: Max difference Std = ${formatNum(maxStd, 2)} %, Spl = ${formatNum(maxSpl, 2)} % — Stable for 24h)`;
+                  return `Acceptance: Cumulative percentage difference in peak response over 24h shall not exceed 2.0%. (Result: Max difference Std = ${renderPct(formatNum(maxStd, 2))}, Spl = ${renderPct(formatNum(maxSpl, 2))} — Stable for 24h)`;
                 })()}
           </p>
         </div>
@@ -1397,7 +1462,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {data.reviewChecklist.map((item, idx) => (
+                {data.reviewChecklist?.map((item, idx) => (
                   <tr key={idx}>
                     <td className="p-1.5 border border-zinc-300 font-semibold text-zinc-900">{item.particulars}</td>
                     <td className="p-1.5 border border-zinc-300 text-zinc-800">
@@ -1422,7 +1487,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {data.abbreviations.slice(0, 7).map((a, idx) => (
+                {data.abbreviations?.slice(0, 7)?.map((a, idx) => (
                   <tr key={idx}>
                     <td className="p-1.5 border border-zinc-300 text-center font-semibold text-zinc-900">{a.abbreviation}</td>
                     <td className="p-1.5 border border-zinc-300 text-zinc-800">{a.expansion}</td>
@@ -1453,7 +1518,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {data.abbreviations.slice(7).map((a, idx) => (
+                {data.abbreviations?.slice(7)?.map((a, idx) => (
                   <tr key={idx}>
                     <td className="p-1.5 border border-zinc-300 text-center font-semibold text-zinc-900">{a.abbreviation}</td>
                     <td className="p-1.5 border border-zinc-300 text-zinc-800">{a.expansion}</td>
@@ -1471,6 +1536,13 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
 
         <RunningFooter pageNum={8} />
       </div>
+
+      <FooterDateModal
+        isOpen={isFooterDateModalOpen}
+        onClose={() => setIsFooterDateModalOpen(false)}
+        footerData={activeFooterData}
+        onSave={handleUpdateFooter}
+      />
     </div>
   );
 };

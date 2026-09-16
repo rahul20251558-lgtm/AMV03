@@ -75,6 +75,52 @@ export function synchronizeDocumentReportDates<T>(docData: T, newReportDate?: st
   dExec.setDate(dExec.getDate() - 5);
   const execStr = formatPharmaDateHelper(dExec);
 
+
+  // Special MLT dates
+  if (copy.analysisStartDate && copy.analysisEndDate) {
+    const dEnd = new Date(parsedTarget);
+    dEnd.setDate(dEnd.getDate() - 3);
+    copy.analysisEndDate = formatPharmaDateHelper(dEnd);
+    
+    const dStart = new Date(parsedTarget);
+    dStart.setDate(dStart.getDate() - 10);
+    copy.analysisStartDate = formatPharmaDateHelper(dStart);
+    
+    const dProt = new Date(parsedTarget);
+    dProt.setDate(dProt.getDate() - 20);
+    copy.protocolDate = formatPharmaDateHelper(dProt);
+    
+    if (Array.isArray(copy.organisms)) {
+      copy.organisms.forEach(org => {
+        org.dateOfPreparation = formatPharmaDateHelper(dStart);
+      });
+    }
+
+    if (Array.isArray(copy.equipment)) {
+      copy.equipment.forEach((eq: any, idx: number) => {
+        const cal = parsePharmaDateHelper(eq.calibrationDueDate);
+        if (!cal || cal.getTime() <= dEnd.getTime()) {
+          const newCal = new Date(dEnd);
+          newCal.setMonth(newCal.getMonth() + 4 + (idx % 5));
+          newCal.setDate(15);
+          eq.calibrationDueDate = formatPharmaDateHelper(newCal);
+        }
+      });
+    }
+
+    if (Array.isArray(copy.media)) {
+      copy.media.forEach((m: any, idx: number) => {
+        const exp = parsePharmaDateHelper(m.expiryDate);
+        if (!exp || exp.getTime() <= dEnd.getTime()) {
+          const newExp = new Date(dEnd);
+          newExp.setMonth(newExp.getMonth() + 3 + (idx % 6));
+          newExp.setDate(25);
+          m.expiryDate = formatPharmaDateHelper(newExp);
+        }
+      });
+    }
+  }
+
   // SignOffs
   if (copy.signOffs) {
     copy.signOffs = { ...copy.signOffs };
@@ -94,7 +140,7 @@ export function synchronizeDocumentReportDates<T>(docData: T, newReportDate?: st
 
   // Completion record
   if (Array.isArray(copy.completionRecord)) {
-    copy.completionRecord = copy.completionRecord.map((row: any) => {
+    copy.completionRecord = (copy.completionRecord || []).map((row: any) => {
       const part = String(row.particulars || '').toLowerCase();
       if (part.includes('final report approval') || part.includes('report approval')) {
         return {
@@ -129,7 +175,7 @@ export function synchronizeDocumentReportDates<T>(docData: T, newReportDate?: st
 
   // Revision history
   if (Array.isArray(copy.revisionHistory) && copy.revisionHistory.length > 0) {
-    copy.revisionHistory = copy.revisionHistory.map((rev: any, idx: number) => {
+    copy.revisionHistory = (copy.revisionHistory || []).map((rev: any, idx: number) => {
       if (idx === copy.revisionHistory.length - 1) {
         return { ...rev, effectiveDate: formattedTarget };
       }
@@ -277,7 +323,7 @@ export function postProcessSanitizeDocument<T>(
       return sanitizeString(curr);
     }
     if (Array.isArray(curr)) {
-      return curr.map((item) => walkAndSanitize(item));
+      return (curr || []).map((item) => walkAndSanitize(item));
     }
     if (typeof curr === 'object') {
       const copy: Record<string, any> = {};

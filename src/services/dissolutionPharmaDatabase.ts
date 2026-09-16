@@ -28,6 +28,7 @@ import {
   getProductDegradantProfile,
   identifyActiveDrug,
 } from './complianceAuditGate';
+import { recalculateDissolutionData } from './calculations';
 import { filterUsedAbbreviations } from './abbreviationFilter';
 import { getCleanDrugDisplayName, postProcessSanitizeDocument } from './postGenerationSanitizer';
 import {
@@ -81,7 +82,7 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
     medium: '500 mL of a 0.25 % w/v solution of sodium lauryl sulfate',
     apparatus: 'Apparatus 2 (paddle)',
     paddleSpeed: '50 revolutions per minute',
-    mediumTemperature: '37 °C ± 0.5 °C',
+    mediumTemperature: '37 \xB0C ± 0.5 \xB0C',
     diluent: '0.25 % w/v solution of sodium lauryl sulfate',
     wavelength: '205 nm',
     wavelengthNum: 205,
@@ -89,7 +90,7 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
       'Stainless steel column (10 cm × 4.6 mm) packed with octadecylsilyl silica gel for chromatography (5 µm) (Hypersil ODS or equivalent)',
     mobilePhase: '23 volumes of water and 77 volumes of methanol R2',
     flowRate: '0.5 mL per minute',
-    columnTemperature: '40 °C',
+    columnTemperature: '40 \xB0C',
     injectionVolume: '200 µL',
     isocraticOrGradient: 'Isocratic',
   },
@@ -104,14 +105,14 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
     medium: '900 mL of Phosphate buffer pH 5.8',
     apparatus: 'Apparatus 2 (paddle)',
     paddleSpeed: '50 revolutions per minute',
-    mediumTemperature: '37 °C ± 0.5 °C',
+    mediumTemperature: '37 \xB0C ± 0.5 \xB0C',
     diluent: 'Phosphate buffer pH 5.8 / Mobile phase',
     wavelength: '243 nm',
     wavelengthNum: 243,
     column: 'Inertsil ODS-3 C18 (250 mm × 4.6 mm, 5 µm)',
     mobilePhase: 'Methanol and Water (25:75 v/v)',
     flowRate: '1.0 mL per minute',
-    columnTemperature: '30 °C',
+    columnTemperature: '30 \xB0C',
     injectionVolume: '10 µL',
     isocraticOrGradient: 'Isocratic',
   },
@@ -126,14 +127,14 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
     medium: '900 mL of Phosphate buffer pH 7.2',
     apparatus: 'Apparatus 2 (paddle)',
     paddleSpeed: '50 revolutions per minute',
-    mediumTemperature: '37 °C ± 0.5 °C',
+    mediumTemperature: '37 \xB0C ± 0.5 \xB0C',
     diluent: 'Phosphate buffer pH 7.2',
     wavelength: '221 nm',
     wavelengthNum: 221,
     column: 'Zorbax Eclipse XDB-C18 (150 mm × 4.6 mm, 5 µm)',
     mobilePhase: 'Acetonitrile and 0.01M Phosphate buffer pH 3.0 (60:40 v/v)',
     flowRate: '1.2 mL per minute',
-    columnTemperature: '35 °C',
+    columnTemperature: '35 \xB0C',
     injectionVolume: '20 µL',
     isocraticOrGradient: 'Isocratic',
   },
@@ -148,14 +149,14 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
     medium: '1000 mL of Phosphate buffer pH 6.8',
     apparatus: 'Apparatus 1 (basket)',
     paddleSpeed: '100 revolutions per minute',
-    mediumTemperature: '37 °C ± 0.5 °C',
+    mediumTemperature: '37 \xB0C ± 0.5 \xB0C',
     diluent: 'Dissolution medium',
     wavelength: '233 nm',
     wavelengthNum: 233,
     column: 'Kromasil C18 (250 mm × 4.6 mm, 5 µm)',
     mobilePhase: 'Acetonitrile and 0.05M Phosphate buffer pH 3.0 (20:80 v/v)',
     flowRate: '1.0 mL per minute',
-    columnTemperature: '30 °C',
+    columnTemperature: '30 \xB0C',
     injectionVolume: '10 µL',
     isocraticOrGradient: 'Isocratic',
   },
@@ -169,14 +170,14 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
     medium: '900 mL of 0.05 M Phosphate buffer pH 6.8 containing 0.1 % w/v Sodium Dodecyl Sulfate',
     apparatus: 'Apparatus 2 (paddle)',
     paddleSpeed: '75 revolutions per minute',
-    mediumTemperature: '37 °C ± 0.5 °C',
+    mediumTemperature: '37 \xB0C ± 0.5 \xB0C',
     diluent: 'Dissolution medium',
     wavelength: '246 nm',
     wavelengthNum: 246,
     column: 'USP L1 C18 (250 mm × 4.6 mm, 5 µm)',
     mobilePhase: 'Acetonitrile : 0.05 M Ammonium Acetate buffer pH 4.5 (65:35 v/v)',
     flowRate: '1.2 mL per minute',
-    columnTemperature: '35 °C',
+    columnTemperature: '35 \xB0C',
     injectionVolume: '20 µL',
     isocraticOrGradient: 'Isocratic',
   },
@@ -190,14 +191,14 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
     medium: '900 mL of 0.01 M Hydrochloric acid',
     apparatus: 'Apparatus 2 (paddle)',
     paddleSpeed: '50 revolutions per minute',
-    mediumTemperature: '37 °C ± 0.5 °C',
+    mediumTemperature: '37 \xB0C ± 0.5 \xB0C',
     diluent: '0.01 M Hydrochloric acid',
     wavelength: '278 nm',
     wavelengthNum: 278,
     column: 'USP L1 C18 (250 mm × 4.6 mm, 5 µm)',
     mobilePhase: 'Acetonitrile : 0.025 M Phosphoric Acid with Triethylamine pH 3.0 (13:87 v/v)',
     flowRate: '1.5 mL per minute',
-    columnTemperature: '30 °C',
+    columnTemperature: '30 \xB0C',
     injectionVolume: '10 µL',
     isocraticOrGradient: 'Isocratic',
   },
@@ -211,14 +212,14 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
     medium: '900 mL of 0.1 M Hydrochloric acid',
     apparatus: 'Apparatus 2 (paddle)',
     paddleSpeed: '50 revolutions per minute',
-    mediumTemperature: '37 °C ± 0.5 °C',
+    mediumTemperature: '37 \xB0C ± 0.5 \xB0C',
     diluent: 'Dissolution medium',
     wavelength: '210 nm',
     wavelengthNum: 210,
     column: 'USP L8 Amino stationary phase (250 mm × 4.6 mm, 5 µm)',
     mobilePhase: 'Acetonitrile : 0.01 M Potassium Dihydrogen Phosphate Buffer pH 6.0 (75:25 v/v)',
     flowRate: '1.0 mL per minute',
-    columnTemperature: '35 °C',
+    columnTemperature: '35 \xB0C',
     injectionVolume: '10 µL',
     isocraticOrGradient: 'Isocratic',
   },
@@ -232,14 +233,14 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
     medium: 'Stage 1: 500 mL 0.1 M HCl (2 hr); Stage 2: 900 mL Phosphate buffer pH 6.8',
     apparatus: 'Apparatus 2 (paddle)',
     paddleSpeed: '100 revolutions per minute',
-    mediumTemperature: '37 °C ± 0.5 °C',
+    mediumTemperature: '37 \xB0C ± 0.5 \xB0C',
     diluent: 'Phosphate buffer pH 6.8',
     wavelength: '302 nm',
     wavelengthNum: 302,
     column: 'USP L1 C18 (150 mm × 4.6 mm, 5 µm)',
     mobilePhase: 'Acetonitrile : Phosphate Buffer pH 7.6 (28:72 v/v)',
     flowRate: '1.0 mL per minute',
-    columnTemperature: '25 °C',
+    columnTemperature: '25 \xB0C',
     injectionVolume: '20 µL',
     isocraticOrGradient: 'Isocratic',
   },
@@ -253,14 +254,14 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
     medium: 'Acid stage: 900 mL 0.1 M HCl; Buffer stage: 900 mL Phosphate buffer pH 6.8',
     apparatus: 'Apparatus 2 (paddle)',
     paddleSpeed: '100 revolutions per minute',
-    mediumTemperature: '37 °C ± 0.5 °C',
+    mediumTemperature: '37 \xB0C ± 0.5 \xB0C',
     diluent: 'Phosphate buffer pH 6.8',
     wavelength: '290 nm',
     wavelengthNum: 290,
     column: 'USP L1 C18 (150 mm × 4.6 mm, 5 µm)',
     mobilePhase: 'Acetonitrile : 0.01 M Phosphate Buffer pH 7.0 (35:65 v/v)',
     flowRate: '1.0 mL per minute',
-    columnTemperature: '30 °C',
+    columnTemperature: '30 \xB0C',
     injectionVolume: '10 µL',
     isocraticOrGradient: 'Isocratic',
   },
@@ -274,14 +275,14 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
     medium: '900 mL of Purified Water',
     apparatus: 'Apparatus 2 (paddle)',
     paddleSpeed: '50 revolutions per minute',
-    mediumTemperature: '37 °C ± 0.5 °C',
+    mediumTemperature: '37 \xB0C ± 0.5 \xB0C',
     diluent: 'Purified Water',
     wavelength: '250 nm',
     wavelengthNum: 250,
     column: 'USP L1 C18 (150 mm × 4.6 mm, 5 µm)',
     mobilePhase: 'Acetonitrile : 0.1 % v/v Phosphoric Acid in Water (40:60 v/v)',
     flowRate: '1.0 mL per minute',
-    columnTemperature: '25 °C',
+    columnTemperature: '25 \xB0C',
     injectionVolume: '10 µL',
     isocraticOrGradient: 'Isocratic',
   },
@@ -295,14 +296,14 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
     medium: '900 mL of 0.5 % w/v Sodium Lauryl Sulfate in Water',
     apparatus: 'Apparatus 2 (paddle)',
     paddleSpeed: '50 revolutions per minute',
-    mediumTemperature: '37 °C ± 0.5 °C',
+    mediumTemperature: '37 \xB0C ± 0.5 \xB0C',
     diluent: '0.5 % w/v Sodium Lauryl Sulfate in Water',
     wavelength: '345 nm',
     wavelengthNum: 345,
     column: 'USP L11 Phenyl-Hexyl (150 mm × 4.6 mm, 3.5 µm)',
     mobilePhase: 'Acetonitrile : 0.02 M Potassium Dihydrogen Phosphate pH 3.7 (60:40 v/v)',
     flowRate: '1.2 mL per minute',
-    columnTemperature: '40 °C',
+    columnTemperature: '40 \xB0C',
     injectionVolume: '20 µL',
     isocraticOrGradient: 'Isocratic',
   },
@@ -316,14 +317,14 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
     medium: '500 mL of 0.01 M Hydrochloric acid',
     apparatus: 'Apparatus 2 (paddle)',
     paddleSpeed: '75 revolutions per minute',
-    mediumTemperature: '37 °C ± 0.5 °C',
+    mediumTemperature: '37 \xB0C ± 0.5 \xB0C',
     diluent: '0.01 M Hydrochloric acid',
     wavelength: '237 nm',
     wavelengthNum: 237,
     column: 'USP L1 C18 (150 mm × 4.6 mm, 5 µm)',
     mobilePhase: 'Methanol : Acetonitrile : 0.03 M Triethylamine Buffer pH 3.0 (35:15:50 v/v)',
     flowRate: '1.0 mL per minute',
-    columnTemperature: '30 °C',
+    columnTemperature: '30 \xB0C',
     injectionVolume: '20 µL',
     isocraticOrGradient: 'Isocratic',
   },
@@ -337,14 +338,14 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
     medium: '900 mL of 0.1 M Hydrochloric acid',
     apparatus: 'Apparatus 1 (basket)',
     paddleSpeed: '100 revolutions per minute',
-    mediumTemperature: '37 °C ± 0.5 °C',
+    mediumTemperature: '37 \xB0C ± 0.5 \xB0C',
     diluent: '0.1 M Hydrochloric acid',
     wavelength: '294 nm',
     wavelengthNum: 294,
     column: 'USP L1 C18 (250 mm × 4.6 mm, 5 µm)',
     mobilePhase: 'Acetonitrile : 0.1% v/v Trifluoroacetic Acid in Water (20:80 v/v)',
     flowRate: '1.2 mL per minute',
-    columnTemperature: '35 °C',
+    columnTemperature: '35 \xB0C',
     injectionVolume: '10 µL',
     isocraticOrGradient: 'Isocratic',
   },
@@ -358,14 +359,14 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
     medium: '900 mL of Water',
     apparatus: 'Apparatus 2 (paddle)',
     paddleSpeed: '50 revolutions per minute',
-    mediumTemperature: '37 °C ± 0.5 °C',
+    mediumTemperature: '37 \xB0C ± 0.5 \xB0C',
     diluent: 'Water',
     wavelength: '230 nm',
     wavelengthNum: 230,
     column: 'Inertsil ODS-3 C18 (150 mm × 4.6 mm, 5 µm)',
     mobilePhase: 'Acetonitrile : 0.05 M Potassium Dihydrogen Phosphate Buffer pH 6.0 (40:60 v/v)',
     flowRate: '1.0 mL per minute',
-    columnTemperature: '25 °C',
+    columnTemperature: '25 \xB0C',
     injectionVolume: '10 µL',
     isocraticOrGradient: 'Isocratic',
   },
@@ -379,14 +380,14 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
     medium: 'Acid stage: 900 mL 0.1 M HCl (2 hr); Buffer stage: 900 mL Phosphate buffer pH 6.8',
     apparatus: 'Apparatus 2 (paddle)',
     paddleSpeed: '50 revolutions per minute',
-    mediumTemperature: '37 °C ± 0.5 °C',
+    mediumTemperature: '37 \xB0C ± 0.5 \xB0C',
     diluent: 'Phosphate buffer pH 6.8',
     wavelength: '254 nm',
     wavelengthNum: 254,
     column: 'USP L1 C18 (250 mm × 4.6 mm, 5 µm)',
     mobilePhase: 'Methanol : 0.01 M Phosphate Buffer pH 2.5 (70:30 v/v)',
     flowRate: '1.0 mL per minute',
-    columnTemperature: '30 °C',
+    columnTemperature: '30 \xB0C',
     injectionVolume: '10 µL',
     isocraticOrGradient: 'Isocratic',
   },
@@ -397,17 +398,17 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
     reference: 'USP Monograph — Rosuvastatin Calcium Tablets; USP <711>; USP <621>; ICH Q2(R2)',
     qLimit: 'Not less than 80 % (Q) of the stated amount',
     samplingTime: '30 minutes',
-    medium: '900 mL of 0.05 M Sodium Citrate buffer pH 6.6',
+    medium: '900 mL of 0.05 M Sodium Citrate buffer pH 2.0',
     apparatus: 'Apparatus 2 (paddle)',
     paddleSpeed: '50 revolutions per minute',
-    mediumTemperature: '37 °C ± 0.5 °C',
+    mediumTemperature: '37 \xB0C ± 0.5 \xB0C',
     diluent: 'Dissolution medium',
     wavelength: '242 nm',
     wavelengthNum: 242,
     column: 'USP L1 C18 (250 mm × 4.6 mm, 5 µm)',
     mobilePhase: 'Acetonitrile : 0.05 M Ammonium Acetate buffer pH 4.0 : THF (30:60:10 v/v)',
     flowRate: '1.2 mL per minute',
-    columnTemperature: '35 °C',
+    columnTemperature: '35 \xB0C',
     injectionVolume: '10 µL',
     isocraticOrGradient: 'Isocratic',
   },
@@ -418,17 +419,17 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
     reference: 'USP Monograph — Rosuvastatin Calcium Tablets; USP <711>; USP <621>; ICH Q2(R2)',
     qLimit: 'Not less than 80 % (Q) of the stated amount',
     samplingTime: '30 minutes',
-    medium: '900 mL of 0.05 M Sodium Citrate buffer pH 6.6',
+    medium: '900 mL of 0.05 M Sodium Citrate buffer pH 2.0',
     apparatus: 'Apparatus 2 (paddle)',
     paddleSpeed: '50 revolutions per minute',
-    mediumTemperature: '37 °C ± 0.5 °C',
+    mediumTemperature: '37 \xB0C ± 0.5 \xB0C',
     diluent: 'Dissolution medium',
     wavelength: '242 nm',
     wavelengthNum: 242,
     column: 'USP L1 C18 (250 mm × 4.6 mm, 5 µm)',
     mobilePhase: 'Acetonitrile : 0.05 M Ammonium Acetate buffer pH 4.0 : THF (30:60:10 v/v)',
     flowRate: '1.2 mL per minute',
-    columnTemperature: '35 °C',
+    columnTemperature: '35 \xB0C',
     injectionVolume: '10 µL',
     isocraticOrGradient: 'Isocratic',
   },
@@ -442,14 +443,14 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
     medium: '1000 mL of 0.1 M Hydrochloric acid',
     apparatus: 'Apparatus 2 (paddle)',
     paddleSpeed: '50 revolutions per minute',
-    mediumTemperature: '37 °C ± 0.5 °C',
+    mediumTemperature: '37 \xB0C ± 0.5 \xB0C',
     diluent: '0.1 M Hydrochloric acid',
     wavelength: '220 nm',
     wavelengthNum: 220,
     column: 'USP L1 C18 (150 mm × 4.6 mm, 5 µm)',
     mobilePhase: 'Acetonitrile : 0.05 M Potassium Phosphate Buffer pH 2.5 with 0.1% TEA (75:25 v/v)',
     flowRate: '1.0 mL per minute',
-    columnTemperature: '30 °C',
+    columnTemperature: '30 \xB0C',
     injectionVolume: '10 µL',
     isocraticOrGradient: 'Isocratic',
   },
@@ -463,14 +464,14 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
     medium: '900 mL of 0.1 M Hydrochloric acid',
     apparatus: 'Apparatus 2 (paddle)',
     paddleSpeed: '50 revolutions per minute',
-    mediumTemperature: '37 °C ± 0.5 °C',
+    mediumTemperature: '37 \xB0C ± 0.5 \xB0C',
     diluent: '0.1 M Hydrochloric acid',
     wavelength: '238 nm',
     wavelengthNum: 238,
     column: 'USP L1 C18 (250 mm × 4.6 mm, 5 µm)',
     mobilePhase: 'Acetonitrile : 0.05 M Potassium Dihydrogen Phosphate Buffer pH 3.0 (35:65 v/v)',
     flowRate: '1.0 mL per minute',
-    columnTemperature: '30 °C',
+    columnTemperature: '30 \xB0C',
     injectionVolume: '20 µL',
     isocraticOrGradient: 'Isocratic',
   },
@@ -484,14 +485,14 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
     medium: '900 mL of 0.06 M Hydrochloric acid',
     apparatus: 'Apparatus 1 (basket)',
     paddleSpeed: '100 revolutions per minute',
-    mediumTemperature: '37 °C ± 0.5 °C',
+    mediumTemperature: '37 \xB0C ± 0.5 \xB0C',
     diluent: '0.06 M Hydrochloric acid',
     wavelength: '210 nm',
     wavelengthNum: 210,
     column: 'USP L1 C18 (250 mm × 4.6 mm, 5 µm)',
     mobilePhase: 'Methanol : 0.01 M Monobasic Potassium Phosphate Buffer pH 6.2 (10:90 v/v)',
     flowRate: '1.0 mL per minute',
-    columnTemperature: '25 °C',
+    columnTemperature: '25 \xB0C',
     injectionVolume: '20 µL',
     isocraticOrGradient: 'Isocratic',
   },
@@ -505,14 +506,14 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
     medium: '500 mL of 0.25 % w/v Sodium Lauryl Sulfate in Water',
     apparatus: 'Apparatus 2 (paddle)',
     paddleSpeed: '50 revolutions per minute',
-    mediumTemperature: '37 °C ± 0.5 °C',
+    mediumTemperature: '37 \xB0C ± 0.5 \xB0C',
     diluent: 'Dissolution medium',
     wavelength: '205 nm',
     wavelengthNum: 205,
     column: 'Hypersil ODS C18 (100 mm × 4.6 mm, 5 µm)',
     mobilePhase: 'Methanol : Water (77:23 v/v)',
     flowRate: '0.5 mL per minute',
-    columnTemperature: '40 °C',
+    columnTemperature: '40 \xB0C',
     injectionVolume: '20 µL',
     isocraticOrGradient: 'Isocratic',
     approxRetentionTime: '5.60 min',
@@ -530,14 +531,14 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
     medium: '900 mL of 0.06 N Hydrochloric acid',
     apparatus: 'Apparatus 2 (paddle)',
     paddleSpeed: '50 revolutions per minute',
-    mediumTemperature: '37 °C ± 0.5 °C',
+    mediumTemperature: '37 \xB0C ± 0.5 \xB0C',
     diluent: '0.06 N Hydrochloric acid / Mobile phase',
     wavelength: '210 nm',
     wavelengthNum: 210,
     column: 'USP L1 C18 (250 mm × 4.6 mm, 5 µm)',
     mobilePhase: 'Acetonitrile and 0.04 M Monobasic Potassium Phosphate Buffer pH 6.3 (15:85 v/v)',
     flowRate: '1.0 mL per minute',
-    columnTemperature: '30 °C',
+    columnTemperature: '30 \xB0C',
     injectionVolume: '20 µL',
     isocraticOrGradient: 'Isocratic',
     approxRetentionTime: '4.80 min',
@@ -555,14 +556,14 @@ export const DISSOLUTION_COMPENDIUM: Record<string, DissolutionMonographInfo> = 
     medium: '900 mL of 0.1 M Hydrochloric acid dissolution medium',
     apparatus: 'Apparatus 2 (paddle)',
     paddleSpeed: '50 revolutions per minute',
-    mediumTemperature: '37 °C ± 0.5 °C',
+    mediumTemperature: '37 \xB0C ± 0.5 \xB0C',
     diluent: 'Dissolution medium / Mobile phase (1:1 v/v)',
     wavelength: '210 nm',
     wavelengthNum: 210,
     column: 'Inertsil ODS-3 C18 (150 mm × 4.6 mm, 5 µm) or equivalent USP L1',
     mobilePhase: 'Phosphate Buffer pH 6.8 and Acetonitrile (85:15 v/v)',
     flowRate: '1.0 mL per minute',
-    columnTemperature: '30 °C',
+    columnTemperature: '30 \xB0C',
     injectionVolume: '20 µL',
     isocraticOrGradient: 'Isocratic',
     approxRetentionTime: '4.20 min',
@@ -638,14 +639,14 @@ export function getDissolutionMonograph(productName: string, targetApi?: string)
     medium,
     apparatus: isCapsule ? 'Apparatus 1 (basket)' : 'Apparatus 2 (paddle)',
     paddleSpeed: isCapsule ? '100 revolutions per minute' : '50 revolutions per minute',
-    mediumTemperature: '37 °C ± 0.5 °C',
+    mediumTemperature: '37 \xB0C ± 0.5 \xB0C',
     diluent: 'Dissolution medium / Mobile phase',
     wavelength: `${chosenWavelength} nm`,
     wavelengthNum: chosenWavelength,
     column: 'Stainless steel column (15 cm × 4.6 mm, 5 µm) packed with octadecylsilyl silica gel (C18 / USP L1)',
     mobilePhase: 'Phosphate buffer pH 3.2 and Acetonitrile (60:40 v/v)',
     flowRate: '1.0 mL per minute',
-    columnTemperature: '30 °C',
+    columnTemperature: '30 \xB0C',
     injectionVolume: '10 µL',
     isocraticOrGradient: 'Isocratic',
   };
@@ -834,7 +835,7 @@ export function buildFullDissolutionAMVData(
   const ssMath = generateSystemSuitabilityInjections(mono.productName, nominalArea, 50.0, 6, activeRt, 4850, 1.12);
   
   const A_std = ssMath.meanArea;
-  const ssInjections: DissolutionSystemSuitabilityRow[] = ssMath.injections.map((inj) => ({
+  const ssInjections: DissolutionSystemSuitabilityRow[] = (ssMath.injections || []).map((inj) => ({
     srNo: inj.srNo,
     weightMg: inj.weightMg,
     retentionTime: inj.retentionTime,
@@ -851,7 +852,7 @@ export function buildFullDissolutionAMVData(
   const cWorkingNominal = Number(((strengthNum * 1000 / vMedNum) * df).toFixed(2));
   const nominalPpm = cWorkingNominal;
   const linMath = generateLinearityData(mono.productName, nominalPpm, nominalArea, [50, 75, 100, 125, 150]);
-  const linearityLevels: DissolutionLinearityLevelRow[] = linMath.levels.map((lvl) => ({
+  const linearityLevels: DissolutionLinearityLevelRow[] = (linMath.levels || []).map((lvl) => ({
     levelName: lvl.levelName,
     nominalPpm: lvl.concentrationPpm,
     weightMg: lvl.nominalWeightMg,
@@ -873,12 +874,12 @@ export function buildFullDissolutionAMVData(
     { srNo: 6, levelPpm: Number(linearityLevels[3]?.nominalPpm || 125), sampleId: 'Level IV (125 %) — Inj 3', peakArea: Math.round(Number(area125) * (1 + (randRange() - 0.5) * 0.003)) },
   ];
 
-  const areas75 = rangeRows.slice(0, 3).map((r) => Number(r.peakArea));
+  const areas75 = (rangeRows || []).slice(0, 3).map((r) => Number(r.peakArea));
   const mean75 = Math.round(areas75.reduce((a, b) => a + b, 0) / 3);
   const sd75 = Number(Math.sqrt(areas75.reduce((acc, a) => acc + Math.pow(a - mean75, 2), 0) / 2).toFixed(1));
   const rsd75 = Number(((sd75 / mean75) * 100).toFixed(2));
 
-  const areas125 = rangeRows.slice(3, 6).map((r) => Number(r.peakArea));
+  const areas125 = (rangeRows || []).slice(3, 6).map((r) => Number(r.peakArea));
   const mean125 = Math.round(areas125.reduce((a, b) => a + b, 0) / 3);
   const sd125 = Number(Math.sqrt(areas125.reduce((acc, a) => acc + Math.pow(a - mean125, 2), 0) / 2).toFixed(1));
   const rsd125 = Number(((sd125 / mean125) * 100).toFixed(2));
@@ -901,7 +902,7 @@ export function buildFullDissolutionAMVData(
   };
   const precMath = generatePrecisionData(mono.productName, strengthNum, nominalArea, 99.8, true, ctx);
 
-  const precisionRows: DissolutionPrecisionRow[] = precMath.analyst1.rows.map((r, i) => ({
+  const precisionRows: DissolutionPrecisionRow[] = (precMath.analyst1?.rows || []).map((r, i) => ({
     srNo: r.determinationNo,
     sampleId: `Dissolution Unit Vessel ${i + 1}`,
     amountUsedMg: Number(strengthNum.toFixed(strengthNum >= 50 ? 0 : 2)),
@@ -910,7 +911,7 @@ export function buildFullDissolutionAMVData(
   }));
 
   // 6. Intermediate Precision (Analyst 1 vs Analyst 2)
-  const intermediatePrecisionRows: DissolutionIntermediatePrecisionRow[] = precMath.analyst1.rows.map((r1, i) => {
+  const intermediatePrecisionRows: DissolutionIntermediatePrecisionRow[] = (precMath.analyst1?.rows || []).map((r1, i) => {
     const r2 = precMath.analyst2.rows[i];
     return {
       srNo: r1.determinationNo,
@@ -977,7 +978,7 @@ export function buildFullDissolutionAMVData(
   const specificityStressRows: DissolutionSpecificityStressRow[] = [
     {
       condition: 'Acid Degradation (0.1 N HCl)',
-      stressParameters: '0.1 N HCl at 60 °C for 2 hours; neutralized with 0.1 N NaOH',
+      stressParameters: '0.1 N HCl at 60 \xB0C for 2 hours; neutralized with 0.1 N NaOH',
       activeRtMin: (activeRt + 0.002).toFixed(3),
       degradantRtMin: degRt.toFixed(3),
       activePeakArea: Math.round(nominalArea * 0.924),
@@ -989,7 +990,7 @@ export function buildFullDissolutionAMVData(
     },
     {
       condition: 'Base Degradation (0.1 N NaOH)',
-      stressParameters: '0.1 N NaOH at 60 °C for 2 hours; neutralized with 0.1 N HCl',
+      stressParameters: '0.1 N NaOH at 60 \xB0C for 2 hours; neutralized with 0.1 N HCl',
       activeRtMin: (activeRt - 0.002).toFixed(3),
       degradantRtMin: (degRt + 0.002).toFixed(3),
       activePeakArea: Math.round(nominalArea * 0.911),
@@ -1012,8 +1013,8 @@ export function buildFullDissolutionAMVData(
       interference: 'Nil — Baseline resolved (Rs > 2.0)',
     },
     {
-      condition: 'Thermal Stress (Dry Heat, 105 °C)',
-      stressParameters: 'Solid powder exposed to 105 °C for 24 hours in dry oven',
+      condition: 'Thermal Stress (Dry Heat, 105 \xB0C)',
+      stressParameters: 'Solid powder exposed to 105 \xB0C for 24 hours in dry oven',
       activeRtMin: (activeRt + 0.001).toFixed(3),
       degradantRtMin: (degRt + 0.001).toFixed(3),
       activePeakArea: Math.round(nominalArea * 0.932),
@@ -1044,67 +1045,71 @@ export function buildFullDissolutionAMVData(
   const baseTemp = baseTempMatch ? parseInt(baseTempMatch[0]) : 35;
   const baseRt = activeRt;
 
+  const sstTailingObserved = ssMath.meanTailing || 1.12;
+  const sstPlatesObserved = ssMath.meanPlates || 4850;
+  const sstRsdObserved = ssMath.rsdArea || 0.38;
+
   const robustnessRows: DissolutionRobustnessRow[] = [
     {
       conditionVaried: `Flow Rate: ${(baseFlow - 0.1).toFixed(1)} mL/min (-0.1 mL/min)`,
       retentionTimeMin: (baseRt * (baseFlow / (baseFlow - 0.1))).toFixed(2),
-      tailingFactor: Number((1.14 + (randRob() - 0.5) * 0.03).toFixed(2)),
-      theoreticalPlates: Math.round(4250 + (randRob() - 0.5) * 120),
-      rsdPercent: Number((0.38 + (randRob() - 0.5) * 0.08).toFixed(2)),
+      tailingFactor: Number((sstTailingObserved + 0.02 + (randRob() - 0.5) * 0.02).toFixed(2)),
+      theoreticalPlates: Math.round(sstPlatesObserved * 0.96 + (randRob() - 0.5) * 60),
+      rsdPercent: Number((Math.max(0.2, sstRsdObserved * 1.05 + (randRob() - 0.5) * 0.04)).toFixed(2)),
       remark: 'Complies',
     },
     {
       conditionVaried: `Flow Rate: ${(baseFlow + 0.1).toFixed(1)} mL/min (+0.1 mL/min)`,
       retentionTimeMin: (baseRt * (baseFlow / (baseFlow + 0.1))).toFixed(2),
-      tailingFactor: Number((1.12 + (randRob() - 0.5) * 0.03).toFixed(2)),
-      theoreticalPlates: Math.round(3980 + (randRob() - 0.5) * 120),
-      rsdPercent: Number((0.45 + (randRob() - 0.5) * 0.08).toFixed(2)),
+      tailingFactor: Number((sstTailingObserved - 0.01 + (randRob() - 0.5) * 0.02).toFixed(2)),
+      theoreticalPlates: Math.round(sstPlatesObserved * 0.91 + (randRob() - 0.5) * 60),
+      rsdPercent: Number((Math.max(0.2, sstRsdObserved * 1.12 + (randRob() - 0.5) * 0.04)).toFixed(2)),
       remark: 'Complies',
     },
     {
-      conditionVaried: `Column Temp: ${baseTemp - 3} °C (-3 °C)`,
+      conditionVaried: `Column Temp: ${baseTemp - 3} \xB0C (-3 \xB0C)`,
       retentionTimeMin: (baseRt * 1.04).toFixed(2),
-      tailingFactor: Number((1.15 + (randRob() - 0.5) * 0.03).toFixed(2)),
-      theoreticalPlates: Math.round(4100 + (randRob() - 0.5) * 120),
-      rsdPercent: Number((0.32 + (randRob() - 0.5) * 0.06).toFixed(2)),
+      tailingFactor: Number((sstTailingObserved + 0.03 + (randRob() - 0.5) * 0.02).toFixed(2)),
+      theoreticalPlates: Math.round(sstPlatesObserved * 0.94 + (randRob() - 0.5) * 60),
+      rsdPercent: Number((Math.max(0.2, sstRsdObserved * 0.95 + (randRob() - 0.5) * 0.04)).toFixed(2)),
       remark: 'Complies',
     },
     {
-      conditionVaried: `Column Temp: ${baseTemp + 3} °C (+3 °C)`,
+      conditionVaried: `Column Temp: ${baseTemp + 3} \xB0C (+3 \xB0C)`,
       retentionTimeMin: (baseRt * 0.96).toFixed(2),
-      tailingFactor: Number((1.13 + (randRob() - 0.5) * 0.03).toFixed(2)),
-      theoreticalPlates: Math.round(4310 + (randRob() - 0.5) * 120),
-      rsdPercent: Number((0.29 + (randRob() - 0.5) * 0.06).toFixed(2)),
+      tailingFactor: Number((sstTailingObserved + 0.01 + (randRob() - 0.5) * 0.02).toFixed(2)),
+      theoreticalPlates: Math.round(sstPlatesObserved * 0.98 + (randRob() - 0.5) * 60),
+      rsdPercent: Number((Math.max(0.2, sstRsdObserved * 0.90 + (randRob() - 0.5) * 0.04)).toFixed(2)),
       remark: 'Complies',
     },
     {
       conditionVaried: 'Mobile Phase Organic Composition: -2 % v/v',
       retentionTimeMin: (baseRt * 1.06).toFixed(2),
-      tailingFactor: Number((1.16 + (randRob() - 0.5) * 0.03).toFixed(2)),
-      theoreticalPlates: Math.round(4050 + (randRob() - 0.5) * 120),
-      rsdPercent: Number((0.41 + (randRob() - 0.5) * 0.08).toFixed(2)),
+      tailingFactor: Number((sstTailingObserved + 0.04 + (randRob() - 0.5) * 0.02).toFixed(2)),
+      theoreticalPlates: Math.round(sstPlatesObserved * 0.92 + (randRob() - 0.5) * 60),
+      rsdPercent: Number((Math.max(0.2, sstRsdObserved * 1.08 + (randRob() - 0.5) * 0.04)).toFixed(2)),
       remark: 'Complies',
     },
     {
       conditionVaried: 'Mobile Phase Organic Composition: +2 % v/v',
       retentionTimeMin: (baseRt * 0.95).toFixed(2),
-      tailingFactor: Number((1.11 + (randRob() - 0.5) * 0.03).toFixed(2)),
-      theoreticalPlates: Math.round(4220 + (randRob() - 0.5) * 120),
-      rsdPercent: Number((0.35 + (randRob() - 0.5) * 0.08).toFixed(2)),
+      tailingFactor: Number((sstTailingObserved - 0.02 + (randRob() - 0.5) * 0.02).toFixed(2)),
+      theoreticalPlates: Math.round(sstPlatesObserved * 0.97 + (randRob() - 0.5) * 60),
+      rsdPercent: Number((Math.max(0.2, sstRsdObserved * 0.98 + (randRob() - 0.5) * 0.04)).toFixed(2)),
       remark: 'Complies',
     },
   ];
 
-  const maxRobRsd = Math.max(...robustnessRows.map(r => Number(r.rsdPercent)));
-  const minRobTailing = Math.min(...robustnessRows.map(r => Number(r.tailingFactor)));
-  const maxRobTailing = Math.max(...robustnessRows.map(r => Number(r.tailingFactor)));
-  const minRobPlates = Math.min(...robustnessRows.map(r => Number(r.theoreticalPlates)));
+  const maxRobRsd = Math.max(...(robustnessRows || []).map(r => Number(r.rsdPercent)));
+  const minRobTailing = Math.min(...(robustnessRows || []).map(r => Number(r.tailingFactor)));
+  const maxRobTailing = Math.max(...(robustnessRows || []).map(r => Number(r.tailingFactor)));
+  const minRobPlates = Math.min(...(robustnessRows || []).map(r => Number(r.theoreticalPlates)));
 
   const robustnessData: DissolutionRobustnessData = {
     rows: robustnessRows,
     acceptanceCriteria: 'System suitability criteria (%RSD ≤ 2.0 %, tailing factor ≤ 1.5, theoretical plates ≥ 2000) must be met under each deliberately varied condition.',
     conclusionProtocol: 'System suitability parameters will be evaluated under deliberately varied conditions of flow rate, column temperature, and mobile phase composition. Acceptance criteria: %RSD ≤ 2.0 %, tailing factor ≤ 1.5, theoretical plates ≥ 2000.',
-    conclusionReport: `Under all deliberately modified chromatographic conditions (Flow rate ±0.1 mL/min, Column temperature ±3 °C, and Mobile phase organic composition ±2 % v/v), system suitability parameters met all acceptance criteria (%RSD ≤ ${maxRobRsd.toFixed(2)} %, tailing factor ${minRobTailing.toFixed(2)}–${maxRobTailing.toFixed(2)}, theoretical plates ≥ ${minRobPlates}). The dissolution analytical method is robust.`,
+    conclusionReport: `Under all deliberately modified chromatographic conditions (Flow rate ±0.1 mL/min, Column temperature ±3 \xB0C, and Mobile phase organic composition ±2 % v/v), system suitability parameters met all acceptance criteria (%RSD ≤ ${maxRobRsd.toFixed(2)} %, tailing factor ${minRobTailing.toFixed(2)}–${maxRobTailing.toFixed(2)}, theoretical plates ≥ ${minRobPlates}). The dissolution analytical method is robust.`,
   };
 
   // 10. Solution Stability Data (0h, 12h, 24h, 48h)
@@ -1123,7 +1128,7 @@ export function buildFullDissolutionAMVData(
     return `${val.toFixed(2)} %`;
   };
 
-  // Room temperature (20–25 °C)
+  // Room temperature (20–25 \xB0C)
   const rtStdArea12 = Math.round(initStdArea * (1 - 0.0035 - randStab() * 0.0015));
   const rtSmpArea12 = Math.round(initSmpArea * (1 - 0.0032 - randStab() * 0.0015));
 
@@ -1172,7 +1177,7 @@ export function buildFullDissolutionAMVData(
     },
   ];
 
-  // Refrigerated (2–8 °C)
+  // Refrigerated (2–8 \xB0C)
   const refStdArea12 = Math.round(initStdArea * (1 - 0.0012 - randStab() * 0.0008));
   const refSmpArea12 = Math.round(initSmpArea * (1 - 0.0014 - randStab() * 0.0008));
 
@@ -1231,9 +1236,9 @@ export function buildFullDissolutionAMVData(
   const solutionStabilityData: DissolutionSolutionStabilityData = {
     rowsRoomTemp,
     rowsRefrigerated,
-    acceptanceCriteria: 'Percentage difference in peak area response of standard solution and sample dissolution solution from initial (0 h) shall be NMT 2.0 % after 48 hours storage at room temperature (20–25 °C) and refrigerated (2–8 °C). Solutions must remain clear with no precipitation.',
-    conclusionProtocol: 'Standard and sample solutions will be stored at room temperature (20–25 °C) and refrigerated (2–8 °C) and tested at 0 h, 12 h, 24 h, and 48 h. The % difference from the initial response must be NMT 2.0 %.',
-    conclusionReport: `Standard and test dissolution sample solutions demonstrated stability for up to 48 hours under both storage conditions. The maximum difference from initial response was ${maxRtDiff.toFixed(2)} % at room temperature (20–25 °C) and ${maxRefDiff.toFixed(2)} % under refrigeration (2–8 °C), well within the NMT 2.0 % limit. Filtered dissolution solutions can be safely held for 48 hours prior to HPLC injection.`,
+    acceptanceCriteria: 'Percentage difference in peak area response of standard solution and sample dissolution solution from initial (0 h) shall be NMT 2.0 % after 48 hours storage at room temperature (20–25 \xB0C) and refrigerated (2–8 \xB0C). Solutions must remain clear with no precipitation.',
+    conclusionProtocol: 'Standard and sample solutions will be stored at room temperature (20–25 \xB0C) and refrigerated (2–8 \xB0C) and tested at 0 h, 12 h, 24 h, and 48 h. The % difference from the initial response must be NMT 2.0 %.',
+    conclusionReport: `Standard and test dissolution sample solutions demonstrated stability for up to 48 hours under both storage conditions. The maximum difference from initial response was ${maxRtDiff.toFixed(2)} % at room temperature (20–25 \xB0C) and ${maxRefDiff.toFixed(2)} % under refrigeration (2–8 \xB0C), well within the NMT 2.0 % limit. Filtered dissolution solutions can be safely held for 48 hours prior to HPLC injection.`,
   };
 
   // 11. New Mandated Sections per Master GMP Directives
@@ -1553,14 +1558,14 @@ export function buildFullDissolutionAMVData(
     {
       annexureNo: 'Annexure VIII',
       title: 'Robustness Study Chromatograms',
-      contents: 'Chromatograms acquired under deliberately varied chromatographic conditions: Flow rate (±0.1 mL/min), Column temperature (±3 °C), and Mobile phase organic composition (±2 % v/v).',
+      contents: 'Chromatograms acquired under deliberately varied chromatographic conditions: Flow rate (±0.1 mL/min), Column temperature (±3 \xB0C), and Mobile phase organic composition (±2 % v/v).',
       totalPages: 6,
       status: 'Attached & Verified',
     },
     {
       annexureNo: 'Annexure IX',
       title: 'Solution Stability Chromatograms',
-      contents: 'Standard solution and filtered dissolution sample solution chromatograms tested at 0 h, 12 h, 24 h, and 48 h under room temperature (20–25 °C) and refrigerated (2–8 °C) conditions.',
+      contents: 'Standard solution and filtered dissolution sample solution chromatograms tested at 0 h, 12 h, 24 h, and 48 h under room temperature (20–25 \xB0C) and refrigerated (2–8 \xB0C) conditions.',
       totalPages: 8,
       status: 'Attached & Verified',
     },
@@ -1638,16 +1643,16 @@ export function buildFullDissolutionAMVData(
     {
       srNo: '5.9',
       parameter: 'Robustness',
-      acceptanceCriteria: 'System suitability criteria (%RSD ≤ 2.0 %, tailing factor ≤ 1.5, theoretical plates ≥ 2000) maintained under varied flow (±0.1 mL/min), column temp (±3 °C), and mobile phase organic composition (±2 % v/v).',
+      acceptanceCriteria: 'System suitability criteria (%RSD ≤ 2.0 %, tailing factor ≤ 1.5, theoretical plates ≥ 2000) maintained under varied flow (±0.1 mL/min), column temp (±3 \xB0C), and mobile phase organic composition (±2 % v/v).',
       executionStatusProtocol: 'To be evaluated',
       executionStatusReport: `Complies (%RSD ≤ ${maxRobRsd.toFixed(2)} %, Tailing ${minRobTailing.toFixed(2)}–${maxRobTailing.toFixed(2)}, Plates ≥ ${minRobPlates})`,
     },
     {
       srNo: '5.10',
       parameter: 'Solution Stability',
-      acceptanceCriteria: 'Standard and filtered dissolution sample % difference from initial (0 h) NMT 2.0 % over 48 hours at room temperature (20–25 °C) and refrigerated (2–8 °C).',
+      acceptanceCriteria: 'Standard and filtered dissolution sample % difference from initial (0 h) NMT 2.0 % over 48 hours at room temperature (20–25 \xB0C) and refrigerated (2–8 \xB0C).',
       executionStatusProtocol: 'To be evaluated',
-      executionStatusReport: `Complies (Max diff: ${maxRtDiff.toFixed(2)} % at RT, ${maxRefDiff.toFixed(2)} % at 2–8 °C at 48 h)`,
+      executionStatusReport: `Complies (Max diff: ${maxRtDiff.toFixed(2)} % at RT, ${maxRefDiff.toFixed(2)} % at 2–8 \xB0C at 48 h)`,
     },
   ];
 
@@ -1732,14 +1737,14 @@ export function buildFullDissolutionAMVData(
         numberOfUnits: '6 units for Stage 1 (S1) testing as per pharmacopoeia',
       },
       solutionPreparation: {
-        testSolution: `Place 1 dosage unit in each of the 6 dissolution vessels containing ${mono.medium} maintained at 37 °C ± 0.5 °C. Operate the apparatus at ${mono.paddleSpeed}. At ${mono.samplingTime}, withdraw 10 mL sample from each vessel, filter through 0.45 µm filter, and dilute appropriately with ${mono.diluent} to produce an expected working concentration of active substance.`,
+        testSolution: `Place 1 dosage unit in each of the 6 dissolution vessels containing ${mono.medium} maintained at 37 \xB0C ± 0.5 \xB0C. Operate the apparatus at ${mono.paddleSpeed}. At ${mono.samplingTime}, withdraw 10 mL sample from each vessel, filter through 0.45 µm filter, and dilute appropriately with ${mono.diluent} to produce an expected working concentration of active substance.`,
         standardSolution: `Weigh accurately about 25.0 mg of ${drugKeyName} Reference Standard into a 50 mL volumetric flask, dissolve and dilute with methanol/diluent. Further dilute an aliquot with ${mono.diluent} to achieve a working concentration matching 100 % dissolution release in the vessel (${cWorkingNominal} µg/mL).`,
         blank: `Freshly prepared dissolution medium (${mono.diluent}).`,
         placeboSolution: `Transfer an accurately weighed quantity of placebo powder equivalent to one dosage unit into a vessel containing ${mono.medium}, process under identical dissolution conditions, filter, and inject.`,
         precisionStandardSolution: `Standard preparation containing active substance at working concentration (${cWorkingNominal} µg/mL), prepared in duplicate from distinct standard weighings to confirm relative response factor repeatability.`,
         precisionSampleSolution: `Six individual dosage units tested simultaneously in dissolution apparatus vessels 1 through 6, sampled at ${mono.samplingTime}, filtered and analysed.`,
         linearitySolutions: `Prepare 5 calibrated solutions spanning 50 %, 75 %, 100 %, 125 %, and 150 % of nominal working concentration (${cWorkingNominal} µg/mL) by serial dilution of the stock standard with ${mono.diluent}.`,
-        handlingNote: `Degas the dissolution medium prior to use to prevent bubble formation. Equilibrate vessels at 37 °C ± 0.5 °C. Analyse filtered samples immediately or within established solution stability periods.`,
+        handlingNote: `Degas the dissolution medium prior to use to prevent bubble formation. Equilibrate vessels at 37 \xB0C ± 0.5 \xB0C. Analyse filtered samples immediately or within established solution stability periods.`,
       },
       monographLimits: {
         criterion: `Amount of active drug substance released at ${mono.samplingTime}`,
@@ -1780,7 +1785,7 @@ export function buildFullDissolutionAMVData(
         ? `Complies. No interference was observed from blank diluent or placebo matrix at the retention window of ${drugKeyName} (~${activeRt.toFixed(2)} min). Across all five stress degradation conditions (Acid, Base, Oxidation, Thermal, Photolytic), the degradation impurity peak consistently eluting at RT ~${degRt.toFixed(2)} min is cleanly baseline resolved from the main analyte peak (Rs ≥ 4.08, criteria: NLT 2.0). Diode array peak purity analysis confirmed that the ${drugKeyName} peak is spectrally pure (Purity Angle < Purity Threshold) without co-eluting degradants, demonstrating method specificity and stability-indicating capacity.`
         : `Complies. No interference was observed from blank diluent or placebo matrix at the retention window of ${drugKeyName} (~${activeRt.toFixed(2)} min). Diode array peak purity analysis confirmed that the ${drugKeyName} peak is spectrally pure (Purity Angle < Purity Threshold) without co-eluting excipient matrix components, demonstrating procedure specificity for dissolution testing.`,
       degradationAssessment: includeForcedDegradation
-        ? `Regulatory & Scientific Assessment of the ~${degRt.toFixed(2)} min Peak: In all five forced degradation stress samples (Acid 0.1N HCl, Base 0.1N NaOH, Peroxide 3% H₂O₂, Thermal 105 °C, and Photolytic UV/Vis), an additional peak is consistently observed at retention time ~${degRt.toFixed(2)} min (RRT ~${degRrt.toFixed(2)}). In chemical stability studies of ${drugKeyName}, this represents the primary degradant (${degProfile.name}). Chromatographic resolution between this degradation impurity (${degRt.toFixed(2)} min) and the parent ${drugKeyName} peak (${activeRt.toFixed(2)} min) is greater than 4.0 in all conditions (Rs = 4.08 to 4.16), easily satisfying the regulatory criterion of Rs ≥ 2.0. Furthermore, photodiode array (PDA) spectral peak purity analysis confirms complete homogeneity of the main ${drugKeyName} peak with no co-eluting degradants. The dissolution test procedure is therefore fully validated as stability-indicating and specific for its intended use.`
+        ? `Regulatory & Scientific Assessment of the ~${degRt.toFixed(2)} min Peak: In all five forced degradation stress samples (Acid 0.1N HCl, Base 0.1N NaOH, Peroxide 3% H₂O₂, Thermal 105 \xB0C, and Photolytic UV/Vis), an additional peak is consistently observed at retention time ~${degRt.toFixed(2)} min (RRT ~${degRrt.toFixed(2)}). In chemical stability studies of ${drugKeyName}, this represents the primary degradant (${degProfile.name}). Chromatographic resolution between this degradation impurity (${degRt.toFixed(2)} min) and the parent ${drugKeyName} peak (${activeRt.toFixed(2)} min) is greater than 4.0 in all conditions (Rs = 4.08 to 4.16), easily satisfying the regulatory criterion of Rs ≥ 2.0. Furthermore, photodiode array (PDA) spectral peak purity analysis confirms complete homogeneity of the main ${drugKeyName} peak with no co-eluting degradants. The dissolution test procedure is therefore fully validated as stability-indicating and specific for its intended use.`
         : '',
     },
 
@@ -1904,8 +1909,8 @@ export function buildFullDissolutionAMVData(
         effectiveDate: finalApprovalDate,
         docNumber: reportNo,
         reason: includeForcedDegradation
-          ? `Executed Analytical Method Verification Report formalization issued as ${reportNo} against commercial validation batch ${batchNo} (supersedes initial protocol ${protocolNo} on batch ${batchNo}). Verifies core analytical parameters (Retention Time ~${activeRt.toFixed(2)} min, detection wavelength ${mono.wavelength}, column ${mono.column}, mobile phase ${mono.mobilePhase}) with complete Specificity forced degradation, deliberate Robustness variations (flow rate ±0.1 mL/min, column temperature ±3 °C, mobile phase composition ±2 %), extended 48-hour Solution Stability, and recovery datasets ensuring full ICH Q2(R2) compliance.`
-          : `Executed Analytical Method Verification Report formalization issued as ${reportNo} against commercial validation batch ${batchNo} (supersedes initial protocol ${protocolNo} on batch ${batchNo}). Verifies core analytical parameters (Retention Time ~${activeRt.toFixed(2)} min, detection wavelength ${mono.wavelength}, column ${mono.column}, mobile phase ${mono.mobilePhase}) with complete Specificity (blank and placebo matrix non-interference), deliberate Robustness variations (flow rate ±0.1 mL/min, column temperature ±3 °C, mobile phase composition ±2 %), extended 48-hour Solution Stability, and recovery datasets ensuring full compendial compliance.`,
+          ? `Executed Analytical Method Verification Report formalization issued as ${reportNo} against commercial validation batch ${batchNo} (supersedes initial protocol ${protocolNo} on batch ${batchNo}). Verifies core analytical parameters (Retention Time ~${activeRt.toFixed(2)} min, detection wavelength ${mono.wavelength}, column ${mono.column}, mobile phase ${mono.mobilePhase}) with complete Specificity forced degradation, deliberate Robustness variations (flow rate ±0.1 mL/min, column temperature ±3 \xB0C, mobile phase composition ±2 %), extended 48-hour Solution Stability, and recovery datasets ensuring full ICH Q2(R2) compliance.`
+          : `Executed Analytical Method Verification Report formalization issued as ${reportNo} against commercial validation batch ${batchNo} (supersedes initial protocol ${protocolNo} on batch ${batchNo}). Verifies core analytical parameters (Retention Time ~${activeRt.toFixed(2)} min, detection wavelength ${mono.wavelength}, column ${mono.column}, mobile phase ${mono.mobilePhase}) with complete Specificity (blank and placebo matrix non-interference), deliberate Robustness variations (flow rate ±0.1 mL/min, column temperature ±3 \xB0C, mobile phase composition ±2 %), extended 48-hour Solution Stability, and recovery datasets ensuring full compendial compliance.`,
       },
     ],
     includeForcedDegradation,
@@ -1915,5 +1920,5 @@ export function buildFullDissolutionAMVData(
   const docText = JSON.stringify({ ...doc, abbreviations: [] });
   doc.abbreviations = filterUsedAbbreviations(doc.abbreviations || [], docText, true);
 
-  return postProcessSanitizeDocument(doc, 'dissolution');
+  return postProcessSanitizeDocument(recalculateDissolutionData(doc), 'dissolution');
 }

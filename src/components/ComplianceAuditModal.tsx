@@ -104,7 +104,7 @@ export const ComplianceAuditModal: React.FC<ComplianceAuditModalProps> = ({
                 <span>Export Blocked: The following compliance errors must be resolved:</span>
               </div>
               <ul className="list-disc list-inside space-y-1 pl-1 text-xs text-rose-800">
-                {blockers.map((b, i) => (
+                {(blockers || []).map((b, i) => (
                   <li key={i}>{b}</li>
                 ))}
               </ul>
@@ -119,7 +119,7 @@ export const ComplianceAuditModal: React.FC<ComplianceAuditModalProps> = ({
                 <span>Advisory Notice ({warnings.length}):</span>
               </div>
               <ul className="list-disc list-inside space-y-1 pl-1 text-xs text-amber-800">
-                {warnings.map((w, i) => (
+                {(warnings || []).map((w, i) => (
                   <li key={i}>{w}</li>
                 ))}
               </ul>
@@ -132,7 +132,7 @@ export const ComplianceAuditModal: React.FC<ComplianceAuditModalProps> = ({
               Automated Regulatory & Method Verification Checklist ({checks.length} Criteria)
             </h4>
             <div className="divide-y divide-zinc-100 border border-zinc-200 rounded-lg overflow-hidden bg-white">
-              {checks.map((check) => (
+              {(checks || []).map((check) => (
                 <div key={check.id} className="p-3 hover:bg-zinc-50/60 transition-colors flex items-start space-x-3">
                   <div className="mt-0.5 flex-shrink-0">
                     {check.status === 'passed' && (
