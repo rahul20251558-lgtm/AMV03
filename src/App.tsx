@@ -218,7 +218,7 @@ export function App() {
     setMltData((prev) => synchronizeDocumentReportDates(prev, newDate));
   };
 
-  // Handle switching between Dissolution, Related Substances, and Assay methods
+  // Handle switching between Dissolution, Related Substances, Assay, and Assay & Content of Uniformity methods
   // Preserves the single shared product name, strength, batch and report date
   const handleValidationMethodChange = (newMethod: ValidationMethodType) => {
     setValidationMethod(newMethod);
@@ -229,8 +229,17 @@ export function App() {
         ? `Preparing Dissolution Verification (BP Appendix XII B1) for "${productName}"...`
         : newMethod === 'related_substances'
         ? `Preparing Related Substances (Organic Impurities) AMV for "${productName}"...`
+        : newMethod === 'assay_and_cu'
+        ? `Preparing Assay & Content of Uniformity Method AMV for "${productName}"...`
         : `Preparing Assay by HPLC AMV for "${productName}"...`
     );
+
+    if (newMethod === 'assay_and_cu') {
+      setAssayData((prev) => recalculateAMVData({ ...prev, assayScope: 'assay_and_cu' }));
+    } else if (newMethod === 'assay') {
+      setAssayData((prev) => recalculateAMVData({ ...prev, assayScope: 'assay_only' }));
+    }
+
     setTimeout(() => {
       setIsLoading(false);
       setLoadingStepText('');
@@ -362,6 +371,7 @@ Do you want to automatically switch to the suggested Report No.?`;
           companyName,
           reportDate,
           effectiveDate: reportDate,
+          assayScope: (activeMethod === 'assay_and_cu' || (!activeMethod && validationMethod === 'assay_and_cu')) ? 'assay_and_cu' : 'assay_only',
           ...activeOverrides,
           targetApi
         });

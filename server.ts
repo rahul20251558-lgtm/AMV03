@@ -655,7 +655,13 @@ Return ONLY a valid JSON object matching this structure:
   return res.json({ overrides: {}, success: false });
 });
 
-app.post("/api/log-error", express.json(), (req, res) => { console.log("CLIENT ERROR:", req.body.error); res.json({ success: true }); });
+app.post("/api/log-error", express.json(), (req, res) => {
+  const err = String(req.body?.error || '');
+  if (!err.includes('WebSocket') && !err.includes('vite') && !err.includes('ResizeObserver')) {
+    console.log("CLIENT ERROR:", err);
+  }
+  res.json({ success: true });
+});
 // Vite Middleware & Static Serving
 async function startServer() {
   const publicPath = path.join(process.cwd(), 'public');
@@ -664,7 +670,7 @@ async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: false },
       appType: 'spa',
     });
     app.use(vite.middlewares);

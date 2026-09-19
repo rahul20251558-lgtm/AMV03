@@ -935,9 +935,12 @@ export async function generateAndDownloadDissolutionDocx(
   docElements.push(createBodyText('A calibration curve is simply a graph where concentration is plotted along the x-axis, and peak area is plotted along the y-axis. After making several Calibration Standards at different concentrations. After running each one on the instrument and getting the area, the points are then plotted on the graph. The points are then connected with a line. That line represents the calibration curve.'));
   docElements.push(createBodyText('Prepare 5 or more Standard solutions having concentrations that cover the range of detection (for example, 50 %; 75 %; 100 %; 125 % and 150 % of nominal concentration).'));
   
-  if (data.linearityAndRange?.linearity?.levels && data.linearityAndRange.linearity.levels.length > 0) {
-    data.linearityAndRange.linearity.levels.forEach(lvl => {
-      docElements.push(createBodyText(`For ${lvl.levelName} (${lvl.nominalPpm} ppm) : Weigh accurately about ${lvl.weightMg || 'the required'} mg of Reference Standard in volumetric flask, further dissolve in diluent and make up to the mark with diluent to attain ${lvl.nominalPpm} ppm.`));
+  const linLevels = (data as any).linearityAndRange?.linearity?.levels || (data.linearity?.levels as any[]) || [];
+  if (linLevels.length > 0) {
+    linLevels.forEach((lvl: any) => {
+      const concPpm = lvl.nominalPpm || lvl.nominalConcentrationPpm || lvl.concentrationPpm || lvl.concentrationUgMl || lvl.concentration || '';
+      const lvlLabel = lvl.levelName || lvl.levelPercent || '';
+      docElements.push(createBodyText(`For ${lvlLabel} (${concPpm} ppm) : Weigh accurately about ${lvl.weightMg || 'the required'} mg of Reference Standard in volumetric flask, further dissolve in diluent and make up to the mark with diluent to attain ${concPpm} ppm.`));
     });
   }
   docElements.push(new Paragraph({ spacing: { before: 80, after: 120 } }));

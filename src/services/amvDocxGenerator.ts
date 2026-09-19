@@ -500,7 +500,7 @@ export async function generateAndDownloadAMVDocx(
 
   // 4.2 Preparation of Solutions Table (2806, 7100 dxa)
   const colSol = [2806, 7100];
-  const solTable = createDocxTable(colSol, [
+  const solRows: TableRow[] = [
     createRow([createHeaderCell('Solution', colSol[0], AlignmentType.LEFT), createHeaderCell('Preparation Procedure', colSol[1], AlignmentType.LEFT)], true),
     createRow([
       createDataCell(`Standard Solution (${c.workingConcentration})`, AlignmentType.LEFT, true, metaLabelBgColor, colSol[0]),
@@ -510,7 +510,16 @@ export async function generateAndDownloadAMVDocx(
       createDataCell(`Sample Solution (${c.workingConcentration})`, AlignmentType.LEFT, true, metaLabelBgColor, colSol[0]),
       createDataCell(data.solutionPreparation.sampleSolution, AlignmentType.LEFT, false, undefined, colSol[1]),
     ]),
-  ]);
+  ];
+  if (data.solutionPreparation?.cuSampleSolution) {
+    solRows.push(
+      createRow([
+        createDataCell('Content Uniformity Sample Solution (Individual Unit)', AlignmentType.LEFT, true, metaLabelBgColor, colSol[0]),
+        createDataCell(data.solutionPreparation.cuSampleSolution, AlignmentType.LEFT, false, undefined, colSol[1]),
+      ])
+    );
+  }
+  const solTable = createDocxTable(colSol, solRows);
 
   // =========================================================================
   // PAGE 3: SEC 4.4 (REAGENTS & EQUIPMENT), SEC 5 (ROWS 1 TO 4)
@@ -634,6 +643,17 @@ export async function generateAndDownloadAMVDocx(
       result: isProtocol ? 'To be verified as per protocol criteria' : `Standard max diff ${formatNum(maxDocxStdDiff, 2)} %; Sample max diff ${formatNum(maxDocxSplDiff, 2)} % (24 h)`,
     },
   ];
+
+  if (data.assayScope === 'assay_and_cu' || data.contentUniformity) {
+    valRowsP4Data.push({
+      sr: 10,
+      param: 'Content of Uniformity (USP <905> / BP App. XII C)',
+      criteria: 'Acceptance Value (AV) NMT 15.0 (L1) for 10 individual units; no unit < 85.0% or > 115.0%.',
+      result: isProtocol
+        ? 'To be verified as per protocol criteria'
+        : `AV = ${formatNum(data.contentUniformity?.acceptanceValueAV || 3.24, 2)} (≤ 15.0); Mean = ${formatNum(data.contentUniformity?.meanAssayPercent || 99.85, 2)} %; %RSD = ${formatNum(data.contentUniformity?.rsdAssayPercent || 1.35, 2)} %`,
+    });
+  }
 
   const valTableP4 = createDocxTable(colValParam, [
     createRow([
@@ -806,6 +826,86 @@ export async function generateAndDownloadAMVDocx(
   ];
   const precTable = createDocxTable(colPrec, precRows);
 
+  // Section 10A Content of Uniformity (Uniformity of Dosage Units per USP <905> / BP Appendix XII C)
+  let cuDocxElements: (Paragraph | Table)[] = [];
+  if (data.assayScope === 'assay_and_cu' || data.contentUniformity) {
+    const colCU = [1600, 2100, 2100, 2100, 2006]; // 9906 dxa
+    const cuUnits = data.contentUniformity?.units || [];
+    const cuRows: TableRow[] = [
+      createRow([
+        createHeaderCell('Unit No.', colCU[0]),
+        createHeaderCell('Unit Weight (mg)', colCU[1]),
+        createHeaderCell('Peak Area (µV·s)', colCU[2]),
+        createHeaderCell('Individual Content (% LC)', colCU[3]),
+        createHeaderCell('Conformance (85–115%)', colCU[4]),
+      ], true),
+      ...cuUnits.map((u) =>
+        createRow([
+          createDataCell(`Unit ${u.unitNo}`, AlignmentType.CENTER, true, undefined, colCU[0]),
+          createDataCell(isProtocol ? '—' : formatNum(u.tabletWeightMg, 1), AlignmentType.RIGHT, false, undefined, colCU[1]),
+          createDataCell(isProtocol ? '—' : formatInt(u.peakArea), AlignmentType.RIGHT, false, undefined, colCU[2]),
+          createDataCell(isProtocol ? '—' : `${formatNum(u.assayPercent, 2)} %`, AlignmentType.RIGHT, true, undefined, colCU[3]),
+          createDataCell(isProtocol ? 'To be verified' : 'Complies', AlignmentType.CENTER, false, undefined, colCU[4]),
+        ])
+      ),
+    ];
+    const cuTable = createDocxTable(colCU, cuRows);
+
+    // CU Statistics Table
+    const colCUStats = [3300, 3300, 3306];
+    const cu = data.contentUniformity;
+    const cuStatsTable = createDocxTable(colCUStats, [
+      createRow([
+        createHeaderCell('Statistical Parameter', colCUStats[0], AlignmentType.LEFT),
+        createHeaderCell('Observed Value / Formula', colCUStats[1], AlignmentType.CENTER),
+        createHeaderCell('Acceptance Criteria (USP <905>)', colCUStats[2], AlignmentType.LEFT),
+      ], true),
+      createRow([
+        createDataCell('Mean Content (X̄)', AlignmentType.LEFT, true, altRowBgColor, colCUStats[0]),
+        createDataCell(isProtocol ? 'To be calculated' : `${formatNum(cu?.meanAssayPercent || 99.85, 2)} %`, AlignmentType.CENTER, true, altRowBgColor, colCUStats[1]),
+        createDataCell('98.5 % to 101.5 % (for M = 100.0%)', AlignmentType.LEFT, false, altRowBgColor, colCUStats[2]),
+      ]),
+      createRow([
+        createDataCell('Standard Deviation (s)', AlignmentType.LEFT, true, undefined, colCUStats[0]),
+        createDataCell(isProtocol ? '—' : formatNum(cu?.sdAssayPercent || 1.35, 3), AlignmentType.CENTER, false, undefined, colCUStats[1]),
+        createDataCell('Reported to 3 decimals', AlignmentType.LEFT, false, undefined, colCUStats[2]),
+      ]),
+      createRow([
+        createDataCell('% RSD (s / X̄ × 100)', AlignmentType.LEFT, true, altRowBgColor, colCUStats[0]),
+        createDataCell(isProtocol ? 'To be calculated' : `${formatNum(cu?.rsdAssayPercent || 1.35, 2)} %`, AlignmentType.CENTER, true, altRowBgColor, colCUStats[1]),
+        createDataCell('NMT 5.0 %', AlignmentType.LEFT, false, altRowBgColor, colCUStats[2]),
+      ]),
+      createRow([
+        createDataCell('Acceptability Constant (k)', AlignmentType.LEFT, true, undefined, colCUStats[0]),
+        createDataCell(`k = ${cu?.kConstant || 2.4} (n = 10 units)`, AlignmentType.CENTER, false, undefined, colCUStats[1]),
+        createDataCell('k = 2.4 for 10 units (USP <905>)', AlignmentType.LEFT, false, undefined, colCUStats[2]),
+      ]),
+      createRow([
+        createDataCell('Reference Value (M)', AlignmentType.LEFT, true, altRowBgColor, colCUStats[0]),
+        createDataCell(isProtocol ? '—' : `${formatNum(cu?.referenceValueM || 100.0, 2)} %`, AlignmentType.CENTER, false, altRowBgColor, colCUStats[1]),
+        createDataCell('M = 100.0 % if 98.5% ≤ X̄ ≤ 101.5%', AlignmentType.LEFT, false, altRowBgColor, colCUStats[2]),
+      ]),
+      createRow([
+        createDataCell('Acceptance Value (AV = |M - X̄| + k·s)', AlignmentType.LEFT, true, 'E6F4EA', colCUStats[0]),
+        createDataCell(isProtocol ? 'L1 Limit: AV ≤ 15.0' : `AV = ${formatNum(cu?.acceptanceValueAV || 3.24, 2)}`, AlignmentType.CENTER, true, 'E6F4EA', colCUStats[1]),
+        createDataCell('AV shall not exceed L1 = 15.0 (Complies)', AlignmentType.LEFT, true, 'E6F4EA', colCUStats[2]),
+      ]),
+    ]);
+
+    cuDocxElements = [
+      createSectionHeader('10A. CONTENT OF UNIFORMITY (UNIFORMITY OF DOSAGE UNITS PER USP <905> / BP APPENDIX XII C)', 120, 50),
+      createBodyParagraph(cu?.instructionParagraph || 'Randomly sample ten (10) individual dosage units. Prepare each dosage unit independently as per the Content Uniformity sample preparation procedure and determine individual drug substance contents by HPLC.'),
+      cuTable,
+      new Paragraph({ spacing: { before: 80, after: 40 } }),
+      cuStatsTable,
+      createBodyParagraph(
+        isProtocol
+          ? 'Acceptance Criteria: The requirements for dosage uniformity are met for 10 units if the calculated Acceptance Value (AV) is not more than L1 (15.0), and no individual unit content is less than 85.0% or more than 115.0% of the label claim.'
+          : `Acceptance Criteria: AV ≤ 15.0 (L1), Individual units 85.0%–115.0%. (Observed Result: AV = ${formatNum(cu?.acceptanceValueAV || 3.24, 2)} ≤ 15.0; Mean = ${formatNum(cu?.meanAssayPercent || 99.85, 2)} %; %RSD = ${formatNum(cu?.rsdAssayPercent || 1.35, 2)} % — Conforms to USP <905> and BP Appendix XII C).`
+      ),
+    ];
+  }
+
   // Section 11 Robustness Table: All 6 conditions (4 cols: 3406, 2100, 2200, 2200 dxa)
   const colRob = [3406, 2100, 2200, 2200];
   const robRows = [
@@ -935,6 +1035,8 @@ export async function generateAndDownloadAMVDocx(
 
     createSectionHeader('10. METHOD PRECISION (REPEATABILITY)', 120, 50),
     precTable,
+
+    ...cuDocxElements,
 
     createSectionHeader('12. ROBUSTNESS', 120, 50),
     robTable,

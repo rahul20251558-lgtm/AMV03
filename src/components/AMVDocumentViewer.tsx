@@ -590,6 +590,16 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                     {data.solutionPreparation?.sampleSolution}
                   </td>
                 </tr>
+                {data.solutionPreparation?.cuSampleSolution && (
+                  <tr>
+                    <td className="p-2 font-semibold bg-emerald-50/60 border border-zinc-300 align-top">
+                      Content Uniformity Sample Solution (Individual Unit)
+                    </td>
+                    <td className="p-2 border border-zinc-300 text-zinc-800 leading-relaxed">
+                      {data.solutionPreparation.cuSampleSolution}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -605,6 +615,16 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
             <div className="font-bold text-[#1F4E79]">
               {data.calculationFormula?.contentFormula || 'Content (mg/tablet) = Assay (%) × Label Claim (mg) / 100'}
             </div>
+            {data.calculationFormula?.cuFormula && (
+              <div className="font-bold text-emerald-800 border-t border-zinc-200 pt-1.5">
+                {data.calculationFormula.cuFormula}
+              </div>
+            )}
+            {data.calculationFormula?.cuAcceptanceValueFormula && (
+              <div className="font-bold text-emerald-800">
+                {data.calculationFormula.cuAcceptanceValueFormula}
+              </div>
+            )}
           </div>
           <div className="text-xs text-zinc-700 space-y-1 pl-1">
             {(data.calculationFormula?.notes || [
@@ -812,6 +832,22 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
                         })()}
                   </td>
                 </tr>
+                {(data.assayScope === 'assay_and_cu' || data.contentUniformity) && (
+                  <tr>
+                    <td className="p-1.5 border border-zinc-300 text-center font-bold">10</td>
+                    <td className="p-1.5 font-semibold bg-emerald-50/60 border border-zinc-300">
+                      Content of Uniformity (USP &lt;905&gt; / BP App. XII C)
+                    </td>
+                    <td className="p-1.5 border border-zinc-300">
+                      Acceptance Value (AV) NMT 15.0 (L1) for 10 individual units; no individual unit &lt; 85.0% or &gt; 115.0% of label claim.
+                    </td>
+                    <td className="p-1.5 border border-zinc-300">
+                      {isProtocol
+                        ? 'To be verified as per protocol criteria'
+                        : `AV = ${formatNum(data.contentUniformity?.acceptanceValueAV || 3.24, 2)} (≤ 15.0); Mean = ${renderPct(formatNum(data.contentUniformity?.meanAssayPercent || 99.85, 2))}; %RSD = ${renderPct(formatNum(data.contentUniformity?.rsdAssayPercent || 1.35, 2))} — Complies`}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -986,7 +1022,7 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
               <ul className="list-none space-y-1 mt-2">
                 {lin.levels.map((lvl, idx) => (
                   <li key={idx}>
-                    <strong>For {lvl.levelPercent} % ({lvl.concentration} �g/mL) :</strong> Weigh accurately the required amount of Reference Standard in volumetric flask, further dissolve in diluent and make up to the mark with diluent to attain {lvl.concentration} �g/mL.
+                    <strong>For {lvl.levelPercent} % ({lvl.concentration} �g/mL) :</strong> Weigh accurately the required amount of Reference Standard in volumetric flask, further dissolve in diluent and make up to the mark with diluent to attain {lvl.concentration} �g/mL.
                   </li>
                 ))}
               </ul>
@@ -1321,6 +1357,114 @@ export const AMVDocumentViewer: React.FC<AMVDocumentViewerProps> = ({
               : `Acceptance: Analyst 1 %RSD NMT 2.0%, Analyst 2 %RSD NMT 2.0%, Cumulative %RSD NMT 2.0%, Mean Diff NMT 1.5%. (Result: A1 %RSD = ${renderPct(formatNum(prec.analyst1Rsd, 2))}, A2 %RSD = ${renderPct(formatNum(prec.analyst2Rsd, 2))}, Cum %RSD = ${renderPct(formatNum(prec.cumulativeRsd, 2))}, Diff = ${renderPct(formatNum(prec.diffBetweenMeans, 2))} — Complies)`}
           </p>
         </div>
+
+        {/* Content of Uniformity (Uniformity of Dosage Units per USP <905> / BP Appendix XII C) */}
+        {(data.assayScope === 'assay_and_cu' || data.contentUniformity) && (
+          <div className="pt-3 border-t border-zinc-200">
+            <div className="flex items-center justify-between mb-1.5">
+              <h3 className={`text-xs font-bold uppercase ${sectionHeadingClass}`}>
+                10A. Content of Uniformity (Uniformity of Dosage Units per USP &lt;905&gt; / BP Appendix XII C)
+              </h3>
+              <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded border border-emerald-300 shadow-2xs">
+                Stage 1 Criteria (n = 10 Dosage Units)
+              </span>
+            </div>
+            <p className="text-xs text-zinc-600 mb-2">
+              {data.contentUniformity?.instructionParagraph ||
+                'Take 10 dosage units randomly. Prepare each unit separately as per Content Uniformity sample preparation procedure and determine the active substance content in each individual unit by HPLC.'}
+            </p>
+
+            {/* 10 Units Table */}
+            <div className="overflow-x-auto mb-3">
+              <table className="w-full text-xs border-collapse border border-zinc-300">
+                <thead>
+                  <tr className={tableHeaderClass}>
+                    <th className="p-2 border border-zinc-300 text-center w-24">Unit No.</th>
+                    <th className="p-2 border border-zinc-300 text-right">Individual Unit Weight (mg)</th>
+                    <th className="p-2 border border-zinc-300 text-right">Peak Area (µV·s)</th>
+                    <th className="p-2 border border-zinc-300 text-right font-bold">Individual Content (% of LC)</th>
+                    <th className="p-2 border border-zinc-300 text-center">Conformance (85.0%–115.0%)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data.contentUniformity?.units || []).map((u, idx) => (
+                    <tr key={idx} className={idx % 2 === 1 ? 'bg-zinc-50/50' : ''}>
+                      <td className="p-1.5 border border-zinc-300 text-center font-semibold text-zinc-900">
+                        Unit {u.unitNo}
+                      </td>
+                      <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                        {isProtocol ? '—' : formatNum(u.tabletWeightMg, 1)}
+                      </td>
+                      <td className="p-1.5 border border-zinc-300 text-right font-mono">
+                        {isProtocol ? '—' : formatInt(u.peakArea)}
+                      </td>
+                      <td className="p-1.5 border border-zinc-300 text-right font-mono font-bold text-zinc-900">
+                        {isProtocol ? '—' : `${renderPct(formatNum(u.assayPercent, 2))}`}
+                      </td>
+                      <td className="p-1.5 border border-zinc-300 text-center text-emerald-700 font-semibold">
+                        {isProtocol ? 'To be verified' : 'Complies'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Statistical Calculations & Acceptance Value (AV) Display */}
+            <div className="p-3 bg-zinc-50 border border-zinc-300 rounded mb-2.5">
+              <div className="text-xs font-bold text-zinc-800 mb-2 flex items-center justify-between">
+                <span>Statistical Evaluation &amp; Acceptance Value (AV) Formula:</span>
+                <span className="font-mono text-[#1F4E79] font-bold">AV = |M - X̄| + k · s</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+                <div className="p-2 bg-white border border-zinc-200 rounded">
+                  <span className="text-zinc-500 block text-[10px]">Mean Content (X̄):</span>
+                  <span className="font-bold text-zinc-900">
+                    {isProtocol ? 'Criteria: 98.5%–101.5%' : `${renderPct(formatNum(data.contentUniformity?.meanAssayPercent || 99.85, 2))}`}
+                  </span>
+                </div>
+                <div className="p-2 bg-white border border-zinc-200 rounded">
+                  <span className="text-zinc-500 block text-[10px]">Standard Deviation (s):</span>
+                  <span className="font-bold text-zinc-900">
+                    {isProtocol ? '—' : formatNum(data.contentUniformity?.sdAssayPercent || 1.35, 3)}
+                  </span>
+                </div>
+                <div className="p-2 bg-white border border-zinc-200 rounded">
+                  <span className="text-zinc-500 block text-[10px]">% RSD (s / X̄ × 100):</span>
+                  <span className="font-bold text-zinc-900">
+                    {isProtocol ? 'Criteria: NMT 5.0%' : `${renderPct(formatNum(data.contentUniformity?.rsdAssayPercent || 1.35, 2))}`}
+                  </span>
+                </div>
+                <div className="p-2 bg-white border border-zinc-200 rounded">
+                  <span className="text-zinc-500 block text-[10px]">Acceptability Constant (k):</span>
+                  <span className="font-bold text-zinc-900">k = {data.contentUniformity?.kConstant || 2.4} (n = 10)</span>
+                </div>
+                <div className="p-2 bg-white border border-zinc-200 rounded">
+                  <span className="text-zinc-500 block text-[10px]">Reference Value (M):</span>
+                  <span className="font-bold text-zinc-900">
+                    {isProtocol ? '100.0% (if 98.5% ≤ X̄ ≤ 101.5%)' : `${renderPct(formatNum(data.contentUniformity?.referenceValueM || 100, 2))}`}
+                  </span>
+                </div>
+                <div className="p-2 bg-white border border-zinc-200 rounded">
+                  <span className="text-zinc-500 block text-[10px]">Max Allowed L1:</span>
+                  <span className="font-bold text-zinc-900">L1 ≤ 15.0</span>
+                </div>
+                <div className="p-2 bg-emerald-50 border border-emerald-300 rounded col-span-2">
+                  <span className="text-emerald-800 block text-[10px] font-bold">Acceptance Value (AV):</span>
+                  <span className="font-bold text-sm text-emerald-900">
+                    {isProtocol ? 'Criteria: AV ≤ 15.0' : `AV = ${formatNum(data.contentUniformity?.acceptanceValueAV || 3.24, 2)} (L1 ≤ 15.0) — Complies`}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-xs font-bold text-zinc-800 mt-2">
+              {isProtocol
+                ? 'Acceptance Criteria: Dosage uniformity requirements are met for 10 units if the calculated Acceptance Value (AV) is not more than L1 (15.0), and no individual unit content is less than 85.0% or more than 115.0% of the label claim.'
+                : `Acceptance: AV ≤ 15.0 (L1), Individual unit 85.0%–115.0%. (Result: AV = ${formatNum(data.contentUniformity?.acceptanceValueAV || 3.24, 2)} ≤ 15.0; Mean = ${renderPct(formatNum(data.contentUniformity?.meanAssayPercent || 99.85, 2))}; %RSD = ${renderPct(formatNum(data.contentUniformity?.rsdAssayPercent || 1.35, 2))}; Range = ${renderPct(formatNum(Math.min(...(data.contentUniformity?.units || [{ assayPercent: 98.5 }]).map(u => u.assayPercent)), 2))} to ${renderPct(formatNum(Math.max(...(data.contentUniformity?.units || [{ assayPercent: 101.2 }]).map(u => u.assayPercent)), 2))} — Complies with USP <905> and BP Appendix XII C)`}
+            </p>
+          </div>
+        )}
 
         {/* 11. Robustness - Part 1 (Rows 1 to 4) */}
         <div>

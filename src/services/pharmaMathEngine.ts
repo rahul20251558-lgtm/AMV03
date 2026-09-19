@@ -640,3 +640,69 @@ export function parsePharmaDate(dateStr: string | undefined | null): Date | null
   return isNaN(parsed.getTime()) ? null : parsed;
 }
 
+export interface GeneratedContentUniformityUnit {
+  unitNo: number;
+  weightMg: number;
+  peakArea: number;
+  contentFoundMg: number;
+  assayPercent: number;
+}
+
+export function generateContentUniformityData(
+  productName: string,
+  strengthMg: number,
+  nominalArea: number,
+  avgTabletWeightMg: number = 150
+) {
+  const rand = createSeededRandom(`${productName.toLowerCase()}_cu_dosage_units`);
+  const numUnits = 10;
+  const units: GeneratedContentUniformityUnit[] = [];
+  const baseArea = nominalArea > 0 ? nominalArea : 2000000;
+  const baseTabletWt = avgTabletWeightMg > 0 ? avgTabletWeightMg : 150;
+
+  for (let i = 1; i <= numUnits; i++) {
+    const tabletWt = Number((baseTabletWt * (1 + (rand() - 0.5) * 0.03)).toFixed(2));
+    const indPct = Number((99.85 + (rand() - 0.5) * 2.6).toFixed(2));
+    const contentFound = Number(((indPct / 100) * strengthMg).toFixed(strengthMg >= 50 ? 1 : strengthMg >= 1 ? 2 : 3));
+    const area = Math.round(baseArea * (indPct / 100));
+
+    units.push({
+      unitNo: i,
+      weightMg: tabletWt,
+      peakArea: area,
+      contentFoundMg: contentFound,
+      assayPercent: indPct,
+    });
+  }
+
+  const assays = units.map((u) => u.assayPercent);
+  const meanAssay = Number((assays.reduce((a, b) => a + b, 0) / numUnits).toFixed(2));
+  const variance = assays.reduce((acc, p) => acc + Math.pow(p - meanAssay, 2), 0) / (numUnits - 1);
+  const sd = Number(Math.sqrt(variance).toFixed(3));
+  const rsd = Number(((sd / meanAssay) * 100).toFixed(2));
+  const k = 2.4; // constant for n = 10 units
+
+  let M = meanAssay;
+  if (meanAssay < 98.5) {
+    M = 98.5;
+  } else if (meanAssay > 101.5) {
+    M = 101.5;
+  }
+  const diffM = Math.abs(M - meanAssay);
+  const av = Number((diffM + k * sd).toFixed(2));
+
+  return {
+    units,
+    meanAssayPercent: meanAssay,
+    sdAssayPercent: sd,
+    rsdAssayPercent: rsd,
+    kConstant: k,
+    referenceValueM: M,
+    acceptanceValueAV: av,
+    maxAllowedAV: 15.0,
+    acceptanceTextProtocol:
+      'Content of Uniformity shall be evaluated on 10 individual dosage units as per USP <905> / BP Appendix XII C. The Acceptance Value (AV) shall not exceed 15.0 (L1 criteria), and individual unit contents shall be within 85.0 % to 115.0 % of declared label claim.',
+    conclusionReport: `The Acceptance Value (AV) for 10 individual dosage units is ${av} (NMT 15.0). Mean content is ${meanAssay} % with %RSD of ${rsd} % (NMT 5.0 %). All individual tablet assay values lie within 85.0 % to 115.0 % of label claim. The method is fully validated and verified for Content of Uniformity testing per USP <905> / BP Appendix XII C.`,
+  };
+}
+

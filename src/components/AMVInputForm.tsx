@@ -169,6 +169,8 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
                 ? 'Dissolution Method Verification Engine (BP Appendix XII B1)'
                 : isRS
                 ? 'Related Substances (AMV) Validation Engine'
+                : validationMethod === 'assay_and_cu'
+                ? 'For Assay and Content of Uniformity Method by HPLC'
                 : 'Assay by HPLC Validation Engine'}
             </h2>
           </div>
@@ -202,13 +204,25 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
               type="button"
               onClick={() => onValidationMethodChange('assay')}
               className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 ${
-                !isRS && !isDissolution
+                validationMethod === 'assay'
                   ? 'bg-[#1F4E79] text-white shadow-xs font-semibold'
                   : 'text-zinc-600 hover:text-zinc-900'
               }`}
             >
               <Beaker className="w-3.5 h-3.5" />
               <span>Assay (HPLC)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onValidationMethodChange('assay_and_cu')}
+              className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 ${
+                validationMethod === 'assay_and_cu'
+                  ? 'bg-[#1F4E79] text-white shadow-xs font-semibold'
+                  : 'text-zinc-600 hover:text-zinc-900'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5 text-emerald-400" />
+              <span>For Assay &amp; Content of Uniformity</span>
             </button>
           </div>
         </div>
@@ -221,6 +235,45 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
           {showAdvanced ? 'Hide Identifiers' : 'Customize Doc & Batch No.'}
         </button>
       </div>
+
+      {/* Assay Scope Sub-Selector when either Assay or Assay & CU is active */}
+      {(!isRS && !isDissolution) && (
+        <div className="bg-amber-50/60 border-b border-amber-200 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-zinc-800">Assay Method Scope:</span>
+            <div className="inline-flex rounded-md border border-amber-300 bg-white p-0.5 shadow-2xs">
+              <button
+                type="button"
+                onClick={() => onValidationMethodChange('assay')}
+                className={`px-3 py-1 rounded text-xs transition-all font-medium ${
+                  validationMethod === 'assay'
+                    ? 'bg-blue-800 text-white font-bold shadow-xs'
+                    : 'text-zinc-700 hover:bg-zinc-100'
+                }`}
+              >
+                1. Assay Only
+              </button>
+              <button
+                type="button"
+                onClick={() => onValidationMethodChange('assay_and_cu')}
+                className={`px-3 py-1 rounded text-xs transition-all font-medium flex items-center gap-1.5 ${
+                  validationMethod === 'assay_and_cu'
+                    ? 'bg-blue-800 text-white font-bold shadow-xs'
+                    : 'text-zinc-700 hover:bg-zinc-100'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                2. For Assay and Content of uniformity Method (USP &lt;905&gt; / BP XII C)
+              </button>
+            </div>
+          </div>
+          <span className="text-[11px] text-zinc-600 italic">
+            {validationMethod === 'assay_and_cu'
+              ? 'Includes individual 10 unit assay data, weights, peak areas, AV & statistical compliance'
+              : 'Composite powder assay method validation'}
+          </span>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-4">
         {/* Main Product Search Input */}

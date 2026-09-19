@@ -180,7 +180,8 @@ export function getBaselineLookupKey(productName: string, validationMethod: stri
   else if (clean.includes('ciprofloxacin')) drug = 'ciprofloxacin';
   else if (clean.includes('pantoprazole')) drug = 'pantoprazole';
 
-  return `${drug}_${validationMethod}`;
+  const methodKey = validationMethod === 'assay_and_cu' ? 'assay' : validationMethod;
+  return `${drug}_${methodKey}`;
 }
 
 /**
@@ -188,7 +189,7 @@ export function getBaselineLookupKey(productName: string, validationMethod: stri
  */
 export function extractCoreMethodParameters(
   docData: any,
-  validationMethod: 'dissolution' | 'related_substances' | 'assay'
+  validationMethod: 'dissolution' | 'related_substances' | 'assay' | 'assay_and_cu' | string
 ): CoreMethodParameters {
   const chromConds =
     docData?.chromatographicConditions ||

@@ -1,7 +1,8 @@
 export type DocumentType = 'protocol' | 'report';
 export type DataMode = 'TEMPLATE' | 'DEMO';
 export type ThemeFormat = 'blue' | 'simple' | 'westcoast'; // 'blue' is Executive Blue (#1F4E79), 'simple' is Simple Format (No Color), 'westcoast' is Official Westcoast Format (matching PDF)
-export type ValidationMethodType = 'assay' | 'related_substances' | 'dissolution' | 'microbial_limit_test';
+export type ValidationMethodType = 'assay' | 'assay_and_cu' | 'related_substances' | 'dissolution' | 'microbial_limit_test';
+export type AssayScopeType = 'assay_only' | 'assay_and_cu';
 export type FontFamilyType = 'Times New Roman' | 'Arial' | 'Calibri' | 'Segoe UI' | 'Cambria' | 'Georgia';
 export type FontSizePt = 9 | 10 | 11 | 12 | 13 | 14 | 16;
 
@@ -28,6 +29,7 @@ export interface FooterSignOffData {
 
 export interface SignOffGrid {
   preparedBy: SignOffPerson;
+  checkedBy?: SignOffPerson;
   reviewedBy: SignOffPerson;
   approvedBy: SignOffPerson;
 }
@@ -49,32 +51,65 @@ export interface ChromatographicConditions {
 export interface SolutionPreparation {
   standardSolution: string;
   sampleSolution: string;
+  cuSampleSolution?: string;
   standardPreparation?: string;
   samplePreparation?: string;
   placeboPreparation?: string;
 }
 
+export interface ContentUniformityUnitRow {
+  unitNo: number | string;
+  weightMg: number | string;
+  tabletWeightMg?: number | string;
+  peakArea: number | string;
+  contentFoundMg: number | string;
+  assayPercent: number | string;
+}
+
+export interface ContentUniformityData {
+  units: ContentUniformityUnitRow[];
+  instructionParagraph?: string;
+  meanAssayPercent: number | string;
+  sdAssayPercent: number | string;
+  rsdAssayPercent: number | string;
+  kConstant: number | string;
+  referenceValueM: number | string;
+  acceptanceValueAV: number | string;
+  maxAllowedAV: number | string;
+  conforms?: boolean;
+  acceptanceTextProtocol: string;
+  conclusionReport: string;
+}
+
 export interface ChemicalRequirement {
-  name: string;
+  name?: string;
+  chemicalName?: string;
   grade: string;
   make: string;
-  batchNo: string;
+  batchNo?: string;
+  lotNumber?: string;
+  expiryDate?: string;
 }
 
 export interface EquipmentRequirement {
-  srNo: number | string;
-  name: string;
-  idNo: string;
-  calibrationDate: string;
-  dueDate: string;
+  srNo?: number | string;
+  name?: string;
+  equipmentName?: string;
+  idNo?: string;
+  equipmentId?: string;
+  makeModel?: string;
+  calibrationDate?: string;
+  dueDate?: string;
+  calibrationDueDate?: string;
 }
 
 export interface ValidationParameterSummary {
-  srNo: number | string;
+  srNo?: number | string;
   parameter: string;
   acceptanceCriteria: string;
-  verificationRequirement: string; // for protocol: "To be verified as per protocol criteria"
-  resultStatus: string; // for report: calculated dynamic summary, e.g., "Tailing 1.15; %RSD 0.06 %; plates 3845 — Complies"
+  verificationRequirement?: string; // for protocol: "To be verified as per protocol criteria"
+  resultStatus?: string; // for report: calculated dynamic summary, e.g., "Tailing 1.15; %RSD 0.06 %; plates 3845 — Complies"
+  result?: string;
 }
 
 export interface SystemSuitabilityRow {
@@ -87,13 +122,15 @@ export interface SystemSuitabilityRow {
 export interface SystemSuitabilityData {
   injections: SystemSuitabilityRow[];
   meanArea: number | string;
+  sdArea?: number | string;
   rsdArea: number | string;
   meanTailing: number | string;
-  rsdTailing: number | string;
+  rsdTailing?: number | string;
   meanPlates: number | string;
-  rsdPlates: number | string;
+  rsdPlates?: number | string;
   acceptanceTextProtocol: string;
-  acceptanceTextReport: string;
+  acceptanceTextReport?: string;
+  conclusionReport?: string;
 }
 
 export interface SpecificityRow {
@@ -250,6 +287,8 @@ export interface AMVDocumentData {
   calculationFormula: {
     assayFormula: string;
     contentFormula: string;
+    cuFormula?: string;
+    cuAcceptanceValueFormula?: string;
     notes: string[];
   };
   reagentsAndStandards: ChemicalRequirement[];
@@ -257,11 +296,13 @@ export interface AMVDocumentData {
 
   validationParameters: ValidationParameterSummary[];
 
+  assayScope?: AssayScopeType;
   systemSuitability: SystemSuitabilityData;
   specificity: SpecificityData;
   linearity: LinearityData;
   accuracy: AccuracyData;
   precision: PrecisionData;
+  contentUniformity?: ContentUniformityData;
   robustness: RobustnessData;
   solutionStability: SolutionStabilityData;
 
