@@ -80,10 +80,22 @@ export const KNOWN_PHARMA_DRUGS = [
   'valproate',
   'valproic',
   'gliclazide',
+  'sodium bicarbonate',
+  'calcium carbonate',
+  'ascorbic acid',
+  'zinc sulfate',
+  'magnesium hydroxide',
+  'ferrous sulfate',
 ] as const;
 
 // Equivalence groups and active substance synonyms (salts, free acids/bases, international nonproprietary names)
 export const DRUG_SYNONYMS: Record<string, string[]> = {
+  'sodium bicarbonate': ['sodium bicarbonate', 'baking soda', 'nahco3'],
+  'calcium carbonate': ['calcium carbonate', 'caco3'],
+  'ascorbic acid': ['ascorbic acid', 'vitamin c', 'l-ascorbic acid'],
+  'zinc sulfate': ['zinc sulfate', 'zinc sulphate', 'znso4'],
+  'magnesium hydroxide': ['magnesium hydroxide', 'mg(oh)2', 'milk of magnesia'],
+  'ferrous sulfate': ['ferrous sulfate', 'ferrous sulphate', 'feso4'],
   valproate: ['valproate', 'valproic', 'valproic acid', 'sodium valproate', 'divalproex', 'divalproex sodium'],
   paracetamol: ['paracetamol', 'acetaminophen', 'apap', 'tylenol'],
   aspirin: ['aspirin', 'acetylsalicylic', 'acetylsalicylic acid'],

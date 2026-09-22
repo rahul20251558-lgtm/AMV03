@@ -888,11 +888,12 @@ export function getBaseMonograph
 
 export function getMethodDocumentNumber(baseDocNo: string, method: string, isReport: boolean = false): string {
   let clean = (baseDocNo || 'AMV-UNK-2604-101').replace(/\/R$/i, '').replace(/-R$/i, '');
-  clean = clean.replace(/-(ASSAY|RS|DIS|DISS|MLT)/gi, '');
+  clean = clean.replace(/-(ASSAY|RS|DIS|DISS|MLT|TITR)/gi, '');
   let tag = 'ASSAY';
   if (method === 'related_substances') tag = 'RS';
   else if (method === 'dissolution') tag = 'DIS';
   else if (method === 'microbial_limit_test') tag = 'MLT';
+  else if (method === 'titration') tag = 'TITR';
   let fullCode = clean;
   if (clean.startsWith('AMV-')) {
     fullCode = clean.replace('AMV-', `AMV-${tag}-`);

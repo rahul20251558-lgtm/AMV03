@@ -1,7 +1,7 @@
 export type DocumentType = 'protocol' | 'report';
 export type DataMode = 'TEMPLATE' | 'DEMO';
 export type ThemeFormat = 'blue' | 'simple' | 'westcoast'; // 'blue' is Executive Blue (#1F4E79), 'simple' is Simple Format (No Color), 'westcoast' is Official Westcoast Format (matching PDF)
-export type ValidationMethodType = 'assay' | 'assay_and_cu' | 'related_substances' | 'dissolution' | 'microbial_limit_test';
+export type ValidationMethodType = 'assay' | 'assay_and_cu' | 'related_substances' | 'dissolution' | 'microbial_limit_test' | 'titration';
 export type AssayScopeType = 'assay_only' | 'assay_and_cu';
 export type FontFamilyType = 'Times New Roman' | 'Arial' | 'Calibri' | 'Segoe UI' | 'Cambria' | 'Georgia';
 export type FontSizePt = 9 | 10 | 11 | 12 | 13 | 14 | 16;
@@ -1101,3 +1101,4 @@ export interface RawInjection {
   signalToNoise?: number | string;
 }
 export * from './types_mlt';
+export * from './types_titration';

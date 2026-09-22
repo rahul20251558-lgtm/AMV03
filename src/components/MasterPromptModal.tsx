@@ -131,7 +131,7 @@ export const MasterPromptModal: React.FC<MasterPromptModalProps> = ({
                 <h4 className="font-bold text-blue-950 text-xs">
                   Quick Load Authentically Calibrated Method Baselines:
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                   <button
                     onClick={() => {
                       onSelectProduct('dissolution', 'Tibolone Tablets BP 2.5 mg');
@@ -171,6 +171,20 @@ export const MasterPromptModal: React.FC<MasterPromptModalProps> = ({
                     <span className="text-[10px] text-zinc-600">Acarbose Tablets 100 mg</span>
                     <span className="text-[10px] text-blue-700 mt-1 flex items-center gap-0.5 font-semibold">
                       Load Assay Method <ArrowRight className="w-2.5 h-2.5" />
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      onSelectProduct('titration', 'Sodium Bicarbonate Tablets USP 500 mg');
+                      onClose();
+                    }}
+                    className="p-2 bg-white rounded border border-emerald-300 hover:bg-emerald-50 text-left transition-colors flex flex-col justify-between"
+                  >
+                    <span className="font-bold text-zinc-900 text-[11px]">Titrimetric Assay</span>
+                    <span className="text-[10px] text-zinc-600">Sodium Bicarbonate 500 mg</span>
+                    <span className="text-[10px] text-emerald-700 mt-1 flex items-center gap-0.5 font-semibold">
+                      Load Titration <ArrowRight className="w-2.5 h-2.5" />
                     </span>
                   </button>
                 </div>

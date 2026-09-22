@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { pharmaMasterDB, detectMultiApiSignals } from '../services/pharmaMasterRegistry';
-import { Search, Sparkles, RefreshCw, Layers, Calendar, FileCode2, FlaskConical, Beaker, Building2, UploadCloud, FileText, CheckCircle2 , History } from 'lucide-react';
+import { Search, Sparkles, RefreshCw, Layers, Calendar, FileCode2, FlaskConical, Beaker, Building2, UploadCloud, FileText, CheckCircle2 , History, TestTube2 } from 'lucide-react';
 import { ThemeFormat, ValidationMethodType } from '../types';
 
 interface AMVInputFormProps {
@@ -74,6 +74,17 @@ const DISSOLUTION_QUICK_SUGGESTIONS = [
   'Ciprofloxacin Tablets 500 mg',
 ];
 
+const TITRATION_QUICK_SUGGESTIONS = [
+  'Sodium Bicarbonate Tablets USP 500 mg',
+  'Calcium Carbonate Tablets USP 500 mg',
+  'Ascorbic Acid Tablets IP/BP 500 mg',
+  'Aspirin Tablets USP 300 mg',
+  'Zinc Sulfate Tablets USP 50 mg',
+  'Magnesium Hydroxide Tablets USP 400 mg',
+  'Metformin Hydrochloride BP (Non-Aqueous)',
+  'Ferrous Sulfate Tablets USP 200 mg',
+];
+
 export const AMVInputForm: React.FC<AMVInputFormProps> = ({
   productName,
   onProductNameChange,
@@ -108,8 +119,8 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedApi, setSelectedApi] = useState<string>('');
   const isRS = validationMethod === 'related_substances';
-  
   const isDissolution = validationMethod === 'dissolution';
+  const isTitration = validationMethod === 'titration';
 
   // Multi-API Detection
   const matchedProduct = pharmaMasterDB.findProductByName(productName);
@@ -147,7 +158,9 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
     }
   };
 
-  const currentSuggestions = isDissolution
+  const currentSuggestions = isTitration
+    ? TITRATION_QUICK_SUGGESTIONS
+    : isDissolution
     ? DISSOLUTION_QUICK_SUGGESTIONS
     : isRS
     ? RS_QUICK_SUGGESTIONS
@@ -224,6 +237,18 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
               <Layers className="w-3.5 h-3.5 text-emerald-400" />
               <span>For Assay &amp; Content of Uniformity</span>
             </button>
+            <button
+              type="button"
+              onClick={() => onValidationMethodChange('titration')}
+              className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 ${
+                isTitration
+                  ? 'bg-[#1F4E79] text-white shadow-xs font-semibold'
+                  : 'text-zinc-600 hover:text-zinc-900'
+              }`}
+            >
+              <TestTube2 className="w-3.5 h-3.5 text-cyan-300" />
+              <span>Assay (Titration)</span>
+            </button>
           </div>
         </div>
 
@@ -237,7 +262,7 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
       </div>
 
       {/* Assay Scope Sub-Selector when either Assay or Assay & CU is active */}
-      {(!isRS && !isDissolution) && (
+      {(!isRS && !isDissolution && !isTitration) && (
         <div className="bg-amber-50/60 border-b border-amber-200 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-zinc-800">Assay Method Scope:</span>
@@ -280,13 +305,19 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
         <div>
           <div className="flex justify-between items-center mb-1.5">
             <label className="block text-xs font-semibold text-zinc-700 uppercase tracking-wider">
-              {isDissolution
+              {isTitration
+                ? 'Enter Any Product Name for Titrimetric Assay AMV (e.g. Sodium Bicarbonate, Calcium Carbonate, or any product)'
+                : isDissolution
                 ? 'Enter Product Name / Formulation for Dissolution Method Verification'
                 : isRS
                 ? 'Enter Any Product Name / Formulation for RS AMV (Compendial or Custom/Other Product)'
                 : 'Enter Product Name / Formulation (or API with Strength)'}
             </label>
-            {isDissolution ? (
+            {isTitration ? (
+              <span className="text-[11px] font-medium text-cyan-800 bg-cyan-50 px-2 py-0.5 rounded border border-cyan-200">
+                USP &lt;1226&gt; / ICH Q2(R2) Titrimetry Protocol &amp; Report
+              </span>
+            ) : isDissolution ? (
               <span className="text-[11px] font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
                 BP Appendix XII B1 Protocol &amp; Report
               </span>
@@ -306,7 +337,9 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
                 value={productName}
                 onChange={(e) => onProductNameChange(e.target.value)}
                 placeholder={
-                  isDissolution
+                  isTitration
+                    ? 'e.g. Sodium Bicarbonate Tablets USP 500 mg, Calcium Carbonate, Ascorbic Acid, or your custom product...'
+                    : isDissolution
                     ? 'e.g. Tibolone Tablets BP 2.5 mg, Paracetamol Tablets 500 mg, Ibuprofen Tablets 400 mg...'
                     : isRS
                     ? 'e.g. Sodium Valproate Oral Solution BP, Paracetamol, Metformin, or your other product...'
@@ -460,7 +493,9 @@ export const AMVInputForm: React.FC<AMVInputFormProps> = ({
           <div className="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5 font-medium">
             <Layers className="w-3.5 h-3.5" />
             <span>
-              {isRS
+              {isTitration
+                ? 'Quick Titrimetric Assays (or type any custom/other product above):'
+                : isRS
                 ? 'Quick Compendial RS Formulations (or type any custom/other product above):'
                 : 'Quick Compendial Formulations:'}
             </span>

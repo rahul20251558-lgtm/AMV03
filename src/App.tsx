@@ -29,6 +29,10 @@ import { generateAndDownloadAMVDocx } from './services/amvDocxGenerator';
 import { generateAndDownloadRSAMVDocx } from './services/rsDocxGenerator';
 import { generateAndDownloadDissolutionDocx } from './services/dissolutionDocxGenerator';
 import { generateAndDownloadMLTDocx } from './services/mltDocxGenerator';
+import { TitrationAMVDocumentData } from './types_titration';
+import { generateTitrationAMVData } from './services/titrationPharmaDatabase';
+import { generateAndDownloadTitrationDocx } from './services/titrationDocxGenerator';
+import { TitrationDocumentViewer } from './components/TitrationDocumentViewer';
 import { runPreOutputAuditGate, ComplianceGateResult } from './services/complianceAuditGate';
 import { synchronizeDocumentReportDates } from './services/postGenerationSanitizer';
 import { extractSSOTBlock } from './services/selfAuditEngine';
@@ -163,12 +167,24 @@ export function App() {
     return synchronizeDocumentReportDates(generateMLTAMVDataForProduct(productName, batchNo, { documentNo: mltDoc, protocolNo: mltDoc, reportNo: `${mltDoc}/R`, supersedes, companyName, reportDate, effectiveDate: reportDate } as any), reportDate);
   });
 
+  const [titrationData, setTitrationData] = useState<TitrationAMVDocumentData>(() => {
+    const titrDoc = getMethodDocumentNumber(initialBaseDocNo, 'titration');
+    return generateTitrationAMVData('Sodium Bicarbonate Tablets USP 500 mg', {
+      protocolNo: titrDoc,
+      reportNo: `${titrDoc}/R`,
+      batchNo: initialCodes.validationBatchNo,
+      companyName: 'WESTCOAST PHARMACEUTICAL WORKS LTD.',
+      reportDate: '20-Apr-2026',
+    });
+  });
+
   // Dedicated reactive field handlers to instantly reflect user input changes across ALL active documents
   const handleCompanyNameChange = (newCompany: string) => {
     setCompanyName(newCompany);
     setDissolutionData((prev) => ({ ...prev, companyName: newCompany }));
     setRsData((prev) => ({ ...prev, companyName: newCompany }));
     setAssayData((prev) => ({ ...prev, companyName: newCompany }));
+    setTitrationData((prev) => ({ ...prev, companyName: newCompany }));
   };
 
   const handleSupersedesChange = (newSupersedes: string) => {
@@ -177,6 +193,7 @@ export function App() {
     setRsData((prev) => ({ ...prev, supersedes: newSupersedes }));
     setAssayData((prev) => ({ ...prev, supersedes: newSupersedes }));
     setMltData((prev) => ({ ...prev, supersedes: newSupersedes }));
+    setTitrationData((prev) => ({ ...prev, supersedes: newSupersedes }));
   };
   const handleDocumentNoChange = (newDocNo: string) => {
     setDocumentNo(newDocNo);
@@ -184,11 +201,13 @@ export function App() {
     const rsDoc = getMethodDocumentNumber(newDocNo, 'related_substances');
     const assayDoc = getMethodDocumentNumber(newDocNo, 'assay');
     const mltDoc = getMethodDocumentNumber(newDocNo, 'microbial_limit_test');
+    const titrDoc = getMethodDocumentNumber(newDocNo, 'titration');
 
     setDissolutionData((prev) => ({ ...prev, protocolNo: dissDoc, reportNo: `${dissDoc}/R` }));
     setRsData((prev) => ({ ...prev, protocolNo: rsDoc, reportNo: `${rsDoc}/R` }));
     setAssayData((prev) => ({ ...prev, documentNo: assayDoc, reportNo: `${assayDoc}/R` }));
     setMltData((prev) => ({ ...prev, protocolNo: mltDoc, reportNo: `${mltDoc}/R` }));
+    setTitrationData((prev) => ({ ...prev, protocolNo: titrDoc, reportNo: `${titrDoc}/R` }));
   };
 
   const handleBatchNoChange = (newBatchNo: string) => {
@@ -196,6 +215,7 @@ export function App() {
     setDissolutionData((prev) => ({ ...prev, batchNoUsed: newBatchNo }));
     setRsData((prev) => ({ ...prev, batchNoUsed: newBatchNo }));
     setAssayData((prev) => ({ ...prev, batchNoUsed: newBatchNo }));
+    setTitrationData((prev) => ({ ...prev, batchNoUsed: newBatchNo }));
   };
 
   const handleStandardLotChange = (newLot: string) => {
@@ -216,6 +236,7 @@ export function App() {
     setRsData((prev) => synchronizeDocumentReportDates(prev, newDate));
     setAssayData((prev) => synchronizeDocumentReportDates(prev, newDate));
     setMltData((prev) => synchronizeDocumentReportDates(prev, newDate));
+    setTitrationData((prev) => synchronizeDocumentReportDates(prev, newDate));
   };
 
   // Handle switching between Dissolution, Related Substances, Assay, and Assay & Content of Uniformity methods
@@ -231,6 +252,8 @@ export function App() {
         ? `Preparing Related Substances (Organic Impurities) AMV for "${productName}"...`
         : newMethod === 'assay_and_cu'
         ? `Preparing Assay & Content of Uniformity Method AMV for "${productName}"...`
+        : newMethod === 'titration'
+        ? `Preparing Titrimetric Assay AMV (USP <1226> / <541>) for "${productName}"...`
         : `Preparing Assay by HPLC AMV for "${productName}"...`
     );
 
@@ -333,6 +356,7 @@ Do you want to automatically switch to the suggested Report No.?`;
         const rsDocNo = getMethodDocumentNumber(cleanDocNo, 'related_substances');
         const assayDocNo = getMethodDocumentNumber(cleanDocNo, 'assay');
         const mltDocNo = getMethodDocumentNumber(cleanDocNo, 'microbial_limit_test');
+        const titrDocNo = getMethodDocumentNumber(cleanDocNo, 'titration');
 
         const localDiss = recalculateDissolutionData(
           buildFullDissolutionAMVData(activeProduct, {
@@ -381,13 +405,23 @@ Do you want to automatically switch to the suggested Report No.?`;
         const localMLT = generateMLTAMVDataForProduct(activeProduct, codes.validationBatchNo, { protocolNo: mltDocNo, reportNo: `${mltDocNo}/R`, companyName, reportDate } as any);
         setMltData(synchronizeDocumentReportDates(localMLT, reportDate) as any);
 
-        if (activeMethod === 'dissolution') {
-        checkAndPromptMajorChanges(localDiss, 'dissolution', activeProduct);
+        const localTitration = generateTitrationAMVData(activeProduct, {
+          protocolNo: titrDocNo,
+          reportNo: `${titrDocNo}/R`,
+          batchNo: codes.validationBatchNo,
+          companyName,
+          reportDate,
+        });
+        setTitrationData(localTitration);
 
+        if (activeMethod === 'dissolution') {
+          checkAndPromptMajorChanges(localDiss, 'dissolution', activeProduct);
         } else if (activeMethod === 'microbial_limit_test') {
           // No major changes prompt for MLT currently
         } else if (activeMethod === 'related_substances') {
           checkAndPromptMajorChanges(localRS, 'related_substances', activeProduct);
+        } else if (activeMethod === 'titration') {
+          // Titrimetric assay
         } else {
           checkAndPromptMajorChanges(recalculated, 'assay', activeProduct);
         }
@@ -490,6 +524,21 @@ Do you want to automatically switch to the suggested Report No.?`;
         }
         return { ...prev, revisionHistory: revs };
       });
+    } else if (validationMethod === 'titration') {
+      setTitrationData((prev) => {
+        const revs = [...(prev?.revisionHistory || [])];
+        if (revs.length > 0) {
+          revs[revs.length - 1] = { ...revs[revs.length - 1], reason: newReason };
+        } else {
+          revs.push({
+            version: '01',
+            effectiveDate: prev?.reportDate || '21-Apr-2026',
+            reason: newReason,
+            docNumber: prev?.reportNo || prev?.protocolNo,
+          });
+        }
+        return { ...prev, revisionHistory: revs };
+      });
     } else {
       setAssayData((prev) => {
         const revs = [...(prev?.revisionHistory || [])];
@@ -509,17 +558,11 @@ Do you want to automatically switch to the suggested Report No.?`;
     setAuditNonce((n) => n + 1);
   };
 
-  
-
-
-  
-
-
-
   const getCurrentDocData = () => {
     if (validationMethod === 'dissolution') return dissolutionData;
     if (validationMethod === 'related_substances') return rsData;
     if (validationMethod === 'microbial_limit_test') return mltData as any;
+    if (validationMethod === 'titration') return titrationData as any;
     return assayData;
   };
 
@@ -530,24 +573,24 @@ Do you want to automatically switch to the suggested Report No.?`;
     const baselineParams = DEFAULT_METHOD_BASELINES[baselineKey];
     if (!baselineParams) return [];
     return compareCoreMethodParameters(currentParams, baselineParams);
-  }, [dissolutionData, rsData, assayData, validationMethod, productName]);
+  }, [dissolutionData, rsData, assayData, titrationData, validationMethod, productName]);
 
   const activeRevisionReason = useMemo(() => {
     const data = getCurrentDocData();
     const revs = data.revisionHistory || [];
     return revs.length > 0 ? revs[revs.length - 1].reason || '' : '';
-  }, [dissolutionData, rsData, assayData, validationMethod]);
+  }, [dissolutionData, rsData, assayData, titrationData, validationMethod]);
 
   // Live computed compliance audit result
   const auditResult = useMemo(() => {
     const data = getCurrentDocData();
     return runPreOutputAuditGate(data, validationMethod);
-  }, [dissolutionData, rsData, assayData, mltData, validationMethod, auditNonce]);
+  }, [dissolutionData, rsData, assayData, mltData, titrationData, validationMethod, auditNonce]);
 
   // Single Source of Truth (SSOT) Parameters (§1.2)
   const currentSSOT = useMemo(() => {
     return extractSSOTBlock(getCurrentDocData(), validationMethod);
-  }, [dissolutionData, rsData, assayData, mltData, validationMethod]);
+  }, [dissolutionData, rsData, assayData, mltData, titrationData, validationMethod]);
 
   const handleReAudit = () => {
     setMltData((prev) => synchronizeDocumentReportDates(prev, reportDate));
@@ -584,6 +627,8 @@ Do you want to automatically switch to the suggested Report No.?`;
       await generateAndDownloadMLTDocx(mltData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode, footerSignOffData });
     } else if (validationMethod === 'related_substances') {
       await generateAndDownloadRSAMVDocx(rsData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode, footerSignOffData });
+    } else if (validationMethod === 'titration') {
+      await generateAndDownloadTitrationDocx(titrationData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode, footerSignOffData });
     } else {
       await generateAndDownloadAMVDocx(assayData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode, footerSignOffData });
     }
@@ -597,6 +642,8 @@ Do you want to automatically switch to the suggested Report No.?`;
       await generateAndDownloadMLTDocx(mltData, { docType: 'report', theme, fontFamily, fontSize, dataMode, footerSignOffData });
     } else if (validationMethod === 'related_substances') {
       await generateAndDownloadRSAMVDocx(rsData, { docType: 'report', theme, fontFamily, fontSize, dataMode, footerSignOffData });
+    } else if (validationMethod === 'titration') {
+      await generateAndDownloadTitrationDocx(titrationData, { docType: 'report', theme, fontFamily, fontSize, dataMode, footerSignOffData });
     } else {
       await generateAndDownloadAMVDocx(assayData, { docType: 'report', theme, fontFamily, fontSize, dataMode, footerSignOffData });
     }
@@ -618,6 +665,11 @@ Do you want to automatically switch to the suggested Report No.?`;
       await generateAndDownloadRSAMVDocx(rsData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode, footerSignOffData });
       setTimeout(async () => {
         await generateAndDownloadRSAMVDocx(rsData, { docType: 'report', theme, fontFamily, fontSize, dataMode, footerSignOffData });
+      }, 600);
+    } else if (validationMethod === 'titration') {
+      await generateAndDownloadTitrationDocx(titrationData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode, footerSignOffData });
+      setTimeout(async () => {
+        await generateAndDownloadTitrationDocx(titrationData, { docType: 'report', theme, fontFamily, fontSize, dataMode, footerSignOffData });
       }, 600);
     } else {
       await generateAndDownloadAMVDocx(assayData, { docType: 'protocol', theme, fontFamily, fontSize, dataMode, footerSignOffData });
@@ -657,6 +709,10 @@ Do you want to automatically switch to the suggested Report No.?`;
 
   const handleUpdateMLTData = (updated: MLTDocumentData) => {
     setMltData(updated);
+  };
+
+  const handleUpdateTitrationData = (updated: TitrationAMVDocumentData) => {
+    setTitrationData(updated);
   };
 
   return (
@@ -891,6 +947,25 @@ Do you want to automatically switch to the suggested Report No.?`;
               onDownloadReport={handleDownloadReport}
               onDownloadBoth={handleDownloadBoth}
               onUpdateData={handleUpdateRSData}
+              footerSignOffData={footerSignOffData}
+              onUpdateFooterSignOffData={setFooterSignOffData}
+            />
+          ) : validationMethod === 'titration' ? (
+            <TitrationDocumentViewer seed={productName+batchNo} 
+              data={titrationData}
+              docType={docType}
+              theme={theme}
+              dataMode={dataMode}
+              fontFamily={fontFamily}
+              fontSize={fontSize}
+              onFontFamilyChange={setFontFamily}
+              onFontSizeChange={setFontSize}
+              onDocTypeChange={setDocType}
+              onThemeChange={setTheme}
+              onDownloadProtocol={handleDownloadProtocol}
+              onDownloadReport={handleDownloadReport}
+              onDownloadBoth={handleDownloadBoth}
+              onUpdateData={handleUpdateTitrationData}
               footerSignOffData={footerSignOffData}
               onUpdateFooterSignOffData={setFooterSignOffData}
             />
